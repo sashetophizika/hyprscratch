@@ -3,28 +3,13 @@ use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 
-fn scratchpad(cmd: &str) -> Result<()> {
+fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     let work42 = &Clients::get()?
-        .filter(|x| x.workspace.id == 42 && x.title == cmd)
+        .filter(|x| x.workspace.id == 42 && x.title == title)
         .collect::<Vec<_>>();
 
     if work42.len() == 0 {
-        match cmd {
-            "btop" => hyprland::dispatch!(Exec, "[float;size 70% 80%] kitty -e btop ")?,
-            "ranger" => hyprland::dispatch!(Exec, "[float;size 70% 80%] kitty -e ranger ")?,
-            "pulsemixer" => hyprland::dispatch!(Exec, "[float;size 50% 40%] kitty -e pulsemixer ")?,
-            "batock" => hyprland::dispatch!(
-                Exec,
-                "[float;size 50% 80%] kitty --session batock_session --title batock"
-            )?,
-            "mpd" => hyprland::dispatch!(
-                Exec,
-                "[float;size 80% 80%] kitty --session mpd_session --title mpd"
-            )?,
-            "thunar" => hyprland::dispatch!(Exec, "[float;size 70% 80%] thunar")?,
-            "spotify" => hyprland::dispatch!(Exec, "[float;size 80% 80%] spotify")?,
-            _ => (),
-        }
+        hyprland::dispatch!(Exec, cmd)?;
     } else {
         let addr = work42[0].clone().address;
         hyprland::dispatch!(
@@ -38,18 +23,26 @@ fn scratchpad(cmd: &str) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let cl = Client::get_active()?.unwrap();
-    if cl.floating {
-        hyprland::dispatch!(
-            MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Id(42),
-            None
-        )?;
-    }
+    let [_, title, cmd] = &std::env::args().collect::<Vec<String>>()[..] else {panic!("Bad args")};
+    let cl = Client::get_active()?;
 
-    let cmd = &std::env::args().collect::<Vec<String>>()[1];
-    if &cl.title != cmd {
-        scratchpad(cmd)?;
+    match cl {
+        Some(cl) => {
+            if cl.floating {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Id(42),
+                    None
+                )?;
+            }
+
+            if &cl.title != title {
+                scratchpad(title, cmd)?;
+            }
+        }
+        None => {
+            scratchpad(title, cmd)?;
+        }
     }
     Ok(())
 }
