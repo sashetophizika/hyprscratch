@@ -9,13 +9,13 @@ Using cargo (Make sure `~/.cargo/bin` is in $PATH)
 ## Usage
 In `hyprland.conf`:
 
-```toml
+```bash
 bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND"
 ```
 
 For example:
 
-```toml
+```bash
 bind = $mainmod, b, exec, hyprscratch btop "[float;size 70% 60%] kitty -e btop"
 ```
 
