@@ -8,7 +8,9 @@ Using cargo (Make sure `~/.cargo/bin` is in $PATH)
 
 ## Usage
 In `hyprland.conf`:
+
 `bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND"`
+
 For example:
 `bind = $mainmod, b, exec, hyprscratch btop "[float;size 70% 60%] kitty -e btop"`
 
