@@ -12,6 +12,7 @@ In `hyprland.conf`:
 `bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND"`
 
 For example:
+
 `bind = $mainmod, b, exec, hyprscratch btop "[float;size 70% 60%] kitty -e btop"`
 
 You can optionally append `stack` to the end of the line so that the new scratchpad doesn't hide the old one. If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads.
