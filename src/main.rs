@@ -15,7 +15,6 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
         let addr = work42[0].clone().address;
         if work42[0].workspace.id == Workspace::get_active()?.id {
             hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
-            hyprland::dispatch::Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
         } else {
             hyprland::dispatch!(
                 MoveToWorkspace,
@@ -23,6 +22,7 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
                 Some(WindowIdentifier::Address(addr))
             )?;
         }
+        hyprland::dispatch::Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
 
     Ok(())
@@ -47,19 +47,24 @@ fn clean() -> Result<()> {
     ev.start_listener()
 }
 
+fn hideall() -> Result<()> {
+    Clients::get()?.filter(|x| x.floating).for_each(|x| hyprland::dispatch!(MoveToWorkspaceSilent, WorkspaceIdentifierWithSpecial::Id(42), Some(WindowIdentifier::Address(x.address))).unwrap());
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let [_, title, cmd @ ..] = &std::env::args().collect::<Vec<String>>()[..] else {panic!("Bad args")};
 
     if title == "clean" && cmd.len() == 0 {
-        clean();
-    } else if title == "stack" && cmd.len() == 0 {
-        std::env::set_var("HYPRSCRATCH_STACK", "1");
+        clean().unwrap();
+    } else if title == "hideall" && cmd.len() == 0 {
+        hideall().unwrap();
     } else {
         let cl = Client::get_active()?;
 
         match cl {
             Some(cl) => {
-                if cl.floating && std::env::var("HYPRSCRATCH_STACK").expect(" ") != "1" {
+                if cl.floating && (!(cmd.len() == 2 && &cmd[1] == "stack") || &cl.title == title) {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
