@@ -3,6 +3,8 @@ use hyprland::dispatch::*;
 use hyprland::event_listener::EventListenerMutable;
 use hyprland::prelude::*;
 use hyprland::Result;
+use regex::Regex;
+use std::io::prelude::*;
 
 fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     let work42 = &Clients::get()?
@@ -28,11 +30,12 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     Ok(())
 }
 
-fn move_floating() {
+fn move_floating(scratchpads: &Vec<&str>) {
     if let Ok(clients) = Clients::get() {
         clients
-            .filter(|x| x.floating && x.workspace.id != 42)
+            .filter(|x| x.floating && x.workspace.id != 42 && scratchpads.contains(&&x.title[..]))
             .for_each(|x| {
+                println!("{}", &x.title);
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
@@ -44,23 +47,41 @@ fn move_floating() {
 }
 
 fn clean(opt: Option<&String>) -> Result<()> {
-    let mut ev = EventListenerMutable::new();
+    let re = Regex::new(r"hyprscratch \w+").unwrap();
+    static mut BUF: String = String::new();
 
-    ev.add_workspace_change_handler(|_, _| {
-        move_floating();
-    });
+    //It is unsafe because I need a mutable reference to a static variable
+    unsafe {
+        std::fs::File::open(format!(
+            "{}/.config/hypr/hyprland.conf",
+            std::env::var("HOME").unwrap()
+        ))?
+        .read_to_string(&mut BUF)?;
 
-    let _spotless = String::from("spotless");
-    if let Some(_spotless) = opt {
-        ev.add_active_window_change_handler(|_, _| {
-            if let Some(cl) = Client::get_active().unwrap() {
-                if !cl.floating {
-                    move_floating();
-                }
-            }
+        let scratchpads = re
+            .find_iter(&BUF)
+            .map(|x| x.as_str().split(" ").last().unwrap())
+            .collect::<Vec<_>>();
+        let scratchpads2 = scratchpads.clone();
+        let mut ev = EventListenerMutable::new();
+
+        ev.add_workspace_change_handler(move |_, _| {
+            move_floating(&scratchpads);
         });
+
+        let _spotless = String::from("spotless");
+        if let Some(_spotless) = opt {
+            ev.add_active_window_change_handler(move |_, _| {
+                if let Some(cl) = Client::get_active().unwrap() {
+                    if !cl.floating {
+                        move_floating(&scratchpads2);
+                    }
+                }
+            });
+        }
+
+        ev.start_listener()
     }
-    ev.start_listener()
 }
 
 fn hideall() -> Result<()> {

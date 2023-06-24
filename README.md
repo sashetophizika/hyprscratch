@@ -19,7 +19,7 @@ bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND"
 For example:
 
 ```bash
-bind = $mainmod, b, exec, hyprscratch btop "[float;size 70% 60%] kitty -e btop"
+bind = $mainNod, b, exec, hyprscratch btop "[float;size 70% 80%] kitty -e btop"
 ```
 
 You can optionally append `stack` to the end of the line so that the new scratchpad doesn't hide the old one. If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads.
@@ -36,7 +36,7 @@ exec-once = hyprscratch clean spotless
 ## Other Relevant information
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where using the key binding again hides it or grabs it from another workspace (or focuses it if it's on the current workspace).
 
-The program assumes that you don't use floating windows outside of scratchpads. For example, spawning a scratchpad while you have a floating window focused will hide it by default. The same is true for `clean` and `hideall`.
+The program assumes that you don't use floating windows outside of scratchpads. For example, spawning a scratchpad while you have a floating window focused will hide it by default. The same is true for `hideall`.
 
 The program doesn't use Hyprland's special workspace, it uses workspace 42. If  you want to spawn a scratchpad on startup, spawn it there.
 
