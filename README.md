@@ -4,7 +4,10 @@ A scratchpad utility for Hyprland
 
 ## Installation
 Using cargo (Make sure `~/.cargo/bin` is in $PATH)
-`cargo install hyprscratch`
+
+```
+cargo install hyprscratch
+```
 
 ## Usage
 In `hyprland.conf`:
@@ -30,12 +33,11 @@ To also hide when losing focus to a non-floating window (This is a bit buggy and
 exec-once = hyprscratch clean spotless
 ```
 
-
 ## Other Relevant information
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where using the key binding again hides it or grabs it from another workspace (or focuses it if it's on the current workspace).
 
-The program assumes that you don't use floating windows outside of scratchpads. For example, spawning a scratchpad, while you have a floating window focused will hide it by default. The same is true for `clean` and `hideall`.
+The program assumes that you don't use floating windows outside of scratchpads. For example, spawning a scratchpad while you have a floating window focused will hide it by default. The same is true for `clean` and `hideall`.
 
-The program doesn't use Hyprland's special workspace, it uses workspace 42. If you lose a window, it's there.
+The program doesn't use Hyprland's special workspace, it uses workspace 42. If  you want to spawn a scratchpad on startup, spawn it there.
 
 There are some bugs and I blame Hyprland for most. I have noticed Thunar refusing to float and most windows not spawing in the center the first time they are spawned in a session. 
