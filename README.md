@@ -40,4 +40,4 @@ The program assumes that you don't use floating windows outside of scratchpads. 
 
 The program doesn't use Hyprland's special workspace, it uses workspace 42. If  you want to spawn a scratchpad on startup, spawn it there.
 
-There are some bugs and I blame Hyprland for most. I have noticed Thunar refusing to float and most windows not spawing in the center the first time they are spawned in a session. 
+There are some bugs and I blame Hyprland for most. I have noticed most windows not spawing in the center the first time they are spawned in a session. 

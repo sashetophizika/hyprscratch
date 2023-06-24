@@ -8,7 +8,7 @@ use std::io::prelude::*;
 
 fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     let work42 = &Clients::get()?
-        .filter(|x| x.title == title)
+        .filter(|x| x.initial_title == title)
         .collect::<Vec<_>>();
 
     if work42.is_empty() {
@@ -33,13 +33,12 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
 fn move_floating(scratchpads: &[&str]) {
     if let Ok(clients) = Clients::get() {
         clients
-            .filter(|x| x.floating && x.workspace.id != 42 && scratchpads.contains(&&x.title[..]))
+            .filter(|x| x.floating && x.workspace.id != 42 && scratchpads.contains(&&x.initial_title[..]))
             .for_each(|x| {
-                println!("{}", &x.title);
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Title(&x.title))
+                    Some(WindowIdentifier::Title(&x.initial_title))
                 )
                 .expect(" ");
             })
@@ -108,7 +107,7 @@ fn main() -> Result<()> {
 
         match cl {
             Some(cl) => {
-                if (cl.floating && !(cmd.len() == 2 && &cmd[1] == "stack")) || &cl.title == title {
+                if (cl.floating && !(cmd.len() == 2 && &cmd[1] == "stack")) || &cl.initial_title == title {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
@@ -116,7 +115,7 @@ fn main() -> Result<()> {
                     )?;
                 }
 
-                if &cl.title != title {
+                if &cl.initial_title != title {
                     scratchpad(title, &cmd[0])?;
                 }
             }
