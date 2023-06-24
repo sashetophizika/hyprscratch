@@ -11,7 +11,7 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
         .filter(|x| x.title == title)
         .collect::<Vec<_>>();
 
-    if work42.len() == 0 {
+    if work42.is_empty() {
         hyprland::dispatch!(Exec, cmd)?;
     } else {
         let addr = work42[0].clone().address;
@@ -30,7 +30,7 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     Ok(())
 }
 
-fn move_floating(scratchpads: &Vec<&str>) {
+fn move_floating(scratchpads: &[&str]) {
     if let Ok(clients) = Clients::get() {
         clients
             .filter(|x| x.floating && x.workspace.id != 42 && scratchpads.contains(&&x.title[..]))
@@ -60,7 +60,7 @@ fn clean(opt: Option<&String>) -> Result<()> {
 
         let scratchpads = re
             .find_iter(&BUF)
-            .map(|x| x.as_str().split(" ").last().unwrap())
+            .map(|x| x.as_str().split(' ').last().unwrap())
             .collect::<Vec<_>>();
         let scratchpads2 = scratchpads.clone();
         let mut ev = EventListenerMutable::new();
@@ -101,7 +101,7 @@ fn main() -> Result<()> {
 
     if title == "clean" {
         clean(cmd.get(0)).unwrap();
-    } else if title == "hideall" && cmd.len() == 0 {
+    } else if title == "hideall" && cmd.is_empty() {
         hideall().unwrap();
     } else {
         let cl = Client::get_active()?;
