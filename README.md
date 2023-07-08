@@ -13,7 +13,7 @@ cargo install hyprscratch
 In `hyprland.conf`:
 
 ```bash
-bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND"
+bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND [OPTIONS]"
 ```
 
 For example:
@@ -24,6 +24,7 @@ bind = $mainNod, b, exec, hyprscratch btop "[float;size 70% 80%] kitty -e btop"
 
 You can optionally append `stack` to the end of the line so that the new scratchpad doesn't hide the old one. If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads.
 
+
 The scratchpads are just floating windows so by default they remain on the workspace they are spawned if not explicitly hidden. To hide them on workspace change add:
 ```bash
 exec-once = hyprscratch clean
@@ -32,6 +33,8 @@ To also hide when losing focus to a non-floating window (This is a bit buggy and
 ```bash
 exec-once = hyprscratch clean spotless
 ```
+
+You can use the `shiny` option to prevent a specific window from being cleaned. Useful of graphical program where you would want to drag and drop.
 
 ## Other Relevant information
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where using the key binding again hides it or grabs it from another workspace (or focuses it if it's on the current workspace).

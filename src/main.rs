@@ -46,7 +46,8 @@ fn move_floating(scratchpads: &[&str]) {
 }
 
 fn clean(opt: Option<&String>) -> Result<()> {
-    let re = Regex::new(r"hyprscratch \w+").unwrap();
+    let resimple = Regex::new(r"hyprscratch \w+.+").unwrap();
+    let requotes = Regex::new("hyprscratch \".+\".+").unwrap();
     static mut BUF: String = String::new();
 
     //It is unsafe because I need a mutable reference to a static variable
@@ -57,10 +58,18 @@ fn clean(opt: Option<&String>) -> Result<()> {
         ))?
         .read_to_string(&mut BUF)?;
 
-        let scratchpads = re
+        let mut scratchpads = resimple
             .find_iter(&BUF)
-            .map(|x| x.as_str().split(' ').last().unwrap())
+            .filter(|x| !x.as_str().contains("shiny"))
+            .map(|x| x.as_str().split(' ').nth(1).unwrap())
             .collect::<Vec<_>>();
+
+        scratchpads.splice(0..0, requotes
+            .find_iter(&BUF)
+            .filter(|x| !x.as_str().contains("shiny"))
+            .map(|x| x.as_str().split('"').nth(1).unwrap())
+            .collect::<Vec<_>>());
+
         let scratchpads2 = scratchpads.clone();
         let mut ev = EventListenerMutable::new();
 
@@ -107,7 +116,7 @@ fn main() -> Result<()> {
 
         match cl {
             Some(cl) => {
-                if (cl.floating && !(cmd.len() == 2 && &cmd[1] == "stack")) || &cl.initial_title == title {
+                if (cl.floating && !cmd.contains(&String::from("stack"))) || &cl.initial_title == title {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
