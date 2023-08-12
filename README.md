@@ -13,7 +13,7 @@ cargo install hyprscratch
 In `hyprland.conf`:
 
 ```bash
-bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND [OPTIONS]"
+bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS]
 ```
 
 For example:
