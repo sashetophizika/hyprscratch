@@ -34,7 +34,7 @@ To also hide when losing focus to a non-floating window (This is a bit buggy and
 exec-once = hyprscratch clean spotless
 ```
 
-You can use the `shiny` option to prevent a specific window from being cleaned. Useful of graphical program where you would want to drag and drop.
+You can use the `shiny` option to prevent a specific scratchpad from being cleaned. Useful of graphical program where you would want to drag and drop.
 
 ## Other Relevant information
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where using the key binding again hides it or grabs it from another workspace (or focuses it if it's on the current workspace).
@@ -43,4 +43,4 @@ The program assumes that you don't use floating windows outside of scratchpads. 
 
 The program doesn't use Hyprland's special workspace, it uses workspace 42. If  you want to spawn a scratchpad on startup, spawn it there.
 
-There are some bugs and I blame Hyprland for most. I have noticed most windows not spawing in the center the first time they are spawned in a session. 
+There are some bugs and I blame Hyprland for most. I have noticed most windows not spawning in the center the first time they are spawned in a session. 

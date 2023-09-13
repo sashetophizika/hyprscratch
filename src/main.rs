@@ -19,10 +19,11 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
             hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
         } else {
             hyprland::dispatch!(
-                MoveToWorkspace,
+                MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::Address(addr))
+                Some(WindowIdentifier::Address(addr.clone()))
             )?;
+            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
         }
         hyprland::dispatch::Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
