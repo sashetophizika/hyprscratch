@@ -25,7 +25,7 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
             )?;
             hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
         }
-        hyprland::dispatch::Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
+        Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
 
     Ok(())
@@ -39,7 +39,7 @@ fn move_floating(scratchpads: &[&str]) {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Title(&x.initial_title))
+                    Some(WindowIdentifier::Address(x.address))
                 )
                 .expect(" ");
             })
@@ -47,8 +47,8 @@ fn move_floating(scratchpads: &[&str]) {
 }
 
 fn clean(opt: Option<&String>) -> Result<()> {
-    let resimple = Regex::new(r"hyprscratch \w+.+").unwrap();
-    let requotes = Regex::new("hyprscratch \".+\".+").unwrap();
+    let re_simple = Regex::new(r"hyprscratch \w+.+").unwrap();
+    let re_quotes = Regex::new("hyprscratch \".+\".+").unwrap();
     static mut BUF: String = String::new();
 
     //It is unsafe because I need a mutable reference to a static variable
@@ -59,13 +59,13 @@ fn clean(opt: Option<&String>) -> Result<()> {
         ))?
         .read_to_string(&mut BUF)?;
 
-        let mut scratchpads = resimple
+        let mut scratchpads = re_simple
             .find_iter(&BUF)
             .filter(|x| !x.as_str().contains("shiny"))
             .map(|x| x.as_str().split(' ').nth(1).unwrap())
             .collect::<Vec<_>>();
 
-        scratchpads.splice(0..0, requotes
+        scratchpads.splice(0..0, re_quotes
             .find_iter(&BUF)
             .filter(|x| !x.as_str().contains("shiny"))
             .map(|x| x.as_str().split('"').nth(1).unwrap())
