@@ -11,19 +11,20 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
         .filter(|x| x.initial_title == title)
         .collect::<Vec<_>>();
 
+
     if work42.is_empty() {
         hyprland::dispatch!(Exec, cmd)?;
     } else {
-        let addr = work42[0].clone().address;
+        let pid = work42[0].clone().pid as u32;
         if work42[0].workspace.id == Workspace::get_active()?.id {
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
+            hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         } else {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::Address(addr.clone()))
+                Some(WindowIdentifier::ProcessId(pid))
             )?;
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
+            hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
         Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
@@ -39,7 +40,7 @@ fn move_floating(scratchpads: &[&str]) {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Address(x.address))
+                    Some(WindowIdentifier::ProcessId(x.pid as u32))
                 )
                 .expect(" ");
             })
