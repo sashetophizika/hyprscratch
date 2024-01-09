@@ -3,6 +3,7 @@ use hyprland::dispatch::*;
 use hyprland::event_listener::EventListenerMutable;
 use hyprland::prelude::*;
 use hyprland::Result;
+use hyprland::shared::HyprError;
 use regex::Regex;
 use std::io::prelude::*;
 
@@ -10,7 +11,6 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
     let work42 = &Clients::get()?
         .filter(|x| x.initial_title == title)
         .collect::<Vec<_>>();
-
 
     if work42.is_empty() {
         hyprland::dispatch!(Exec, cmd)?;
@@ -47,7 +47,7 @@ fn move_floating(scratchpads: &[&str]) {
     }
 }
 
-fn clean(opt: Option<&String>) -> Result<()> {
+fn parse_config() -> Vec<&'static str> {
     let re_simple = Regex::new(r"hyprscratch \w+.+").unwrap();
     let re_quotes = Regex::new("hyprscratch \".+\".+").unwrap();
     static mut BUF: String = String::new();
@@ -57,8 +57,8 @@ fn clean(opt: Option<&String>) -> Result<()> {
         std::fs::File::open(format!(
             "{}/.config/hypr/hyprland.conf",
             std::env::var("HOME").unwrap()
-        ))?
-        .read_to_string(&mut BUF)?;
+        )).unwrap()
+        .read_to_string(&mut BUF).unwrap();
 
         let mut scratchpads = re_simple
             .find_iter(&BUF)
@@ -71,7 +71,12 @@ fn clean(opt: Option<&String>) -> Result<()> {
             .filter(|x| !x.as_str().contains("shiny"))
             .map(|x| x.as_str().split('"').nth(1).unwrap())
             .collect::<Vec<_>>());
+        scratchpads
+    }
+}
 
+fn clean(opt: Option<&String>) -> Result<()> {
+        let scratchpads = parse_config();
         let scratchpads2 = scratchpads.clone();
         let mut ev = EventListenerMutable::new();
 
@@ -91,7 +96,6 @@ fn clean(opt: Option<&String>) -> Result<()> {
         }
 
         ev.start_listener()
-    }
 }
 
 fn hideall() -> Result<()> {
@@ -118,7 +122,7 @@ fn main() -> Result<()> {
 
         match cl {
             Some(cl) => {
-                if (cl.floating && !cmd.contains(&String::from("stack"))) || &cl.initial_title == title {
+                if (!cmd.contains(&String::from("stack")) && (parse_config().contains(&(&cl.initial_title as &str)) && cl.floating)) || &cl.initial_title == title {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
