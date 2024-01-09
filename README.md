@@ -13,13 +13,13 @@ cargo install hyprscratch
 In `hyprland.conf`:
 
 ```bash
-bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS]
+bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS]
 ```
 
 For example:
 
 ```bash
-bind = $mainNod, b, exec, hyprscratch btop "[float;size 70% 80%] kitty -e btop"
+bind = $mainNod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop"
 ```
 
 You can optionally append `stack` to the end of the line so that the new scratchpad doesn't hide the old one. If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads.
@@ -27,20 +27,20 @@ You can optionally append `stack` to the end of the line so that the new scratch
 
 The scratchpads are just floating windows so by default they remain on the workspace they are spawned if not explicitly hidden. To hide them on workspace change add:
 ```bash
-exec-once = hyprscratch clean
+exec-once = ~/.cargo/bin/hyprscratch clean
 ```
-To also hide when losing focus to a non-floating window (This is a bit buggy and sometimes doesn't replace a scratchpad properly):
+To also hide when losing focus to a non-floating window:
 ```bash
-exec-once = hyprscratch clean spotless
+exec-once = ~/.cargo/bin/hyprscratch clean spotless
 ```
 
-You can use the `shiny` option to prevent a specific scratchpad from being cleaned. Useful of graphical program where you would want to drag and drop.
+You can use the `shiny` option to prevent a specific scratchpad from being cleaned. Useful for graphical program where you would want to drag and drop.
 
 ## Other Relevant information
-Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where using the key binding again hides it or grabs it from another workspace (or focuses it if it's on the current workspace).
+If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
 
-The program assumes that you don't use floating windows outside of scratchpads. For example, spawning a scratchpad while you have a floating window focused will hide it by default. The same is true for `hideall`.
+Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads don't get cleaned.
 
-The program doesn't use Hyprland's special workspace, it uses workspace 42. If  you want to spawn a scratchpad on startup, spawn it there.
+If you want a scratchpad centered properly, the `center` option needs to be last.
 
-There are some bugs and I blame Hyprland for most. I have noticed most windows not spawning in the center the first time they are spawned in a session. 
+The program doesn't use Hyprland's special workspace, it uses workspace 42. If you want to spawn a scratchpad on startup, spawn it there.
