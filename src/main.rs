@@ -1,4 +1,4 @@
-use hyprland::data::{Client, Clients, Workspace, Workspaces};
+use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListenerMutable;
 use hyprland::prelude::*;
@@ -37,7 +37,7 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
 fn dequote(string: &String) -> String {
     let dequoted = match &string[0..1] {
         "\"" => &string[1..string.len() - 1],
-        _ => &string,
+        _ => string,
     };
     dequoted.to_string()
 }
@@ -68,7 +68,7 @@ fn parse_config() -> [Vec<String>; 3] {
 
         for line in lines {
             let parsed_line = &line_regex
-                .find_iter(&line)
+                .find_iter(line)
                 .map(|x| x.as_str().to_string())
                 .collect::<Vec<_>>()[..];
 
@@ -109,13 +109,13 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(cli_options: &[String], titles: &Vec<String>, options: &Vec<String>) -> Result<()> {
+fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Result<()> {
     let mut ev = EventListenerMutable::new();
 
-    let titles_clone = titles.clone();
+    let titles_clone = titles.to_owned();
     let unshiny_titles: Vec<String> = titles
-        .clone()
-        .into_iter()
+        .iter()
+        .cloned()
         .enumerate()
         .filter(|&(i, _)| !options[i].contains("shiny"))
         .map(|(_, x)| x)
@@ -139,7 +139,7 @@ fn clean(cli_options: &[String], titles: &Vec<String>, options: &Vec<String>) ->
     Ok(())
 }
 
-fn autospawn(titles: &Vec<String>, commands: &Vec<String>, options: &Vec<String>) {
+fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
     commands
         .iter()
         .enumerate()
@@ -152,7 +152,7 @@ fn autospawn(titles: &Vec<String>, commands: &Vec<String>, options: &Vec<String>
                     .contains(&titles[i])
         })
         .for_each(|(_, x)| {
-            hyprland::dispatch!(Exec, &x.replacen("[", "[workspace 42 silent;", 1)).unwrap()
+            hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
         });
 }
 
@@ -170,7 +170,7 @@ fn hideall() -> Result<()> {
     Ok(())
 }
 
-fn initialize(title: &String, cmd: &[String]) -> Result<()> {
+fn initialize(title: &str, cmd: &[String]) -> Result<()> {
     let mut cli_args = cmd.join(" ");
     cli_args.push_str(title);
 
@@ -191,7 +191,7 @@ fn initialize(title: &String, cmd: &[String]) -> Result<()> {
         match stream {
             Ok(mut stream) => {
                 let titles_string = format!("{titles:?}");
-                stream.write(titles_string.as_bytes())?;
+                stream.write_all(titles_string.as_bytes())?;
             }
             Err(_) => {
                 break;
@@ -241,7 +241,7 @@ fn main() -> Result<()> {
                         scratchpad(&title, &cli_options[0])?;
                     }
                 }
-                None => scratchpad(&title, &cli_options[0])?
+                None => scratchpad(&title, &cli_options[0])?,
             }
         }
     }
