@@ -30,68 +30,64 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
         }
         Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
-
     Ok(())
 }
 
 fn dequote(string: &String) -> String {
     let dequoted = match &string[0..1] {
-        "\"" => &string[1..string.len() - 1],
+        "\"" | "'" => &string[1..string.len() - 1],
         _ => string,
     };
     dequoted.to_string()
 }
 
 fn parse_config() -> [Vec<String>; 3] {
-    let hyprscrath_regex = Regex::new("hyprscratch.+").unwrap();
-    let line_regex = Regex::new("\".+?\"|\\w+").unwrap();
-    static mut BUF: String = String::new();
+    let lines_with_hyprscratch_regex = Regex::new("hyprscratch.+").unwrap();
+    let hyprscratch_args_regex = Regex::new("\".+?\"|'.+?'|\\w+").unwrap();
+    let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
 
-    //It is unsafe because I need a mutable reference to a static variable
-    unsafe {
-        std::fs::File::open(format!(
-            "{}/.config/hypr/hyprland.conf",
-            std::env::var("HOME").unwrap()
-        ))
-        .unwrap()
-        .read_to_string(&mut BUF)
-        .unwrap();
+    std::fs::File::open(format!(
+        "{}/.config/hypr/hyprland.conf",
+        std::env::var("HOME").unwrap()
+    ))
+    .unwrap()
+    .read_to_string(&mut buf)
+    .unwrap();
 
-        let lines: Vec<&str> = hyprscrath_regex
-            .find_iter(&BUF)
-            .map(|x| x.as_str())
-            .collect();
+    let lines: Vec<&str> = lines_with_hyprscratch_regex
+        .find_iter(&buf)
+        .map(|x| x.as_str())
+        .collect();
 
-        for line in lines {
-            let parsed_line = &line_regex
-                .find_iter(line)
-                .map(|x| x.as_str().to_string())
-                .collect::<Vec<_>>()[..];
+    for line in lines {
+        let parsed_line = &hyprscratch_args_regex
+            .find_iter(line)
+            .map(|x| x.as_str().to_string())
+            .collect::<Vec<_>>()[..];
 
-            if parsed_line.len() == 1 {
-                continue;
-            }
-
-            match parsed_line[1].as_str() {
-                "clean" | "hideall" => (),
-                _ => {
-                    titles.push(dequote(&parsed_line[1]));
-                    commands.push(dequote(&parsed_line[2]));
-
-                    if parsed_line.len() > 3 {
-                        options.push(parsed_line[3..].join(""));
-                    } else {
-                        options.push(String::from(""));
-                    }
-                }
-            };
+        if parsed_line.len() == 1 {
+            continue;
         }
-        [titles, commands, options]
+
+        match parsed_line[1].as_str() {
+            "clean" | "hideall" => (),
+            _ => {
+                titles.push(dequote(&parsed_line[1]));
+                commands.push(dequote(&parsed_line[2]));
+
+                if parsed_line.len() > 3 {
+                    options.push(parsed_line[3..].join(" "));
+                } else {
+                    options.push(String::from(""));
+                }
+            }
+        };
     }
+    [titles, commands, options]
 }
 
 fn move_floating(titles: Vec<String>) {
@@ -134,7 +130,6 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
             }
         });
     }
-
     std::thread::spawn(|| ev.start_listener());
     Ok(())
 }
@@ -198,12 +193,11 @@ fn initialize(title: &str, cmd: &[String]) -> Result<()> {
             }
         };
     }
-
     Ok(())
 }
 
 fn main() -> Result<()> {
-    let args = &std::env::args().collect::<Vec<String>>()[..];
+    let args = std::env::args().collect::<Vec<String>>();
     let title = match args.len() {
         0 | 1 => String::from(""),
         2.. => args[1].clone(),
@@ -245,6 +239,5 @@ fn main() -> Result<()> {
             }
         }
     }
-
     Ok(())
 }
