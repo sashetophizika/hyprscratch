@@ -3,7 +3,7 @@
 A scratchpad utility for Hyprland
 
 ## Installation
-Using cargo (Make sure `~/.cargo/bin` is in $PATH)
+Using cargo (Make sure `~/.cargo/bin` is in $PATH):
 
 ```
 cargo install hyprscratch
@@ -13,7 +13,7 @@ cargo install hyprscratch
 In `hyprland.conf`:
 
 ```bash
-exec-once = hyprscratch [OPTIONS]
+exec-once = ~/.cargo/bin/hyprscratch [OPTIONS]
 
 bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS]
 ```
@@ -40,6 +40,9 @@ exec-once = ~/.cargo/bin/hyprscratch clean spotless
 You can use the `shiny` option to prevent a specific scratchpad from being cleaned on focus change. It is useful for graphical program where you would want to drag and drop.
 
 ## Other Relevant information
+If you have any issues with windows not spawning, try using `hyrscratch get-config` to see if your commands are being parsed propery.
+To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field.
+
 If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
 
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads don't get cleaned.

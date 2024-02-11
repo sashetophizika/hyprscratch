@@ -9,7 +9,7 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 
-fn scratchpad(title: &str, cmd: &str) -> Result<()> {
+fn summon(title: &str, cmd: &str) -> Result<()> {
     let clients_with_title = &Clients::get()?
         .filter(|x| x.initial_title == title)
         .collect::<Vec<_>>();
@@ -31,6 +31,57 @@ fn scratchpad(title: &str, cmd: &str) -> Result<()> {
         Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
     }
     Ok(())
+}
+
+fn scratchpad(title: &str, args: &[String]) -> Result<()> {
+    let cl = Client::get_active()?;
+    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    let mut titles = String::new();
+    stream.read_to_string(&mut titles)?;
+
+    match cl {
+        Some(cl) => {
+            if (!args.contains(&"stack".to_string()) && (cl.floating && titles.contains(&cl.title)))
+                || cl.initial_title == title
+            {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Id(42),
+                    None
+                )?;
+            }
+
+            if cl.initial_title != title {
+                summon(title, &args[0])?;
+            }
+        }
+        None => summon(title, &args[0])?,
+    }
+    Ok(())
+}
+
+fn hideall() -> Result<()> {
+    Clients::get()?
+        .filter(|x| x.floating && x.workspace.id == Workspace::get_active().unwrap().id)
+        .for_each(|x| {
+            hyprland::dispatch!(
+                MoveToWorkspaceSilent,
+                WorkspaceIdentifierWithSpecial::Id(42),
+                Some(WindowIdentifier::ProcessId(x.pid as u32))
+            )
+            .unwrap()
+        });
+    Ok(())
+}
+
+fn get_config() {
+    let [titles, commands, options] = parse_config();
+    titles.iter().enumerate().for_each(|(i, x)| {
+        println!(
+            "Title: {}, Command: {}, Options: {}",
+            x, commands[i], options[i]
+        )
+    });
 }
 
 fn dequote(string: &String) -> String {
@@ -126,6 +177,8 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
                     move_floating(unshiny_titles.clone());
+                } else {
+                    Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop).unwrap();
                 }
             }
         });
@@ -135,45 +188,29 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
 }
 
 fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
+    let clients = Clients::get()
+        .unwrap()
+        .map(|x| x.initial_title)
+        .collect::<Vec<_>>();
+
     commands
         .iter()
         .enumerate()
-        .filter(|&(i, _)| {
-            options[i].contains("onstart")
-                && !Clients::get()
-                    .unwrap()
-                    .map(|x| x.initial_title)
-                    .collect::<Vec<_>>()
-                    .contains(&titles[i])
-        })
+        .filter(|&(i, _)| options[i].contains("onstart") && !clients.contains(&titles[i]))
         .for_each(|(_, x)| {
             hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
         });
 }
 
-fn hideall() -> Result<()> {
-    Clients::get()?
-        .filter(|x| x.floating && x.workspace.id == Workspace::get_active().unwrap().id)
-        .for_each(|x| {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(42),
-                Some(WindowIdentifier::ProcessId(x.pid as u32))
-            )
-            .unwrap()
-        });
-    Ok(())
-}
-
-fn initialize(title: &str, cmd: &[String]) -> Result<()> {
-    let mut cli_args = cmd.join(" ");
+fn initialize(title: &str, args: &[String]) -> Result<()> {
+    let mut cli_args = args.join(" ");
     cli_args.push_str(title);
 
     let [titles, commands, options] = parse_config();
     autospawn(&titles, &commands, &options);
 
     if cli_args.contains("clean") {
-        clean(cmd, &titles, &options)?;
+        clean(args, &titles, &options)?;
     }
 
     let path_to_sock = Path::new("/tmp/hyprscratch.sock");
@@ -204,40 +241,16 @@ fn main() -> Result<()> {
     };
 
     let empty_sting_array = [String::new()];
-
-    let cli_options = match args.len() {
+    let cli_args = match args.len() {
         0..=2 => &empty_sting_array,
         3.. => &args[2..],
     };
+
     match title.as_str() {
-        "clean" | "" => initialize(&title, cli_options)?,
+        "clean" | "" => initialize(&title, cli_args)?,
+        "get-config" => get_config(),
         "hideall" => hideall()?,
-        _ => {
-            let cl = Client::get_active()?;
-            let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
-            let mut titles = String::new();
-            stream.read_to_string(&mut titles)?;
-
-            match cl {
-                Some(cl) => {
-                    if (!cli_options.contains(&"stack".to_string())
-                        && (cl.floating && titles.contains(&title)))
-                        || cl.initial_title == title
-                    {
-                        hyprland::dispatch!(
-                            MoveToWorkspaceSilent,
-                            WorkspaceIdentifierWithSpecial::Id(42),
-                            None
-                        )?;
-                    }
-
-                    if cl.initial_title != title {
-                        scratchpad(&title, &cli_options[0])?;
-                    }
-                }
-                None => scratchpad(&title, &cli_options[0])?,
-            }
-        }
+        _ => scratchpad(&title, cli_args)?,
     }
     Ok(())
 }
