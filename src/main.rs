@@ -35,7 +35,7 @@ fn summon(title: &str, cmd: &str) -> Result<()> {
 
 fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
-    stream.write(b"\0")?;
+    stream.write_all(b"\0")?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
@@ -154,7 +154,11 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Result<()> {
+fn clean(
+    cli_options: &[String],
+    titles: &[String],
+    options: &[String],
+) -> Result<()> {
     let mut ev = EventListenerMutable::new();
 
     let titles_clone = titles.to_owned();
@@ -220,14 +224,23 @@ fn get_config() {
     }
 }
 
-fn handle_stream(stream: &mut UnixStream, titles: &mut Vec<String>) -> Result<()> {
+fn handle_stream(
+    stream: &mut UnixStream,
+    current_titles: &mut Vec<String>,
+    args: &[String],
+) -> Result<()> {
     let mut buf = String::new();
     stream.try_clone()?.take(1).read_to_string(&mut buf)?;
 
     match buf.as_str() {
-        "r" => [*titles, _, _] = parse_config(),
+        "r" => {
+            let [titles, commands, options] = parse_config();
+            *current_titles = titles.clone();
+            autospawn(&titles, &commands, &options);
+            clean(args, &titles, &options)?;
+        }
         "\0" => {
-            let titles_string = format!("{titles:?}");
+            let titles_string = format!("{current_titles:?}");
             stream.write_all(titles_string.as_bytes())?;
         }
         b => println!("Unknown request {b}"),
@@ -243,7 +256,7 @@ fn initialize(title: &str, args: &[String]) -> Result<()> {
     autospawn(&titles, &commands, &options);
 
     if cli_args.contains("clean") {
-        clean(args, &titles, &options)?;
+        clean(args, &titles, &options, )?;
     }
 
     let path_to_sock = Path::new("/tmp/hyprscratch.sock");
@@ -255,7 +268,11 @@ fn initialize(title: &str, args: &[String]) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                handle_stream(&mut stream, &mut titles)?;
+                handle_stream(
+                    &mut stream,
+                    &mut titles,
+                    args,
+                )?;
             }
             Err(_) => {
                 break;

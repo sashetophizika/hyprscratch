@@ -39,9 +39,12 @@ exec-once = ~/.cargo/bin/hyprscratch clean spotless
 
 You can use the `shiny` option to prevent a specific scratchpad from being cleaned on focus change. It is useful for graphical program where you would want to drag and drop.
 
+In order for the program to funtion properly after making changes to the config, you can use `hyprscratch reload` to reparse the config without restarting. Adding the `shiny` option to an existing scratchpad will not work with `reload` and requires the program to restarted.
+
 ## Other Relevant information
 If you have any issues with windows not spawning, try using `hyrscratch get-config` to see if your commands are being parsed propery.
-To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field.
+
+To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
 If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
 
