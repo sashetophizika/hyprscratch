@@ -28,17 +28,19 @@ fn summon(title: &str, cmd: &str) -> Result<()> {
             )?;
             hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
-        Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop)?;
+        Dispatch::call(DispatchType::BringActiveToTop)?;
     }
     Ok(())
 }
 
 fn scratchpad(title: &str, args: &[String]) -> Result<()> {
-    let cl = Client::get_active()?;
     let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    stream.write(b"\0")?;
+
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
 
+    let cl = Client::get_active()?;
     match cl {
         Some(cl) => {
             if (!args.contains(&"stack".to_string()) && (cl.floating && titles.contains(&cl.title)))
@@ -60,6 +62,12 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn reload() -> Result<()> {
+    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    stream.write_all(b"r")?;
+    Ok(())
+}
+
 fn hideall() -> Result<()> {
     Clients::get()?
         .filter(|x| x.floating && x.workspace.id == Workspace::get_active().unwrap().id)
@@ -72,16 +80,6 @@ fn hideall() -> Result<()> {
             .unwrap()
         });
     Ok(())
-}
-
-fn get_config() {
-    let [titles, commands, options] = parse_config();
-    titles.iter().enumerate().for_each(|(i, x)| {
-        println!(
-            "Title: {}, Command: {}, Options: {}",
-            x, commands[i], options[i]
-        )
-    });
 }
 
 fn dequote(string: &String) -> String {
@@ -177,8 +175,6 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
                     move_floating(unshiny_titles.clone());
-                } else {
-                    Dispatch::call(hyprland::dispatch::DispatchType::BringActiveToTop).unwrap();
                 }
             }
         });
@@ -202,11 +198,48 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
         });
 }
 
+fn get_config() {
+    let [titles, commands, options] = parse_config();
+    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
+    let padding = |x: usize, y: usize| " ".repeat(x - y);
+
+    let max_titles = max_len(&titles);
+    let max_commands = max_len(&commands);
+    let max_options = max_len(&options);
+
+    for i in 0..titles.len() {
+        println!(
+            "\x1b[0;31mTitle:\x1b[0;31m {}{}  \x1b[0;31mCommand:\x1b[0;1m {}{}  \x1b[0;31mOptions:\x1b[0;0m {}{}",
+            titles[i],
+            padding(max_titles, titles[i].chars().count()),
+            commands[i],
+            padding(max_commands, commands[i].chars().count()),
+            options[i],
+            padding(max_options, options[i].chars().count())
+        )
+    }
+}
+
+fn handle_stream(stream: &mut UnixStream, titles: &mut Vec<String>) -> Result<()> {
+    let mut buf = String::new();
+    stream.try_clone()?.take(1).read_to_string(&mut buf)?;
+
+    match buf.as_str() {
+        "r" => [*titles, _, _] = parse_config(),
+        "\0" => {
+            let titles_string = format!("{titles:?}");
+            stream.write_all(titles_string.as_bytes())?;
+        }
+        b => println!("Unknown request {b}"),
+    }
+    Ok(())
+}
+
 fn initialize(title: &str, args: &[String]) -> Result<()> {
     let mut cli_args = args.join(" ");
     cli_args.push_str(title);
 
-    let [titles, commands, options] = parse_config();
+    let [mut titles, commands, options] = parse_config();
     autospawn(&titles, &commands, &options);
 
     if cli_args.contains("clean") {
@@ -222,8 +255,7 @@ fn initialize(title: &str, args: &[String]) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                let titles_string = format!("{titles:?}");
-                stream.write_all(titles_string.as_bytes())?;
+                handle_stream(&mut stream, &mut titles)?;
             }
             Err(_) => {
                 break;
@@ -250,6 +282,7 @@ fn main() -> Result<()> {
         "clean" | "" => initialize(&title, cli_args)?,
         "get-config" => get_config(),
         "hideall" => hideall()?,
+        "reload" => reload()?,
         _ => scratchpad(&title, cli_args)?,
     }
     Ok(())
