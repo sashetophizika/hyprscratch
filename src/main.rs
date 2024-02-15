@@ -28,7 +28,7 @@ fn summon(title: &str, cmd: &str) -> Result<()> {
             )?;
             hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
-        Dispatch::call(DispatchType::BringActiveToTop)?;
+                    Dispatch::call(DispatchType::BringActiveToTop)?;
     }
     Ok(())
 }
@@ -43,18 +43,20 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     let cl = Client::get_active()?;
     match cl {
         Some(cl) => {
-            if (!args.contains(&"stack".to_string()) && (cl.floating && titles.contains(&cl.title)))
+            if cl.initial_title != title {
+                summon(title, &args[0])?;
+            }
+
+            if (!args[1..].contains(&"stack".to_string())
+                && cl.floating
+                && titles.contains(&cl.title))
                 || cl.initial_title == title
             {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    None
+                    Some(WindowIdentifier::Address(cl.address))
                 )?;
-            }
-
-            if cl.initial_title != title {
-                summon(title, &args[0])?;
             }
         }
         None => summon(title, &args[0])?,
@@ -123,7 +125,7 @@ fn parse_config() -> [Vec<String>; 3] {
         }
 
         match parsed_line[1].as_str() {
-            "clean" | "hideall" => (),
+            "clean" | "hideall" | "reload" => (),
             _ => {
                 titles.push(dequote(&parsed_line[1]));
                 commands.push(dequote(&parsed_line[2]));
@@ -154,11 +156,7 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(
-    cli_options: &[String],
-    titles: &[String],
-    options: &[String],
-) -> Result<()> {
+fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Result<()> {
     let mut ev = EventListenerMutable::new();
 
     let titles_clone = titles.to_owned();
@@ -179,11 +177,13 @@ fn clean(
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
                     move_floating(unshiny_titles.clone());
+                } else {
+                    Dispatch::call(DispatchType::BringActiveToTop).unwrap();
                 }
             }
         });
     }
-    std::thread::spawn(|| ev.start_listener());
+    std::thread::spawn(|| ev.start_listener().unwrap());
     Ok(())
 }
 
@@ -213,7 +213,7 @@ fn get_config() {
 
     for i in 0..titles.len() {
         println!(
-            "\x1b[0;31mTitle:\x1b[0;31m {}{}  \x1b[0;31mCommand:\x1b[0;1m {}{}  \x1b[0;31mOptions:\x1b[0;0m {}{}",
+            "\x1b[0;34mTitle:\x1b[0;0m {}{}  \x1b[0;34mCommand:\x1b[0;1m {}{}  \x1b[0;34mOptions:\x1b[0;0m {}{}",
             titles[i],
             padding(max_titles, titles[i].chars().count()),
             commands[i],
@@ -248,15 +248,12 @@ fn handle_stream(
     Ok(())
 }
 
-fn initialize(title: &str, args: &[String]) -> Result<()> {
-    let mut cli_args = args.join(" ");
-    cli_args.push_str(title);
-
+fn initialize(args: &[String]) -> Result<()> {
     let [mut titles, commands, options] = parse_config();
     autospawn(&titles, &commands, &options);
 
-    if cli_args.contains("clean") {
-        clean(args, &titles, &options, )?;
+    if args.contains(&"clean".to_string()) {
+        clean(&args[1..], &titles, &options)?;
     }
 
     let path_to_sock = Path::new("/tmp/hyprscratch.sock");
@@ -268,11 +265,7 @@ fn initialize(title: &str, args: &[String]) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                handle_stream(
-                    &mut stream,
-                    &mut titles,
-                    args,
-                )?;
+                handle_stream(&mut stream, &mut titles, &args[1..])?;
             }
             Err(_) => {
                 break;
@@ -289,18 +282,12 @@ fn main() -> Result<()> {
         2.. => args[1].clone(),
     };
 
-    let empty_sting_array = [String::new()];
-    let cli_args = match args.len() {
-        0..=2 => &empty_sting_array,
-        3.. => &args[2..],
-    };
-
     match title.as_str() {
-        "clean" | "" => initialize(&title, cli_args)?,
+        "clean" | "" => initialize(&args)?,
         "get-config" => get_config(),
         "hideall" => hideall()?,
         "reload" => reload()?,
-        _ => scratchpad(&title, cli_args)?,
+        _ => scratchpad(&title, &args[1..])?,
     }
     Ok(())
 }
