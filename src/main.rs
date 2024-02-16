@@ -28,7 +28,7 @@ fn summon(title: &str, cmd: &str) -> Result<()> {
             )?;
             hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
-                    Dispatch::call(DispatchType::BringActiveToTop)?;
+        Dispatch::call(DispatchType::BringActiveToTop)?;
     }
     Ok(())
 }
@@ -44,10 +44,10 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     match cl {
         Some(cl) => {
             if cl.initial_title != title {
-                summon(title, &args[0])?;
+                summon(title, &args[1])?;
             }
 
-            if (!args[1..].contains(&"stack".to_string())
+            if (!args[2..].contains(&"stack".to_string())
                 && cl.floating
                 && titles.contains(&cl.title))
                 || cl.initial_title == title
@@ -59,7 +59,7 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
                 )?;
             }
         }
-        None => summon(title, &args[0])?,
+        None => summon(title, &args[1])?,
     }
     Ok(())
 }
