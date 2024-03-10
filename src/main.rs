@@ -43,21 +43,23 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     let cl = Client::get_active()?;
     match cl {
         Some(cl) => {
-            if Clients::get()?
+            let mut clients = Clients::get()?
                 .filter(|x| {
                     x.floating
                         && x.initial_title == title
                         && x.workspace.id == Workspace::get_active().unwrap().id
                 })
-                .peekable()
-                .peek()
-                .is_some()
-            {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Title(title))
-                )?;
+                .peekable();
+
+            if clients.peek().is_some() {
+                clients.for_each(|x| {
+                    hyprland::dispatch!(
+                        MoveToWorkspaceSilent,
+                        WorkspaceIdentifierWithSpecial::Id(42),
+                        Some(WindowIdentifier::ProcessId(x.pid as u32))
+                    )
+                    .unwrap()
+                });
             } else {
                 if cl.initial_title != title {
                     summon(title, &args[1])?;
