@@ -24,7 +24,8 @@ For example:
 bind = $mainNod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop"
 ```
 
-You can use the `stack` option so that the new scratchpad doesn't hide the old one. If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads. If you want a scratchpad to spawn on startup, you can add `onstart` as an option.
+You can use the `stack` option so that the new scratchpad doesn't hide the old one. This can be used to group multiple scratchpads by binding them to the same key and using `stack` on all except the first one. 
+If you like stacking scratchpads, there is a command `hyprscratch hideall` that you can call to hide all scratchpads. If you want a scratchpad to spawn on startup, you can add `onstart` as an option.
 
 The scratchpads are just floating windows so by default they remain on the workspace they are spawned if not explicitly hidden. To hide them on workspace change add:
 
@@ -32,7 +33,7 @@ The scratchpads are just floating windows so by default they remain on the works
 exec-once = ~/.cargo/bin/hyprscratch clean
 ```
 
-To also hide when losing focus to a non-floating window:
+To also hide when losing focus to a non-floating window (cursor warping is recommended):
 ```bash
 exec-once = ~/.cargo/bin/hyprscratch clean spotless
 ```

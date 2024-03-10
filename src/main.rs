@@ -43,20 +43,36 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     let cl = Client::get_active()?;
     match cl {
         Some(cl) => {
-            if cl.initial_title != title {
-                summon(title, &args[1])?;
-            }
-
-            if (!args[2..].contains(&"stack".to_string())
-                && cl.floating
-                && titles.contains(&cl.title))
-                || cl.initial_title == title
+            if Clients::get()?
+                .filter(|x| {
+                    x.floating
+                        && x.initial_title == title
+                        && x.workspace.id == Workspace::get_active().unwrap().id
+                })
+                .peekable()
+                .peek()
+                .is_some()
             {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Address(cl.address))
+                    Some(WindowIdentifier::Title(title))
                 )?;
+            } else {
+                if cl.initial_title != title {
+                    summon(title, &args[1])?;
+                }
+
+                if !args[2..].contains(&"stack".to_string())
+                    && cl.floating
+                    && titles.contains(&cl.title)
+                {
+                    hyprland::dispatch!(
+                        MoveToWorkspaceSilent,
+                        WorkspaceIdentifierWithSpecial::Id(42),
+                        Some(WindowIdentifier::Address(cl.address))
+                    )?;
+                }
             }
         }
         None => summon(title, &args[1])?,
@@ -94,7 +110,7 @@ fn dequote(string: &String) -> String {
 
 fn parse_config() -> [Vec<String>; 3] {
     let lines_with_hyprscratch_regex = Regex::new("hyprscratch.+").unwrap();
-    let hyprscratch_args_regex = Regex::new("\".+?\"|'.+?'|\\w+").unwrap();
+    let hyprscratch_args_regex = Regex::new("\".+?\"|'.+?'|[\\w.-]+").unwrap();
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
@@ -177,8 +193,6 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
                     move_floating(unshiny_titles.clone());
-                } else {
-                    Dispatch::call(DispatchType::BringActiveToTop).unwrap();
                 }
             }
         });
