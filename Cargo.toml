@@ -1,6 +1,6 @@
 [package]
 name = "hyprscratch"
-version = "0.2.5"
+version = "0.2.7"
 edition = "2021"
 license = "MIT"
 description = "Scratchpad functionality for Hyprland"
