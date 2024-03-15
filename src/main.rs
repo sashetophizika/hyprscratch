@@ -43,7 +43,7 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
     let cl = Client::get_active()?;
     match cl {
         Some(cl) => {
-            let mut clients = Clients::get()?
+            let mut clients_with_title = Clients::get()?
                 .filter(|x| {
                     x.floating
                         && x.initial_title == title
@@ -51,8 +51,8 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
                 })
                 .peekable();
 
-            if clients.peek().is_some() {
-                clients.for_each(|x| {
+            if clients_with_title.peek().is_some() {
+                clients_with_title.for_each(|x| {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
@@ -67,18 +67,33 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
 
                 if !args[2..].contains(&"stack".to_string())
                     && cl.floating
-                    && titles.contains(&cl.title)
+                    && titles.contains(&cl.initial_title)
                 {
+                    println!("this");
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
-                        Some(WindowIdentifier::Address(cl.address))
+                        Some(WindowIdentifier::ProcessId(cl.pid as u32))
                     )?;
                 }
             }
         }
         None => summon(title, &args[1])?,
     }
+    Ok(())
+}
+
+fn cycle() -> Result<()> {
+    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    stream.write_all(b"c")?;
+
+    let mut buf = String::new();
+    stream.read_to_string(&mut buf)?;
+    stream.flush()?;
+
+    let (title, args_string) = buf.split_once(' ').unwrap();
+    let args: Vec<String> = args_string.split('"').map(|x| x.to_owned()).collect();
+    scratchpad(&title, &args)?;
     Ok(())
 }
 
@@ -143,7 +158,7 @@ fn parse_config() -> [Vec<String>; 3] {
         }
 
         match parsed_line[1].as_str() {
-            "clean" | "hideall" | "reload" => (),
+            "clean" | "hideall" | "reload" | "cycle" => (),
             _ => {
                 titles.push(dequote(&parsed_line[1]));
                 commands.push(dequote(&parsed_line[2]));
@@ -243,6 +258,9 @@ fn get_config() {
 fn handle_stream(
     stream: &mut UnixStream,
     current_titles: &mut Vec<String>,
+    current_commands: &mut Vec<String>,
+    current_options: &mut Vec<String>,
+    cycle_current: &mut usize,
     args: &[String],
 ) -> Result<()> {
     let mut buf = String::new();
@@ -252,6 +270,8 @@ fn handle_stream(
         "r" => {
             let [titles, commands, options] = parse_config();
             *current_titles = titles.clone();
+            *current_commands = commands.clone();
+            *current_options = options.clone();
             autospawn(&titles, &commands, &options);
             clean(args, &titles, &options)?;
         }
@@ -259,14 +279,28 @@ fn handle_stream(
             let titles_string = format!("{current_titles:?}");
             stream.write_all(titles_string.as_bytes())?;
         }
-        b => println!("Unknown request {b}"),
+        "c" => {
+            let current_index = *cycle_current % current_titles.len();
+            let next_scratchpad = format!(
+                "{} \"{}\" {}",
+                current_titles[current_index],
+                current_commands[current_index],
+                current_options[current_index]
+            );
+            stream.write_all(next_scratchpad.as_bytes())?;
+            *cycle_current += 1;
+        }
+
+        e => println!("Unknown request {e}"),
     }
     Ok(())
 }
 
 fn initialize(args: &[String]) -> Result<()> {
-    let [mut titles, commands, options] = parse_config();
+    let [mut titles, mut commands, mut options] = parse_config();
     autospawn(&titles, &commands, &options);
+
+    let mut cycle_current: usize = 0;
 
     if args.contains(&"clean".to_string()) {
         clean(&args[1..], &titles, &options)?;
@@ -281,7 +315,14 @@ fn initialize(args: &[String]) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                handle_stream(&mut stream, &mut titles, &args[1..])?;
+                handle_stream(
+                    &mut stream,
+                    &mut titles,
+                    &mut commands,
+                    &mut options,
+                    &mut cycle_current,
+                    &args[1..],
+                )?;
             }
             Err(_) => {
                 break;
@@ -303,6 +344,7 @@ fn main() -> Result<()> {
         "get-config" => get_config(),
         "hideall" => hideall()?,
         "reload" => reload()?,
+        "cycle" => cycle()?,
         _ => scratchpad(&title, &args[1..])?,
     }
     Ok(())
