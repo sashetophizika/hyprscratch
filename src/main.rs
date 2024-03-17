@@ -9,13 +9,13 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 
-fn summon(title: &str, cmd: &str) -> Result<()> {
+fn summon(args: &[String]) -> Result<()> {
     let clients_with_title = &Clients::get()?
-        .filter(|x| x.initial_title == title)
+        .filter(|x| x.initial_title == args[0])
         .collect::<Vec<_>>();
 
     if clients_with_title.is_empty() {
-        hyprland::dispatch!(Exec, cmd)?;
+        hyprland::dispatch!(Exec, &args[1])?;
     } else {
         let pid = clients_with_title[0].pid as u32;
         if clients_with_title[0].workspace.id == Workspace::get_active()?.id {
@@ -33,7 +33,7 @@ fn summon(title: &str, cmd: &str) -> Result<()> {
     Ok(())
 }
 
-fn scratchpad(title: &str, args: &[String]) -> Result<()> {
+fn scratchpad(args: &[String]) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
     stream.write_all(b"\0")?;
 
@@ -46,7 +46,7 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
             let mut clients_with_title = Clients::get()?
                 .filter(|x| {
                     x.floating
-                        && x.initial_title == title
+                        && x.initial_title == args[0]
                         && x.workspace.id == Workspace::get_active().unwrap().id
                 })
                 .peekable();
@@ -61,15 +61,14 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
                     .unwrap()
                 });
             } else {
-                if cl.initial_title != title {
-                    summon(title, &args[1])?;
+                if cl.initial_title != args[0] {
+                    summon(&args)?;
                 }
 
                 if !args[2..].contains(&"stack".to_string())
                     && cl.floating
                     && titles.contains(&cl.initial_title)
                 {
-                    println!("this");
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
@@ -78,7 +77,7 @@ fn scratchpad(title: &str, args: &[String]) -> Result<()> {
                 }
             }
         }
-        None => summon(title, &args[1])?,
+        None => summon(&args)?,
     }
     Ok(())
 }
@@ -91,9 +90,8 @@ fn cycle() -> Result<()> {
     stream.read_to_string(&mut buf)?;
     stream.flush()?;
 
-    let (title, args_string) = buf.split_once(':').unwrap();
-    let args: Vec<String> = args_string.split(':').map(|x| x.to_owned()).collect();
-    scratchpad(&title, &args)?;
+    let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
+    scratchpad(&args)?;
     Ok(())
 }
 
@@ -223,7 +221,7 @@ fn handle_stream(
         "c" => {
             let current_index = *cycle_current % current_titles.len();
             let next_scratchpad = format!(
-                "{}::{}:{}",
+                "{}:{}:{}",
                 current_titles[current_index],
                 current_commands[current_index],
                 current_options[current_index]
@@ -345,7 +343,7 @@ fn main() -> Result<()> {
         "hideall" => hideall()?,
         "reload" => reload()?,
         "cycle" => cycle()?,
-        _ => scratchpad(&title, &args[1..])?,
+        _ => scratchpad(&args[1..])?,
     }
     Ok(())
 }
