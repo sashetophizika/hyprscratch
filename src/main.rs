@@ -91,8 +91,8 @@ fn cycle() -> Result<()> {
     stream.read_to_string(&mut buf)?;
     stream.flush()?;
 
-    let (title, args_string) = buf.split_once(' ').unwrap();
-    let args: Vec<String> = args_string.split('"').map(|x| x.to_owned()).collect();
+    let (title, args_string) = buf.split_once(':').unwrap();
+    let args: Vec<String> = args_string.split(':').map(|x| x.to_owned()).collect();
     scratchpad(&title, &args)?;
     Ok(())
 }
@@ -174,6 +174,69 @@ fn parse_config() -> [Vec<String>; 3] {
     [titles, commands, options]
 }
 
+fn get_config() {
+    let [titles, commands, options] = parse_config();
+    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
+    let padding = |x: usize, y: usize| " ".repeat(x - y);
+
+    let max_titles = max_len(&titles);
+    let max_commands = max_len(&commands);
+    let max_options = max_len(&options);
+
+    for i in 0..titles.len() {
+        println!(
+            "\x1b[0;34mTitle:\x1b[0;0m {}{}  \x1b[0;34mCommand:\x1b[0;1m {}{}  \x1b[0;34mOptions:\x1b[0;0m {}{}",
+            titles[i],
+            padding(max_titles, titles[i].chars().count()),
+            commands[i],
+            padding(max_commands, commands[i].chars().count()),
+            options[i],
+            padding(max_options, options[i].chars().count())
+        )
+    }
+}
+
+fn handle_stream(
+    stream: &mut UnixStream,
+    current_titles: &mut Vec<String>,
+    current_commands: &mut Vec<String>,
+    current_options: &mut Vec<String>,
+    cycle_current: &mut usize,
+    args: &[String],
+) -> Result<()> {
+    let mut buf = String::new();
+    stream.try_clone()?.take(1).read_to_string(&mut buf)?;
+
+    match buf.as_str() {
+        "r" => {
+            let [titles, commands, options] = parse_config();
+            *current_titles = titles.clone();
+            *current_commands = commands.clone();
+            *current_options = options.clone();
+            autospawn(&titles, &commands, &options);
+            clean(args, &titles, &options)?;
+        }
+        "\0" => {
+            let titles_string = format!("{current_titles:?}");
+            stream.write_all(titles_string.as_bytes())?;
+        }
+        "c" => {
+            let current_index = *cycle_current % current_titles.len();
+            let next_scratchpad = format!(
+                "{}::{}:{}",
+                current_titles[current_index],
+                current_commands[current_index],
+                current_options[current_index]
+            );
+            stream.write_all(next_scratchpad.as_bytes())?;
+            *cycle_current += 1;
+        }
+
+        e => println!("Unknown request {e}"),
+    }
+    Ok(())
+}
+
 fn move_floating(titles: Vec<String>) {
     if let Ok(clients) = Clients::get() {
         clients
@@ -231,69 +294,6 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
         .for_each(|(_, x)| {
             hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
         });
-}
-
-fn get_config() {
-    let [titles, commands, options] = parse_config();
-    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
-    let padding = |x: usize, y: usize| " ".repeat(x - y);
-
-    let max_titles = max_len(&titles);
-    let max_commands = max_len(&commands);
-    let max_options = max_len(&options);
-
-    for i in 0..titles.len() {
-        println!(
-            "\x1b[0;34mTitle:\x1b[0;0m {}{}  \x1b[0;34mCommand:\x1b[0;1m {}{}  \x1b[0;34mOptions:\x1b[0;0m {}{}",
-            titles[i],
-            padding(max_titles, titles[i].chars().count()),
-            commands[i],
-            padding(max_commands, commands[i].chars().count()),
-            options[i],
-            padding(max_options, options[i].chars().count())
-        )
-    }
-}
-
-fn handle_stream(
-    stream: &mut UnixStream,
-    current_titles: &mut Vec<String>,
-    current_commands: &mut Vec<String>,
-    current_options: &mut Vec<String>,
-    cycle_current: &mut usize,
-    args: &[String],
-) -> Result<()> {
-    let mut buf = String::new();
-    stream.try_clone()?.take(1).read_to_string(&mut buf)?;
-
-    match buf.as_str() {
-        "r" => {
-            let [titles, commands, options] = parse_config();
-            *current_titles = titles.clone();
-            *current_commands = commands.clone();
-            *current_options = options.clone();
-            autospawn(&titles, &commands, &options);
-            clean(args, &titles, &options)?;
-        }
-        "\0" => {
-            let titles_string = format!("{current_titles:?}");
-            stream.write_all(titles_string.as_bytes())?;
-        }
-        "c" => {
-            let current_index = *cycle_current % current_titles.len();
-            let next_scratchpad = format!(
-                "{} \"{}\" {}",
-                current_titles[current_index],
-                current_commands[current_index],
-                current_options[current_index]
-            );
-            stream.write_all(next_scratchpad.as_bytes())?;
-            *cycle_current += 1;
-        }
-
-        e => println!("Unknown request {e}"),
-    }
-    Ok(())
 }
 
 fn initialize(args: &[String]) -> Result<()> {
