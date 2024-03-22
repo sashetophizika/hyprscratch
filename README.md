@@ -38,7 +38,7 @@ The scratchpads are just floating windows so by default they remain on the works
 exec-once = ~/.cargo/bin/hyprscratch clean
 ```
 
-To also hide when losing focus to a non-floating window (cursor warping is recommended):
+To also hide when losing focus to a non-floating window:
 ```bash
 exec-once = ~/.cargo/bin/hyprscratch clean spotless
 ```

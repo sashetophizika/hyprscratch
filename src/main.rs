@@ -40,9 +40,9 @@ fn scratchpad(args: &[String]) -> Result<()> {
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
 
-    let cl = Client::get_active()?;
-    match cl {
-        Some(cl) => {
+    let active_client = Client::get_active()?;
+    match active_client {
+        Some(active_client) => {
             let mut clients_with_title = Clients::get()?
                 .filter(|x| {
                     x.floating
@@ -51,7 +51,9 @@ fn scratchpad(args: &[String]) -> Result<()> {
                 })
                 .peekable();
 
-            if clients_with_title.peek().is_some() {
+            if active_client.initial_title == args[0]
+                || (!active_client.floating && clients_with_title.peek().is_some())
+            {
                 clients_with_title.for_each(|x| {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
@@ -61,18 +63,16 @@ fn scratchpad(args: &[String]) -> Result<()> {
                     .unwrap()
                 });
             } else {
-                if cl.initial_title != args[0] {
-                    summon(&args)?;
-                }
+                summon(&args)?;
 
                 if !args[2..].contains(&"stack".to_string())
-                    && cl.floating
-                    && titles.contains(&cl.initial_title)
+                    && active_client.floating
+                    && titles.contains(&active_client.initial_title)
                 {
                     hyprland::dispatch!(
                         MoveToWorkspaceSilent,
                         WorkspaceIdentifierWithSpecial::Id(42),
-                        Some(WindowIdentifier::ProcessId(cl.pid as u32))
+                        Some(WindowIdentifier::ProcessId(active_client.pid as u32))
                     )?;
                 }
             }
@@ -124,7 +124,7 @@ fn dequote(string: &String) -> String {
 }
 
 fn parse_config() -> [Vec<String>; 3] {
-    let lines_with_hyprscratch_regex = Regex::new("hyprscratch.+").unwrap();
+    let hyprscratch_lines_regex = Regex::new("hyprscratch.+").unwrap();
     let hyprscratch_args_regex = Regex::new("\".+?\"|'.+?'|[\\w.-]+").unwrap();
     let mut buf: String = String::new();
 
@@ -140,7 +140,7 @@ fn parse_config() -> [Vec<String>; 3] {
     .read_to_string(&mut buf)
     .unwrap();
 
-    let lines: Vec<&str> = lines_with_hyprscratch_regex
+    let lines: Vec<&str> = hyprscratch_lines_regex
         .find_iter(&buf)
         .map(|x| x.as_str())
         .collect();
@@ -280,7 +280,7 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
 }
 
 fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
-    let clients = Clients::get()
+    let client_titles = Clients::get()
         .unwrap()
         .map(|x| x.initial_title)
         .collect::<Vec<_>>();
@@ -288,7 +288,7 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
     commands
         .iter()
         .enumerate()
-        .filter(|&(i, _)| options[i].contains("onstart") && !clients.contains(&titles[i]))
+        .filter(|&(i, _)| options[i].contains("onstart") && !client_titles.contains(&titles[i]))
         .for_each(|(_, x)| {
             hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
         });
@@ -323,7 +323,7 @@ fn initialize(args: &[String]) -> Result<()> {
                 )?;
             }
             Err(_) => {
-                break;
+                continue;
             }
         };
     }
