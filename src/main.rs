@@ -28,7 +28,6 @@ fn summon(args: &[String]) -> Result<()> {
             )?;
             hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
-        Dispatch::call(DispatchType::BringActiveToTop)?;
     }
     Ok(())
 }
@@ -45,8 +44,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
         Some(active_client) => {
             let mut clients_with_title = Clients::get()?
                 .filter(|x| {
-                    x.floating
-                        && x.initial_title == args[0]
+                        x.initial_title == args[0]
                         && x.workspace.id == Workspace::get_active().unwrap().id
                 })
                 .peekable();
@@ -79,6 +77,8 @@ fn scratchpad(args: &[String]) -> Result<()> {
         }
         None => summon(&args)?,
     }
+
+    Dispatch::call(DispatchType::BringActiveToTop)?;
     Ok(())
 }
 
