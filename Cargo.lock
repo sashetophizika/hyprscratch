@@ -255,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "hyprscratch"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "hyprland",
  "regex",
