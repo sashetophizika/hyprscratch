@@ -9,7 +9,22 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 
-fn summon(args: &[String]) -> Result<()> {
+fn summon_special(args: &[String]) -> Result<()> {
+    let title = args[0].clone();
+    let special_with_title = &Clients::get()?
+        .filter(|x| x.initial_title == title && x.workspace.id < 0)
+        .collect::<Vec<_>>();
+
+    if special_with_title.is_empty() {
+        let cmd = args[1].replacen("[", &format!("[workspace special:{title}; "), 1);
+        hyprland::dispatch!(Exec, &cmd)?;
+    } else {
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;
+    }
+    Ok(())
+}
+
+fn summon_normal(args: &[String]) -> Result<()> {
     let clients_with_title = &Clients::get()?
         .filter(|x| x.initial_title == args[0])
         .collect::<Vec<_>>();
@@ -38,13 +53,17 @@ fn scratchpad(args: &[String]) -> Result<()> {
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
+    if args[2..].contains(&"special".to_string()) {
+        summon_special(&args)?;
+        return Ok(());
+    }
 
     let active_client = Client::get_active()?;
     match active_client {
         Some(active_client) => {
             let mut clients_with_title = Clients::get()?
                 .filter(|x| {
-                        x.initial_title == args[0]
+                    x.initial_title == args[0]
                         && x.workspace.id == Workspace::get_active().unwrap().id
                 })
                 .peekable();
@@ -61,7 +80,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
                     .unwrap()
                 });
             } else {
-                summon(&args)?;
+                summon_normal(&args)?;
 
                 if !args[2..].contains(&"stack".to_string())
                     && active_client.floating
@@ -75,7 +94,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
                 }
             }
         }
-        None => summon(&args)?,
+        None => summon_normal(&args)?,
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
@@ -197,6 +216,7 @@ fn get_config() {
 fn handle_stream(
     stream: &mut UnixStream,
     current_titles: &mut Vec<String>,
+    current_normal_titles: &mut Vec<String>,
     current_commands: &mut Vec<String>,
     current_options: &mut Vec<String>,
     cycle_current: &mut usize,
@@ -211,15 +231,27 @@ fn handle_stream(
             *current_titles = titles.clone();
             *current_commands = commands.clone();
             *current_options = options.clone();
+            *current_normal_titles = current_titles
+                .iter()
+                .enumerate()
+                .filter(|&(i, _)| !options[i].contains("special"))
+                .map(|(_, x)| x.to_owned())
+                .collect::<Vec<String>>();
+
             autospawn(&titles, &commands, &options);
             clean(args, &titles, &options)?;
         }
         "\0" => {
-            let titles_string = format!("{current_titles:?}");
+            let titles_string = format!("{current_normal_titles:?}",);
             stream.write_all(titles_string.as_bytes())?;
         }
         "c" => {
-            let current_index = *cycle_current % current_titles.len();
+            let mut current_index = *cycle_current % current_titles.len();
+            while current_options[current_index].contains("special") {
+                *cycle_current += 1;
+                current_index = *cycle_current % current_titles.len();
+            }
+
             let next_scratchpad = format!(
                 "{}:{}:{}",
                 current_titles[current_index],
@@ -253,17 +285,23 @@ fn move_floating(titles: Vec<String>) {
 fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Result<()> {
     let mut ev = EventListenerMutable::new();
 
-    let titles_clone = titles.to_owned();
+    let shiny_titles: Vec<String> = titles
+        .iter()
+        .cloned()
+        .enumerate()
+        .filter(|&(i, _)| !options[i].contains("special"))
+        .map(|(_, x)| x)
+        .collect();
     let unshiny_titles: Vec<String> = titles
         .iter()
         .cloned()
         .enumerate()
-        .filter(|&(i, _)| !options[i].contains("shiny"))
+        .filter(|&(i, _)| !(options[i].contains("shiny") || options[i].contains("special")))
         .map(|(_, x)| x)
         .collect();
 
     ev.add_workspace_change_handler(move |_, _| {
-        move_floating(titles_clone.clone());
+        move_floating(shiny_titles.clone());
     });
 
     if cli_options.contains(&"spotless".to_string()) {
@@ -289,13 +327,24 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
         .iter()
         .enumerate()
         .filter(|&(i, _)| options[i].contains("onstart") && !client_titles.contains(&titles[i]))
-        .for_each(|(_, x)| {
-            hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
+        .for_each(|(i, x)| {
+            if options[i].contains("special") {
+                hyprland::dispatch!(Exec, &x.replacen('[', &format!("[workspace special:{} silent;", titles[i]), 1)).unwrap()
+            } else {
+                hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
+            }
         });
 }
 
 fn initialize(args: &[String]) -> Result<()> {
     let [mut titles, mut commands, mut options] = parse_config();
+    let mut normal_titles = titles
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| !options[i].contains("special"))
+        .map(|(_, x)| x.to_owned())
+        .collect::<Vec<String>>();
+
     autospawn(&titles, &commands, &options);
 
     let mut cycle_current: usize = 0;
@@ -316,6 +365,7 @@ fn initialize(args: &[String]) -> Result<()> {
                 handle_stream(
                     &mut stream,
                     &mut titles,
+                    &mut normal_titles,
                     &mut commands,
                     &mut options,
                     &mut cycle_current,
