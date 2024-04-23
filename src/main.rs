@@ -191,28 +191,6 @@ fn parse_config() -> [Vec<String>; 3] {
     [titles, commands, options]
 }
 
-fn get_config() {
-    let [titles, commands, options] = parse_config();
-    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
-    let padding = |x: usize, y: usize| " ".repeat(x - y);
-
-    let max_titles = max_len(&titles);
-    let max_commands = max_len(&commands);
-    let max_options = max_len(&options);
-
-    for i in 0..titles.len() {
-        println!(
-            "\x1b[0;34mTitle:\x1b[0;0m {}{}  \x1b[0;34mCommand:\x1b[0;1m {}{}  \x1b[0;34mOptions:\x1b[0;0m {}{}",
-            titles[i],
-            padding(max_titles, titles[i].chars().count()),
-            commands[i],
-            padding(max_commands, commands[i].chars().count()),
-            options[i],
-            padding(max_options, options[i].chars().count())
-        )
-    }
-}
-
 fn handle_stream(
     stream: &mut UnixStream,
     current_titles: &mut Vec<String>,
@@ -380,6 +358,46 @@ fn initialize(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn get_config() {
+    let [titles, commands, options] = parse_config();
+    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
+    let padding = |x: usize, y: &str| " ".repeat(x - y.chars().count());
+
+    let max_titles = max_len(&titles);
+    let max_commands = max_len(&commands);
+    let max_options = max_len(&options);
+
+    for i in 0..titles.len() {
+        println!(
+            "\x1b[0;34mTitle:\x1b[0;0m {}{}  \x1b[0;34mCommand:\x1b[0;1m {}{}  \x1b[0;34mOptions:\x1b[0;0m {}{}",
+            titles[i],
+            padding(max_titles, &titles[i]),
+            commands[i],
+            padding(max_commands, &commands[i]),
+            options[i],
+            padding(max_options, &options[i])
+        )
+    }
+}
+
+fn help() {
+    println!("Usage:
+  hyprscratch title command [options...]
+
+EXTRA COMMANDS
+  clean [spotless]    Start the deamon and hide scratchpads on workspace change and focus change with spotless
+  cycle               Cycle between non-special scratchpads
+  hideall             Hidall all scratchpads simultaneously
+  reload              Reparse file without restarting daemon
+  get-config          Print parsed config file
+
+SCRATCHPAD OPTIONS
+  stack               Prevent the scratchpad from hiding the one that is already present
+  shiny               Prevent the scratchpad from being affected by 'clean spotless'
+  onstart             Spawn the scratchpads at the start of a hyprland session
+  special             Use hyprlands special workspace, ignores most other options")
+}
+
 fn main() -> Result<()> {
     let args = std::env::args().collect::<Vec<String>>();
     let title = match args.len() {
@@ -393,6 +411,7 @@ fn main() -> Result<()> {
         "hideall" => hideall()?,
         "reload" => reload()?,
         "cycle" => cycle()?,
+        "help" => help(),
         _ => scratchpad(&args[1..])?,
     }
     Ok(())

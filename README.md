@@ -13,9 +13,9 @@ cargo install hyprscratch
 In `hyprland.conf`:
 
 ```bash
-exec-once = ~/.cargo/bin/hyprscratch [OPTIONS] #starts the necessary hyprscatch daemon
+exec-once = ~/.cargo/bin/hyprscratch [OPTIONS] #start the hyprscratch daemon
 
-bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS]
+bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS] #configure scratchpads
 ```
 
 For example:
@@ -37,7 +37,7 @@ bind = $mainNod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;cen
 
 ### Options than can be used for scratchpads are:
 
-* `stack`: makes it so that the new scratchpad doesn't hide the old one. This can be used to group multiple scratchpads by binding them to the same key and using `stack` on all except the first one. 
+* `stack`: makes it so that the scratchpad doesn't hide one that is already present. This can be used to group multiple scratchpads by binding them to the same key and using `stack` on all except the first one. 
 
 * `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
 
