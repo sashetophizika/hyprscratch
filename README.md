@@ -24,17 +24,9 @@ Example scratchpad:
 bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop" onstart
 ```
 
-### Hyprscratch commands:
+### Daemon options:
 
 * `clean [spotless]`: starts the daemon and hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
-
-* `cycle`: cycles between non-special scratchpads in the order they are defined in the config file.
-
-* `hideall`: hides all scratchpads, useful mostly for stacked ones.
-
-* `reload`: reparses changes to the config file without restarting the daemon.
-
-* `get-config`: prints out the parsed config, useful for debugging potential syntax issues.
 
 ### Scratchpad options:
 
@@ -46,6 +38,15 @@ bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;cen
 
 * `special`: uses the special workspace. Ignores `stack`, `shiny` and is ignored by `clean` and `cycle`.
 
+### Extra hyprscratch commands:
+
+* `cycle`: cycles between non-special scratchpads in the order they are defined in the config file.
+
+* `hideall`: hides all scratchpads, useful mostly for stacked ones.
+
+* `reload`: reparses changes to the config file without restarting the daemon.
+
+* `get-config`: prints out the parsed config, useful for debugging potential syntax issues.
 
 ## Other Relevant information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.

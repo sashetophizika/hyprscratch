@@ -386,20 +386,26 @@ fn get_config() {
 
 fn help() {
     println!("Usage:
-  hyprscratch title command [options...]
+  Daemon:
+    hypscratch [options...]
+  Scratchpads:
+    hyprscratch title command [options...]
 
-EXTRA COMMANDS
-  clean [spotless]    Start the deamon and hide scratchpads on workspace change and focus change with spotless
-  cycle               Cycle between non-special scratchpads
-  hideall             Hidall all scratchpads simultaneously
-  reload              Reparse file without restarting daemon
-  get-config          Print parsed config file
+DAEMON OPTIONS
+  clean [spotless]    Hide scratchpads on workspace change and focus change with spotless
 
 SCRATCHPAD OPTIONS
   stack               Prevent the scratchpad from hiding the one that is already present
   shiny               Prevent the scratchpad from being affected by 'clean spotless'
   onstart             Spawn the scratchpads at the start of a hyprland session
-  special             Use hyprlands special workspace, ignores most other options")
+  special             Use Hyprland's special workspace, ignores most other options
+
+EXTRA COMMANDS
+  cycle               Cycle between non-special scratchpads
+  hideall             Hidall all scratchpads simultaneously
+  reload              Reparse file without restarting daemon
+  get-config          Print parsed config file")
+
 }
 
 fn main() -> Result<()> {
