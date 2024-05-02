@@ -18,14 +18,15 @@ exec-once = ~/.cargo/bin/hyprscratch [OPTIONS] #start the hyprscratch daemon
 bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS] #configure scratchpads
 ```
 
-For example:
+Example scratchpad:
 
 ```bash
-bind = $mainNod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop onstart"
+bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop" onstart
 ```
 
 ### Hyprscratch commands:
-* `clean [spotless]`: starts the daemon and hides all scratchpads no workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
+
+* `clean [spotless]`: starts the daemon and hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
 
 * `cycle`: cycles between non-special scratchpads in the order they are defined in the config file.
 
@@ -35,7 +36,7 @@ bind = $mainNod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;cen
 
 * `get-config`: prints out the parsed config, useful for debugging potential syntax issues.
 
-### Options than can be used for scratchpads are:
+### Scratchpad options:
 
 * `stack`: makes it so that the scratchpad doesn't hide one that is already present. This can be used to group multiple scratchpads by binding them to the same key and using `stack` on all except the first one. 
 
