@@ -307,7 +307,11 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
         .filter(|&(i, _)| options[i].contains("onstart") && !client_titles.contains(&titles[i]))
         .for_each(|(i, x)| {
             if options[i].contains("special") {
-                hyprland::dispatch!(Exec, &x.replacen('[', &format!("[workspace special:{} silent;", titles[i]), 1)).unwrap()
+                hyprland::dispatch!(
+                    Exec,
+                    &x.replacen('[', &format!("[workspace special:{} silent;", titles[i]), 1)
+                )
+                .unwrap()
             } else {
                 hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
             }
@@ -412,7 +416,13 @@ fn main() -> Result<()> {
         "reload" => reload()?,
         "cycle" => cycle()?,
         "help" => help(),
-        _ => scratchpad(&args[1..])?,
+        _ => {
+            if args[2..].is_empty() {
+                println!("Unknown command or not enough arguments given for scratchpad.\nTry 'hyprscratch help'.");
+            } else {
+                scratchpad(&args[1..])?;
+            }
+        }
     }
     Ok(())
 }
