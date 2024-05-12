@@ -11,5 +11,5 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyprland = "0.3.13"
+hyprland = "0.4.0-alpha.2"
 regex = "1.10.4"

@@ -1,10 +1,10 @@
 use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
-use hyprland::event_listener::EventListenerMutable;
+use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
 use hyprland::Result;
 use regex::Regex;
-use std::fs::remove_file;
+use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
@@ -12,11 +12,12 @@ use std::path::Path;
 fn summon_special(args: &[String]) -> Result<()> {
     let title = args[0].clone();
     let special_with_title = &Clients::get()?
+        .into_iter()
         .filter(|x| x.initial_title == title && x.workspace.id < 0)
         .collect::<Vec<_>>();
 
     if special_with_title.is_empty() {
-        let cmd = args[1].replacen("[", &format!("[workspace special:{title}; "), 1);
+        let cmd = args[1].replacen('[', &format!("[workspace special:{title}; "), 1);
         hyprland::dispatch!(Exec, &cmd)?;
     } else {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;
@@ -26,6 +27,7 @@ fn summon_special(args: &[String]) -> Result<()> {
 
 fn summon_normal(args: &[String]) -> Result<()> {
     let clients_with_title = &Clients::get()?
+        .into_iter()
         .filter(|x| x.initial_title == args[0])
         .collect::<Vec<_>>();
 
@@ -48,13 +50,13 @@ fn summon_normal(args: &[String]) -> Result<()> {
 }
 
 fn scratchpad(args: &[String]) -> Result<()> {
-    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"\0")?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
     if args[2..].contains(&"special".to_string()) {
-        summon_special(&args)?;
+        summon_special(args)?;
         return Ok(());
     }
 
@@ -62,6 +64,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
     match active_client {
         Some(active_client) => {
             let mut clients_with_title = Clients::get()?
+                .into_iter()
                 .filter(|x| {
                     x.initial_title == args[0]
                         && x.workspace.id == Workspace::get_active().unwrap().id
@@ -80,7 +83,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
                     .unwrap()
                 });
             } else {
-                summon_normal(&args)?;
+                summon_normal(args)?;
 
                 if !args[2..].contains(&"stack".to_string())
                     && active_client.floating
@@ -94,7 +97,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
                 }
             }
         }
-        None => summon_normal(&args)?,
+        None => summon_normal(args)?,
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
@@ -102,7 +105,7 @@ fn scratchpad(args: &[String]) -> Result<()> {
 }
 
 fn cycle() -> Result<()> {
-    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"c")?;
 
     let mut buf = String::new();
@@ -115,13 +118,14 @@ fn cycle() -> Result<()> {
 }
 
 fn reload() -> Result<()> {
-    let mut stream = UnixStream::connect("/tmp/hyprscratch.sock")?;
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"r")?;
     Ok(())
 }
 
 fn hideall() -> Result<()> {
     Clients::get()?
+        .iter()
         .filter(|x| x.floating && x.workspace.id == Workspace::get_active().unwrap().id)
         .for_each(|x| {
             hyprland::dispatch!(
@@ -217,7 +221,15 @@ fn handle_stream(
                 .collect::<Vec<String>>();
 
             autospawn(&titles, &commands, &options);
-            clean(args, &titles, &options)?;
+            if args.contains(&"spotless".to_string()) {
+                std::thread::spawn(move || {
+                    clean("spotless".to_string(), &titles.clone(), &options.clone())
+                });
+            } else {
+                std::thread::spawn(move || {
+                    clean("".to_string(), &titles.clone(), &options.clone())
+                });
+            }
         }
         "\0" => {
             let titles_string = format!("{current_normal_titles:?}",);
@@ -248,6 +260,7 @@ fn handle_stream(
 fn move_floating(titles: Vec<String>) {
     if let Ok(clients) = Clients::get() {
         clients
+            .iter()
             .filter(|x| x.floating && x.workspace.id != 42 && titles.contains(&x.initial_title))
             .for_each(|x| {
                 hyprland::dispatch!(
@@ -260,8 +273,8 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Result<()> {
-    let mut ev = EventListenerMutable::new();
+fn clean(spotless: String, titles: &[String], options: &[String]) -> Result<()> {
+    let mut ev = EventListener::new();
 
     let shiny_titles: Vec<String> = titles
         .iter()
@@ -278,12 +291,12 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
         .map(|(_, x)| x)
         .collect();
 
-    ev.add_workspace_change_handler(move |_, _| {
+    ev.add_workspace_change_handler(move |_| {
         move_floating(shiny_titles.clone());
     });
 
-    if cli_options.contains(&"spotless".to_string()) {
-        ev.add_active_window_change_handler(move |_, _| {
+    if spotless == "spotless" {
+        ev.add_active_window_change_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
                     move_floating(unshiny_titles.clone());
@@ -291,13 +304,15 @@ fn clean(cli_options: &[String], titles: &[String], options: &[String]) -> Resul
             }
         });
     }
-    std::thread::spawn(|| ev.start_listener().unwrap());
+
+    ev.start_listener()?;
     Ok(())
 }
 
 fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
     let client_titles = Clients::get()
         .unwrap()
+        .into_iter()
         .map(|x| x.initial_title)
         .collect::<Vec<_>>();
 
@@ -332,10 +347,25 @@ fn initialize(args: &[String]) -> Result<()> {
     let mut cycle_current: usize = 0;
 
     if args.contains(&"clean".to_string()) {
-        clean(&args[1..], &titles, &options)?;
+        let titles2 = titles.clone();
+        let options2 = options.clone();
+        if args[1..].contains(&"spotless".to_string()) {
+            std::thread::spawn(move || {
+                clean("spotless".to_string(), &titles2.clone(), &options2.clone())
+            });
+        } else {
+            std::thread::spawn(move || {
+                clean(" ".to_string(), &titles2.clone(), &options2.clone())
+            });
+        }
     }
 
-    let path_to_sock = Path::new("/tmp/hyprscratch.sock");
+    let temp_dir = Path::new("/tmp/hyprscratch/");
+    if !temp_dir.exists() {
+        create_dir(temp_dir)?;
+    }
+
+    let path_to_sock = Path::new("/tmp/hyprscratch/hyprscratch.sock");
     if path_to_sock.exists() {
         remove_file(path_to_sock)?;
     }
@@ -385,7 +415,8 @@ fn get_config() {
 }
 
 fn help() {
-    println!("Usage:
+    println!(
+        "Usage:
   Daemon:
     hypscratch [options...]
   Scratchpads:
@@ -404,8 +435,8 @@ EXTRA COMMANDS
   cycle               Cycle between non-special scratchpads
   hideall             Hidall all scratchpads simultaneously
   reload              Reparse file without restarting daemon
-  get-config          Print parsed config file")
-
+  get-config          Print parsed config file"
+    )
 }
 
 fn main() -> Result<()> {
