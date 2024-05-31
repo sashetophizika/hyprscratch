@@ -223,11 +223,11 @@ fn handle_stream(
             autospawn(&titles, &commands, &options);
             if args.contains(&"spotless".to_string()) {
                 std::thread::spawn(move || {
-                    clean("spotless".to_string(), &titles.clone(), &options.clone())
+                    clean("spotless", &titles.clone(), &options.clone())
                 });
             } else {
                 std::thread::spawn(move || {
-                    clean("".to_string(), &titles.clone(), &options.clone())
+                    clean("", &titles.clone(), &options.clone())
                 });
             }
         }
@@ -273,7 +273,7 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(spotless: String, titles: &[String], options: &[String]) -> Result<()> {
+fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
     let mut ev = EventListener::new();
 
     let shiny_titles: Vec<String> = titles
@@ -293,6 +293,7 @@ fn clean(spotless: String, titles: &[String], options: &[String]) -> Result<()> 
 
     ev.add_workspace_change_handler(move |_| {
         move_floating(shiny_titles.clone());
+        hyprland::dispatch!(ToggleSpecialWorkspace, None).unwrap();
     });
 
     if spotless == "spotless" {
@@ -351,12 +352,10 @@ fn initialize(args: &[String]) -> Result<()> {
         let options2 = options.clone();
         if args[1..].contains(&"spotless".to_string()) {
             std::thread::spawn(move || {
-                clean("spotless".to_string(), &titles2.clone(), &options2.clone())
+                clean("spotless", &titles2.clone(), &options2.clone())
             });
         } else {
-            std::thread::spawn(move || {
-                clean(" ".to_string(), &titles2.clone(), &options2.clone())
-            });
+            std::thread::spawn(move || clean(" ", &titles2.clone(), &options2.clone()));
         }
     }
 
