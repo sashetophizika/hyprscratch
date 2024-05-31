@@ -21,7 +21,7 @@ bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_
 Example scratchpad:
 
 ```bash
-bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty -e btop" onstart
+bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty --title btop -e btop" onstart
 ```
 
 ### Daemon options:
@@ -51,8 +51,10 @@ bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;cen
 ## Other Relevant information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
+Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
+
 If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
 
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.
 
-The program doesn't use hyprlands special workspace by default, it uses workspace 42.
+The program doesn't use hyprland's special workspace by default, it uses workspace 42.
