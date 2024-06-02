@@ -222,13 +222,9 @@ fn handle_stream(
 
             autospawn(&titles, &commands, &options);
             if args.contains(&"spotless".to_string()) {
-                std::thread::spawn(move || {
-                    clean("spotless", &titles.clone(), &options.clone())
-                });
+                std::thread::spawn(move || clean("spotless", &titles.clone(), &options.clone()));
             } else {
-                std::thread::spawn(move || {
-                    clean("", &titles.clone(), &options.clone())
-                });
+                std::thread::spawn(move || clean("", &titles.clone(), &options.clone()));
             }
         }
         "\0" => {
@@ -283,6 +279,7 @@ fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
         .filter(|&(i, _)| !options[i].contains("special"))
         .map(|(_, x)| x)
         .collect();
+
     let unshiny_titles: Vec<String> = titles
         .iter()
         .cloned()
@@ -293,7 +290,11 @@ fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
 
     ev.add_workspace_change_handler(move |_| {
         move_floating(shiny_titles.clone());
-        hyprland::dispatch!(ToggleSpecialWorkspace, None).unwrap();
+        if let Some(cl) = Client::get_active().unwrap() {
+            if cl.workspace.id < 0 {
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
+            }
+        }
     });
 
     if spotless == "spotless" {
@@ -351,9 +352,7 @@ fn initialize(args: &[String]) -> Result<()> {
         let titles2 = titles.clone();
         let options2 = options.clone();
         if args[1..].contains(&"spotless".to_string()) {
-            std::thread::spawn(move || {
-                clean("spotless", &titles2.clone(), &options2.clone())
-            });
+            std::thread::spawn(move || clean("spotless", &titles2.clone(), &options2.clone()));
         } else {
             std::thread::spawn(move || clean(" ", &titles2.clone(), &options2.clone()));
         }

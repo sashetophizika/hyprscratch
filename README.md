@@ -36,7 +36,7 @@ bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;cen
 
 * `onstart`: spawns the scratchpad at the start of the hyprland session.
 
-* `special`: uses the special workspace. Ignores `stack`, `shiny` and is ignored by `clean` and `cycle`.
+* `special`: uses the special workspace. Ignores `stack`, `shiny` and is ignored by `clean spotless` and `cycle`.
 
 ### Extra hyprscratch commands:
 
