@@ -195,6 +195,126 @@ fn parse_config() -> [Vec<String>; 3] {
     [titles, commands, options]
 }
 
+fn shuffle_normal_special(
+    normal_titles: &[String],
+    old_normal_titles: &[String],
+    special_titles: &[String],
+    old_special_titles: &[String],
+) -> Result<()> {
+    let clients = Clients::get()?;
+    for title in old_normal_titles.iter() {
+        if special_titles.contains(title) {
+            clients.iter().filter(|x| &x.title == title).for_each(|x| {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Special(Some(title)),
+                    Some(WindowIdentifier::ProcessId(x.pid as u32))
+                )
+                .unwrap()
+            });
+        }
+    }
+
+    for title in old_special_titles.iter() {
+        if normal_titles.contains(title) {
+            clients.iter().filter(|x| &x.title == title).for_each(|x| {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Id(42),
+                    Some(WindowIdentifier::ProcessId(x.pid as u32))
+                )
+                .unwrap()
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_reload(
+    current_titles: &mut Vec<String>,
+    current_normal_titles: &mut Vec<String>,
+    current_commands: &mut Vec<String>,
+    current_options: &mut Vec<String>,
+    args: &[String],
+) -> Result<()> {
+    let [titles, commands, options] = parse_config();
+
+    let normal_titles = titles
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| !options[i].contains("special"))
+        .map(|(_, x)| x.to_owned())
+        .collect::<Vec<String>>();
+
+    let old_normal_titles = current_titles
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| !current_options[i].contains("special"))
+        .map(|(_, x)| x.to_owned())
+        .collect::<Vec<String>>();
+
+    let special_titles = titles
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| options[i].contains("special"))
+        .map(|(_, x)| x.to_owned())
+        .collect::<Vec<String>>();
+
+    let old_special_titles = current_titles
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| current_options[i].contains("special"))
+        .map(|(_, x)| x.to_owned())
+        .collect::<Vec<String>>();
+
+    shuffle_normal_special(
+        &normal_titles,
+        &old_normal_titles,
+        &special_titles,
+        &old_special_titles,
+    )?;
+
+    *current_titles = titles.clone();
+    *current_commands = commands.clone();
+    *current_options = options.clone();
+    *current_normal_titles = normal_titles;
+
+    autospawn(&titles, &commands, &options)?;
+
+    if args.contains(&"spotless".to_string()) {
+        std::thread::spawn(move || clean("spotless", &titles.clone(), &options.clone()));
+    } else {
+        std::thread::spawn(move || clean("", &titles.clone(), &options.clone()));
+    }
+
+    Ok(())
+}
+
+fn handle_cycle(
+    stream: &mut UnixStream,
+    current_titles: &[String],
+    current_commands: &[String],
+    current_options: &[String],
+    cycle_current: &mut usize,
+) -> Result<()> {
+    let mut current_index = *cycle_current % current_titles.len();
+    while current_options[current_index].contains("special") {
+        *cycle_current += 1;
+        current_index = *cycle_current % current_titles.len();
+    }
+
+    let next_scratchpad = format!(
+        "{}:{}:{}",
+        current_titles[current_index],
+        current_commands[current_index],
+        current_options[current_index]
+    );
+    stream.write_all(next_scratchpad.as_bytes())?;
+    *cycle_current += 1;
+    Ok(())
+}
+
 fn handle_stream(
     stream: &mut UnixStream,
     current_titles: &mut Vec<String>,
@@ -208,46 +328,24 @@ fn handle_stream(
     stream.try_clone()?.take(1).read_to_string(&mut buf)?;
 
     match buf.as_str() {
-        "r" => {
-            let [titles, commands, options] = parse_config();
-            *current_titles = titles.clone();
-            *current_commands = commands.clone();
-            *current_options = options.clone();
-            *current_normal_titles = current_titles
-                .iter()
-                .enumerate()
-                .filter(|&(i, _)| !options[i].contains("special"))
-                .map(|(_, x)| x.to_owned())
-                .collect::<Vec<String>>();
-
-            autospawn(&titles, &commands, &options);
-            if args.contains(&"spotless".to_string()) {
-                std::thread::spawn(move || clean("spotless", &titles.clone(), &options.clone()));
-            } else {
-                std::thread::spawn(move || clean("", &titles.clone(), &options.clone()));
-            }
-        }
         "\0" => {
             let titles_string = format!("{current_normal_titles:?}",);
             stream.write_all(titles_string.as_bytes())?;
         }
-        "c" => {
-            let mut current_index = *cycle_current % current_titles.len();
-            while current_options[current_index].contains("special") {
-                *cycle_current += 1;
-                current_index = *cycle_current % current_titles.len();
-            }
-
-            let next_scratchpad = format!(
-                "{}:{}:{}",
-                current_titles[current_index],
-                current_commands[current_index],
-                current_options[current_index]
-            );
-            stream.write_all(next_scratchpad.as_bytes())?;
-            *cycle_current += 1;
-        }
-
+        "r" => handle_reload(
+            current_titles,
+            current_normal_titles,
+            current_commands,
+            current_options,
+            args,
+        )?,
+        "c" => handle_cycle(
+            stream,
+            current_titles,
+            current_commands,
+            current_options,
+            cycle_current,
+        )?,
         e => println!("Unknown request {e}"),
     }
     Ok(())
@@ -311,9 +409,8 @@ fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
-    let client_titles = Clients::get()
-        .unwrap()
+fn autospawn(titles: &[String], commands: &[String], options: &[String]) -> Result<()> {
+    let client_titles = Clients::get()?
         .into_iter()
         .map(|x| x.initial_title)
         .collect::<Vec<_>>();
@@ -333,6 +430,8 @@ fn autospawn(titles: &[String], commands: &[String], options: &[String]) {
                 hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
             }
         });
+
+    Ok(())
 }
 
 fn initialize(args: &[String]) -> Result<()> {
@@ -344,7 +443,7 @@ fn initialize(args: &[String]) -> Result<()> {
         .map(|(_, x)| x.to_owned())
         .collect::<Vec<String>>();
 
-    autospawn(&titles, &commands, &options);
+    autospawn(&titles, &commands, &options)?;
 
     let mut cycle_current: usize = 0;
 
