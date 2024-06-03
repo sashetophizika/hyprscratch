@@ -8,6 +8,7 @@ use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 fn summon_special(args: &[String]) -> Result<()> {
     let title = args[0].clone();
@@ -236,7 +237,8 @@ fn handle_reload(
     current_normal_titles: &mut Vec<String>,
     current_commands: &mut Vec<String>,
     current_options: &mut Vec<String>,
-    args: &[String],
+    shiny_titles: Arc<Mutex<Vec<String>>>,
+    unshiny_titles: Arc<Mutex<Vec<String>>>
 ) -> Result<()> {
     let [titles, commands, options] = parse_config();
 
@@ -278,15 +280,21 @@ fn handle_reload(
     *current_titles = titles.clone();
     *current_commands = commands.clone();
     *current_options = options.clone();
-    *current_normal_titles = normal_titles;
+    *current_normal_titles = normal_titles.clone();
 
     autospawn(&titles, &commands, &options)?;
 
-    if args.contains(&"spotless".to_string()) {
-        std::thread::spawn(move || clean("spotless", &titles.clone(), &options.clone()));
-    } else {
-        std::thread::spawn(move || clean("", &titles.clone(), &options.clone()));
-    }
+    let mut current_shiny_titles = shiny_titles.lock().unwrap();
+    *current_shiny_titles = normal_titles.clone();
+
+    let mut current_unshiny_titles = unshiny_titles.lock().unwrap();
+    *current_unshiny_titles = titles
+        .iter()
+        .cloned()
+        .enumerate()
+        .filter(|&(i, _)| !options[i].contains("shiny") && !options[i].contains("special"))
+        .map(|(_, x)| x)
+        .collect();
 
     Ok(())
 }
@@ -322,7 +330,8 @@ fn handle_stream(
     current_commands: &mut Vec<String>,
     current_options: &mut Vec<String>,
     cycle_current: &mut usize,
-    args: &[String],
+    shiny_titles: Arc<Mutex<Vec<String>>>,
+    unshiny_titles: Arc<Mutex<Vec<String>>>
 ) -> Result<()> {
     let mut buf = String::new();
     stream.try_clone()?.take(1).read_to_string(&mut buf)?;
@@ -337,7 +346,8 @@ fn handle_stream(
             current_normal_titles,
             current_commands,
             current_options,
-            args,
+            shiny_titles,
+            unshiny_titles,
         )?,
         "c" => handle_cycle(
             stream,
@@ -367,27 +377,12 @@ fn move_floating(titles: Vec<String>) {
     }
 }
 
-fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
+fn clean(spotless: &str, shiny_titles: Arc<Mutex<Vec<String>>>, unshiny_titles: Arc<Mutex<Vec<String>>>) -> Result<()> {
     let mut ev = EventListener::new();
 
-    let shiny_titles: Vec<String> = titles
-        .iter()
-        .cloned()
-        .enumerate()
-        .filter(|&(i, _)| !options[i].contains("special"))
-        .map(|(_, x)| x)
-        .collect();
-
-    let unshiny_titles: Vec<String> = titles
-        .iter()
-        .cloned()
-        .enumerate()
-        .filter(|&(i, _)| !(options[i].contains("shiny") || options[i].contains("special")))
-        .map(|(_, x)| x)
-        .collect();
 
     ev.add_workspace_change_handler(move |_| {
-        move_floating(shiny_titles.clone());
+        move_floating(shiny_titles.lock().unwrap().to_vec());
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
@@ -399,7 +394,7 @@ fn clean(spotless: &str, titles: &[String], options: &[String]) -> Result<()> {
         ev.add_active_window_change_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(unshiny_titles.clone());
+                    move_floating(unshiny_titles.lock().unwrap().to_vec());
                 }
             }
         });
@@ -443,17 +438,27 @@ fn initialize(args: &[String]) -> Result<()> {
         .map(|(_, x)| x.to_owned())
         .collect::<Vec<String>>();
 
+    let shiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(normal_titles.clone()));
+
+    let unshiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(titles
+        .iter()
+        .cloned()
+        .enumerate()
+        .filter(|&(i, _)| !(options[i].contains("shiny") || options[i].contains("special")))
+        .map(|(_, x)| x)
+        .collect()));
+
     autospawn(&titles, &commands, &options)?;
 
     let mut cycle_current: usize = 0;
 
     if args.contains(&"clean".to_string()) {
-        let titles2 = titles.clone();
-        let options2 = options.clone();
+        let shiny_titles = Arc::clone(&shiny_titles);
+        let unshiny_titles = Arc::clone(&unshiny_titles);
         if args[1..].contains(&"spotless".to_string()) {
-            std::thread::spawn(move || clean("spotless", &titles2.clone(), &options2.clone()));
+            std::thread::spawn(move || clean("spotless", shiny_titles.clone(), unshiny_titles.clone()));
         } else {
-            std::thread::spawn(move || clean(" ", &titles2.clone(), &options2.clone()));
+            std::thread::spawn(move || clean(" ", shiny_titles.clone(), unshiny_titles.clone()));
         }
     }
 
@@ -478,7 +483,8 @@ fn initialize(args: &[String]) -> Result<()> {
                     &mut commands,
                     &mut options,
                     &mut cycle_current,
-                    &args[1..],
+                    shiny_titles.clone(),
+                    unshiny_titles.clone()
                 )?;
             }
             Err(_) => {
