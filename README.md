@@ -3,10 +3,14 @@
 A scratchpad utility for Hyprland
 
 ## Installation
-Using cargo (Make sure `~/.cargo/bin` is in $PATH):
+### Cargo:
 
 ```
 cargo install hyprscratch
+```
+### AUR:
+```
+paru -S hyprscratch
 ```
 
 ## Usage
