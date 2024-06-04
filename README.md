@@ -17,15 +17,15 @@ paru -S hyprscratch
 In `hyprland.conf`:
 
 ```bash
-exec-once = ~/.cargo/bin/hyprscratch [OPTIONS] #start the hyprscratch daemon
+exec-once = hyprscratch [OPTIONS] #start the hyprscratch daemon
 
-bind = $MOD, $KEY, exec, ~/.cargo/bin/hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS] #configure scratchpads
+bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS] #configure scratchpads
 ```
 
 Example scratchpad:
 
 ```bash
-bind = $mainMod, b, exec, ~/.cargo/bin/hyprscratch btop "[float;size 70% 80%;center] kitty --title btop -e btop" onstart
+bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] kitty --title btop -e btop" onstart
 ```
 
 ### Daemon options:
