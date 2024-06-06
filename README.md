@@ -25,7 +25,7 @@ bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPT
 Example scratchpad:
 
 ```bash
-bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] kitty --title btop -e btop" onstart
+bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritty --title btop -e btop" onstart
 ```
 
 ### Daemon options:

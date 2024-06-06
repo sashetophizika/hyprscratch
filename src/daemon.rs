@@ -11,35 +11,28 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+fn handle_scratchpad(stream: &mut UnixStream, config: &Config) -> Result<()> {
+    let titles_string = format!("{:?}", config.normal_titles);
+    stream.write_all(titles_string.as_bytes())?;
+    Ok(())
+}
+
 fn handle_reload(config: &mut Config) -> Result<()> {
     config.reload()?;
-
     shuffle_normal_special(&config.normal_titles, &config.special_titles)?;
     autospawn(config)?;
-
-    let mut current_shiny_titles = config.shiny_titles.lock().unwrap();
-    current_shiny_titles.clone_from(&config.normal_titles);
-
-    let mut current_unshiny_titles = config.unshiny_titles.lock().unwrap();
-    *current_unshiny_titles = config.titles
-        .iter()
-        .cloned()
-        .enumerate()
-        .filter(|&(i, _)| !config.options[i].contains("shiny") && !config.options[i].contains("special"))
-        .map(|(_, x)| x)
-        .collect();
     Ok(())
 }
 
 fn handle_cycle(
     stream: &mut UnixStream,
-    cycle_current: &mut usize,
-    config: &mut Config,
+    cycle_index: &mut usize,
+    config: &Config,
 ) -> Result<()> {
-    let mut current_index = *cycle_current % config.titles.len();
+    let mut current_index = *cycle_index % config.titles.len();
     while config.options[current_index].contains("special") {
-        *cycle_current += 1;
-        current_index = *cycle_current % config.titles.len();
+        *cycle_index += 1;
+        current_index = *cycle_index % config.titles.len();
     }
 
     let next_scratchpad = format!(
@@ -47,27 +40,7 @@ fn handle_cycle(
         config.titles[current_index], config.commands[current_index], config.options[current_index]
     );
     stream.write_all(next_scratchpad.as_bytes())?;
-    *cycle_current += 1;
-    Ok(())
-}
-
-fn handle_stream(
-    stream: &mut UnixStream,
-    cycle_current: &mut usize,
-    config: &mut Config,
-) -> Result<()> {
-    let mut buf = String::new();
-    stream.try_clone()?.take(1).read_to_string(&mut buf)?;
-
-    match buf.as_str() {
-        "\0" => {
-            let titles_string = format!("{:?}", config.normal_titles);
-            stream.write_all(titles_string.as_bytes())?;
-        }
-        "r" => handle_reload(config)?,
-        "c" => handle_cycle(stream, cycle_current, config)?,
-        e => println!("Unknown request {e}"),
-    }
+    *cycle_index += 1;
     Ok(())
 }
 
@@ -106,7 +79,7 @@ pub fn initialize(args: &[String]) -> Result<()> {
 
     autospawn(&mut config)?;
 
-    let mut cycle_current: usize = 0;
+    let mut cycle_index: usize = 0;
 
     if args.contains(&"clean".to_string()) {
         let shiny_titles = Arc::clone(&config.shiny_titles);
@@ -134,7 +107,15 @@ pub fn initialize(args: &[String]) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                handle_stream(&mut stream, &mut cycle_current, &mut config)?;
+                let mut buf = String::new();
+                stream.try_clone()?.take(1).read_to_string(&mut buf)?;
+
+                match buf.as_str() {
+                    "s" => handle_scratchpad(&mut stream, &config)?,
+                    "r" => handle_reload(&mut config)?,
+                    "c" => handle_cycle(&mut stream, &mut cycle_index, &config)?,
+                    e => println!("Unknown request {e}"),
+                }
             }
             Err(_) => {
                 continue;

@@ -31,23 +31,21 @@ fn summon_normal(args: &[String]) -> Result<()> {
         hyprland::dispatch!(Exec, &args[1])?;
     } else {
         let pid = clients_with_title[0].pid as u32;
-        if clients_with_title[0].workspace.id == Workspace::get_active()?.id {
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
-        } else {
+        if clients_with_title[0].workspace.id != Workspace::get_active()?.id {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Relative(0),
                 Some(WindowIdentifier::ProcessId(pid))
             )?;
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
         }
+        hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
     }
     Ok(())
 }
 
 pub fn scratchpad(args: &[String]) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-    stream.write_all(b"\0")?;
+    stream.write_all(b"s")?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
@@ -79,8 +77,6 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
                     .unwrap()
                 });
             } else {
-                summon_normal(args)?;
-
                 if !args[2..].contains(&"stack".to_string())
                     && active_client.floating
                     && titles.contains(&active_client.initial_title)
@@ -91,6 +87,8 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
                         Some(WindowIdentifier::ProcessId(active_client.pid as u32))
                     )?;
                 }
+
+                summon_normal(args)?;
             }
         }
         None => summon_normal(args)?,

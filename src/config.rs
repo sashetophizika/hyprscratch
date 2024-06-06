@@ -1,7 +1,7 @@
 use hyprland::Result;
-use std::sync::{Arc, Mutex};
 use regex::Regex;
 use std::io::prelude::*;
+use std::sync::{Arc, Mutex};
 
 pub struct Config {
     pub titles: Vec<String>,
@@ -53,22 +53,39 @@ impl Config {
         })
     }
 
-    pub fn reload(self: &mut Self) -> Result<()> {
+    pub fn reload(self: &mut Config) -> Result<()> {
         [self.titles, self.commands, self.options] = parse_config()?;
-        self.normal_titles = self.titles
+        self.normal_titles = self
+            .titles
             .iter()
             .enumerate()
             .filter(|&(i, _)| !self.options[i].contains("special"))
             .map(|(_, x)| x.to_owned())
             .collect::<Vec<String>>();
 
-        self.special_titles = self.titles
+        self.special_titles = self
+            .titles
             .iter()
             .enumerate()
             .filter(|&(i, _)| self.options[i].contains("special"))
             .map(|(_, x)| x.to_owned())
             .collect::<Vec<String>>();
-        
+
+        let mut current_shiny_titles = self.shiny_titles.lock().unwrap();
+        current_shiny_titles.clone_from(&self.normal_titles);
+
+        let mut current_unshiny_titles = self.unshiny_titles.lock().unwrap();
+        *current_unshiny_titles = self
+            .titles
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter(|&(i, _)| {
+                !self.options[i].contains("shiny") && !self.options[i].contains("special")
+            })
+            .map(|(_, x)| x)
+            .collect();
+
         Ok(())
     }
 }
