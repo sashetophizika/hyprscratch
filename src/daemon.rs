@@ -1,4 +1,6 @@
-use hyprland::data::{Client, Clients};
+use crate::config::Config;
+use crate::utils::*;
+use hyprland::data::Client;
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
@@ -8,145 +10,24 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use crate::utils::parse_config;
-
-struct Config {
-    titles: Vec<String>,
-    normal_titles: Vec<String>,
-    commands: Vec<String>,
-    options: Vec<String>,
-    shiny_titles: Arc<Mutex<Vec<String>>>,
-    unshiny_titles: Arc<Mutex<Vec<String>>>,
-}
-
-impl Config {
-    fn new() -> Result<Config> {
-        let [titles, commands, options] = parse_config()?;
-        let normal_titles = titles
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| !options[i].contains("special"))
-            .map(|(_, x)| x.to_owned())
-            .collect::<Vec<String>>();
-
-        let shiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(normal_titles.clone()));
-
-        let unshiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(
-            titles
-                .iter()
-                .cloned()
-                .enumerate()
-                .filter(|&(i, _)| !(options[i].contains("shiny") || options[i].contains("special")))
-                .map(|(_, x)| x)
-                .collect(),
-        ));
-
-        Ok(Config {
-            titles,
-            normal_titles,
-            commands,
-            options,
-            shiny_titles,
-            unshiny_titles,
-        })
-    }
-}
-
-fn shuffle_normal_special(
-    normal_titles: &[String],
-    old_normal_titles: &[String],
-    special_titles: &[String],
-    old_special_titles: &[String],
-) -> Result<()> {
-    let clients = Clients::get()?;
-    for title in old_normal_titles.iter() {
-        if special_titles.contains(title) {
-            clients.iter().filter(|x| &x.title == title).for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Special(Some(title)),
-                    Some(WindowIdentifier::ProcessId(x.pid as u32))
-                )
-                .unwrap()
-            });
-        }
-    }
-
-    for title in old_special_titles.iter() {
-        if normal_titles.contains(title) {
-            clients.iter().filter(|x| &x.title == title).for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::ProcessId(x.pid as u32))
-                )
-                .unwrap()
-            });
-        }
-    }
-
-    Ok(())
-}
 
 fn handle_reload(config: &mut Config) -> Result<()> {
-    let [titles, commands, options] = parse_config()?;
+    config.reload()?;
 
-    let normal_titles = titles
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| !options[i].contains("special"))
-        .map(|(_, x)| x.to_owned())
-        .collect::<Vec<String>>();
-
-    let old_normal_titles = config
-        .titles
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| !config.options[i].contains("special"))
-        .map(|(_, x)| x.to_owned())
-        .collect::<Vec<String>>();
-
-    let special_titles = titles
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| options[i].contains("special"))
-        .map(|(_, x)| x.to_owned())
-        .collect::<Vec<String>>();
-
-    let old_special_titles = config
-        .titles
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| config.options[i].contains("special"))
-        .map(|(_, x)| x.to_owned())
-        .collect::<Vec<String>>();
-
-    shuffle_normal_special(
-        &normal_titles,
-        &old_normal_titles,
-        &special_titles,
-        &old_special_titles,
-    )?;
-
+    shuffle_normal_special(&config.normal_titles, &config.special_titles)?;
     autospawn(config)?;
 
-    config.titles.clone_from(&titles);
-    config.commands.clone_from(&commands);
-    config.options.clone_from(&options);
-    config.normal_titles.clone_from(&normal_titles);
-
     let mut current_shiny_titles = config.shiny_titles.lock().unwrap();
-    current_shiny_titles.clone_from(&normal_titles);
+    current_shiny_titles.clone_from(&config.normal_titles);
 
     let mut current_unshiny_titles = config.unshiny_titles.lock().unwrap();
-    *current_unshiny_titles = titles
+    *current_unshiny_titles = config.titles
         .iter()
         .cloned()
         .enumerate()
-        .filter(|&(i, _)| !options[i].contains("shiny") && !options[i].contains("special"))
+        .filter(|&(i, _)| !config.options[i].contains("shiny") && !config.options[i].contains("special"))
         .map(|(_, x)| x)
         .collect();
-
     Ok(())
 }
 
@@ -190,22 +71,6 @@ fn handle_stream(
     Ok(())
 }
 
-fn move_floating(titles: Vec<String>) {
-    if let Ok(clients) = Clients::get() {
-        clients
-            .iter()
-            .filter(|x| x.floating && x.workspace.id != 42 && titles.contains(&x.initial_title))
-            .for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::ProcessId(x.pid as u32))
-                )
-                .unwrap()
-            })
-    }
-}
-
 fn clean(
     spotless: &str,
     shiny_titles: Arc<Mutex<Vec<String>>>,
@@ -233,38 +98,6 @@ fn clean(
     }
 
     ev.start_listener()?;
-    Ok(())
-}
-
-fn autospawn(config: &mut Config) -> Result<()> {
-    let client_titles = Clients::get()?
-        .into_iter()
-        .map(|x| x.initial_title)
-        .collect::<Vec<_>>();
-
-    config
-        .commands
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| {
-            config.options[i].contains("onstart") && !client_titles.contains(&config.titles[i])
-        })
-        .for_each(|(i, x)| {
-            if config.options[i].contains("special") {
-                hyprland::dispatch!(
-                    Exec,
-                    &x.replacen(
-                        '[',
-                        &format!("[workspace special:{} silent;", config.titles[i]),
-                        1
-                    )
-                )
-                .unwrap()
-            } else {
-                hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
-            }
-        });
-
     Ok(())
 }
 

@@ -2,11 +2,11 @@ mod daemon;
 mod scratchpad;
 mod extra;
 mod utils;
+mod config;
 
 use hyprland::Result;
 use crate::daemon::initialize;
 use crate::scratchpad::scratchpad;
-use crate::utils::*;
 use crate::extra::*;
 
 fn main() -> Result<()> {
