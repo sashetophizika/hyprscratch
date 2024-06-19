@@ -13,7 +13,12 @@ fn summon_special(args: &[String]) -> Result<()> {
         .collect::<Vec<_>>();
 
     if special_with_title.is_empty() {
-        let cmd = args[1].replacen('[', &format!("[workspace special:{title}; "), 1);
+        let mut special_cmd = args[1].clone();
+        if args[1].find("[") == None {
+            special_cmd.insert_str(0, "[]");
+        }
+
+        let cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
         hyprland::dispatch!(Exec, &cmd)?;
     } else {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;

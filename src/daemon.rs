@@ -24,11 +24,7 @@ fn handle_reload(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_cycle(
-    stream: &mut UnixStream,
-    cycle_index: &mut usize,
-    config: &Config,
-) -> Result<()> {
+fn handle_cycle(stream: &mut UnixStream, cycle_index: &mut usize, config: &Config) -> Result<()> {
     let mut current_index = *cycle_index % config.titles.len();
     while config.options[current_index].contains("special") {
         *cycle_index += 1;
@@ -84,6 +80,7 @@ pub fn initialize(args: &[String]) -> Result<()> {
     if args.contains(&"clean".to_string()) {
         let shiny_titles = Arc::clone(&config.shiny_titles);
         let unshiny_titles = Arc::clone(&config.unshiny_titles);
+
         if args[1..].contains(&"spotless".to_string()) {
             std::thread::spawn(move || {
                 clean("spotless", shiny_titles.clone(), unshiny_titles.clone())

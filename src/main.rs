@@ -1,13 +1,13 @@
-mod daemon;
-mod scratchpad;
-mod extra;
-mod utils;
 mod config;
+mod daemon;
+mod extra;
+mod scratchpad;
+mod utils;
 
-use hyprland::Result;
 use crate::daemon::initialize;
-use crate::scratchpad::scratchpad;
 use crate::extra::*;
+use crate::scratchpad::scratchpad;
+use hyprland::Result;
 
 fn main() -> Result<()> {
     let args = std::env::args().collect::<Vec<String>>();

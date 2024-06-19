@@ -34,10 +34,15 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
             config.options[i].contains("onstart") && !client_titles.contains(&config.titles[i])
         })
         .for_each(|(i, x)| {
+            let mut cmd = x.clone();
+            if x.find("[") == None {
+                cmd.insert_str(0, "[]");
+            }
+
             if config.options[i].contains("special") {
                 hyprland::dispatch!(
                     Exec,
-                    &x.replacen(
+                    &cmd.replacen(
                         '[',
                         &format!("[workspace special:{} silent;", config.titles[i]),
                         1
@@ -45,7 +50,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
                 )
                 .unwrap()
             } else {
-                hyprland::dispatch!(Exec, &x.replacen('[', "[workspace 42 silent;", 1)).unwrap()
+                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1)).unwrap()
             }
         });
 
@@ -78,4 +83,3 @@ pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String
     }
     Ok(())
 }
-
