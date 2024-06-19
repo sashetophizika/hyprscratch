@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::scratchpad::scratchpad;
-use hyprland::data::{Clients, Workspace};
+use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -8,9 +8,18 @@ use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
 
 pub fn hideall() -> Result<()> {
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+    stream.write_all(b"s")?;
+
+    let mut titles = String::new();
+    stream.read_to_string(&mut titles)?;
+    let active_workspace = Workspace::get_active()?;
+
     Clients::get()?
         .iter()
-        .filter(|x| x.floating && x.workspace.id == Workspace::get_active().unwrap().id)
+        .filter(|x| {
+            x.floating && x.workspace.id == active_workspace.id && titles.contains(&x.title)
+        })
         .for_each(|x| {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
@@ -19,6 +28,11 @@ pub fn hideall() -> Result<()> {
             )
             .unwrap()
         });
+
+    let active_client = Client::get_active()?.unwrap();
+    if active_client.workspace.id < 0 {
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(active_client.initial_title))?;
+    }
     Ok(())
 }
 
