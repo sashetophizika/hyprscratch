@@ -14,7 +14,7 @@ fn summon_special(args: &[String]) -> Result<()> {
 
     if special_with_title.is_empty() {
         let mut special_cmd = args[1].clone();
-        if args[1].find("[") == None {
+        if args[1].find('[').is_none() {
             special_cmd.insert_str(0, "[]");
         }
 

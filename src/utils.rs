@@ -35,7 +35,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         })
         .for_each(|(i, x)| {
             let mut cmd = x.clone();
-            if x.find("[") == None {
+            if x.find('[').is_none() {
                 cmd.insert_str(0, "[]");
             }
 
