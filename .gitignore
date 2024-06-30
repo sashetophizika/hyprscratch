@@ -1,6 +1,2 @@
 /target
-<<<<<<< HEAD
-.gitignore
-=======
 /result
->>>>>>> 75022bb (package as nix)
