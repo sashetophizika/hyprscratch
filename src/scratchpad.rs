@@ -48,55 +48,61 @@ fn summon_normal(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn summon(args: &[String]) -> Result<()> {
+    if args[2..].contains(&"special".to_string()) {
+        summon_special(args)?;
+    } else {
+        summon_normal(args)?;
+    }
+    Ok(())
+}
+
+fn hide_active(args: &[String], titles: String, active_client: &Client) -> Result<()> {
+    if !args[2..].contains(&"stack".to_string())
+        && active_client.floating
+        && titles.contains(&active_client.initial_title)
+    {
+        hyprland::dispatch!(
+            MoveToWorkspaceSilent,
+            WorkspaceIdentifierWithSpecial::Id(42),
+            Some(WindowIdentifier::ProcessId(active_client.pid as u32))
+        )?;
+    }
+    Ok(())
+}
+
 pub fn scratchpad(args: &[String]) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"s")?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
-    if args[2..].contains(&"special".to_string()) {
-        summon_special(args)?;
-        return Ok(());
-    }
 
-    let active_client = Client::get_active()?;
-    match active_client {
-        Some(active_client) => {
-            let mut clients_with_title = Clients::get()?
-                .into_iter()
-                .filter(|x| {
-                    x.initial_title == args[0]
-                        && x.workspace.id == Workspace::get_active().unwrap().id
-                })
-                .peekable();
+    if let Some(active_client) = Client::get_active()? {
+        let mut clients_with_title = Clients::get()?
+            .into_iter()
+            .filter(|x| {
+                x.initial_title == args[0] && x.workspace.id == Workspace::get_active().unwrap().id
+            })
+            .peekable();
 
-            if active_client.initial_title == args[0]
-                || (!active_client.floating && clients_with_title.peek().is_some())
-            {
-                clients_with_title.for_each(|x| {
-                    hyprland::dispatch!(
-                        MoveToWorkspaceSilent,
-                        WorkspaceIdentifierWithSpecial::Id(42),
-                        Some(WindowIdentifier::ProcessId(x.pid as u32))
-                    )
-                    .unwrap()
-                });
-            } else {
-                if !args[2..].contains(&"stack".to_string())
-                    && active_client.floating
-                    && titles.contains(&active_client.initial_title)
-                {
-                    hyprland::dispatch!(
-                        MoveToWorkspaceSilent,
-                        WorkspaceIdentifierWithSpecial::Id(42),
-                        Some(WindowIdentifier::ProcessId(active_client.pid as u32))
-                    )?;
-                }
-
-                summon_normal(args)?;
-            }
+        if args[2..].contains(&"special".to_string())
+            || (clients_with_title.peek().is_none() && active_client.initial_title != args[0])
+        {
+            hide_active(args, titles, &active_client)?;
+            summon(args)?;
+        } else {
+            clients_with_title.for_each(|x| {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Id(42),
+                    Some(WindowIdentifier::ProcessId(x.pid as u32))
+                )
+                .unwrap()
+            });
         }
-        None => summon_normal(args)?,
+    } else {
+        summon(args)?;
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;

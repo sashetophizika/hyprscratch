@@ -4,8 +4,8 @@ version = "0.4.0"
 edition = "2021"
 license = "MIT"
 description = "Scratchpad functionality for Hyprland"
-homepage = "https://github.com/sasheto-phizika/hyprscratch"
-repository = "https://github.com/sasheto-phizika/hyprscratch"
+homepage = "https://github.com/sashetophizika/hyprscratch"
+repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
