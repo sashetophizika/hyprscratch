@@ -17,9 +17,9 @@ paru -S hyprscratch
 In `hyprland.conf`:
 
 ```bash
-exec-once = hyprscratch [OPTIONS] #start the hyprscratch daemon
+exec-once = hyprscratch [DAEMON_OPTIONS] #start the hyprscratch daemon
 
-bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [OPTIONS] #configure scratchpads
+bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS] #configure scratchpads
 ```
 
 Example scratchpad:
