@@ -1,5 +1,4 @@
 use hyprland::Result;
-use regex::Regex;
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 
@@ -90,6 +89,58 @@ impl Config {
     }
 }
 
+fn split_args(line: String) -> Vec<String> {
+    let mut args: Vec<String> = vec![];
+    let mut word = String::new();
+    let mut open_quote = '\0';
+    let mut previous_char = '\0';
+
+    for char in line.chars() {
+        if let ' ' | '\n' = char {
+            if open_quote != '\0' {
+                word.push(char);
+                continue;
+            }
+
+            if !word.is_empty() {
+                args.push(word.clone());
+                word = String::new();
+            }
+        } else if let '\"' | '\'' = char {
+            if (open_quote != '\0' && char != open_quote) || previous_char == '\\' {
+                word.push(char);
+                continue;
+            }
+
+            if open_quote == '\0' {
+                open_quote = char;
+            } else {
+                open_quote = '\0';
+            }
+
+            if !word.is_empty() {
+                args.push(word.clone());
+                word = String::new();
+            }
+        } else {
+            word.push(char)
+        }
+
+        previous_char = char;
+    }
+    args
+}
+
+fn get_hyprscratch_lines(input: String) -> Vec<String> {
+    let mut lines = vec![];
+    for line in input.lines() {
+        if let Some(i) = line.find("hyprscratch") {
+            lines.push(line.split_at(i).1.to_string());
+        }
+    }
+    lines
+}
+
 fn dequote(string: &String) -> String {
     let dequoted = match &string[0..1] {
         "\"" | "'" => &string[1..string.len() - 1],
@@ -99,8 +150,6 @@ fn dequote(string: &String) -> String {
 }
 
 fn parse_config() -> Result<[Vec<String>; 3]> {
-    let hyprscratch_lines_regex = Regex::new("hyprscratch.+").unwrap();
-    let hyprscratch_args_regex = Regex::new("\".+?\"|'.+?'|[\\w.-]+").unwrap();
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
@@ -113,29 +162,22 @@ fn parse_config() -> Result<[Vec<String>; 3]> {
     ))?
     .read_to_string(&mut buf)?;
 
-    let lines: Vec<&str> = hyprscratch_lines_regex
-        .find_iter(&buf)
-        .map(|x| x.as_str())
-        .collect();
-
+    let lines: Vec<String> = get_hyprscratch_lines(buf);
     for line in lines {
-        let parsed_line = &hyprscratch_args_regex
-            .find_iter(line)
-            .map(|x| x.as_str().to_string())
-            .collect::<Vec<_>>()[..];
+        let parsed_args = split_args(line);
 
-        if parsed_line.len() == 1 {
+        if parsed_args.len() == 1 {
             continue;
         }
 
-        match parsed_line[1].as_str() {
+        match parsed_args[1].as_str() {
             "clean" | "hideall" | "reload" | "cycle" => (),
             _ => {
-                titles.push(dequote(&parsed_line[1]));
-                commands.push(dequote(&parsed_line[2]));
+                titles.push(dequote(&parsed_args[1]));
+                commands.push(dequote(&parsed_args[2]));
 
-                if parsed_line.len() > 3 {
-                    options.push(parsed_line[3..].join(" "));
+                if parsed_args.len() > 3 {
+                    options.push(parsed_args[3..].join(" "));
                 } else {
                     options.push(String::from(""));
                 }
