@@ -1,14 +1,12 @@
 [package]
 name = "hyprscratch"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 license = "MIT"
 description = "Scratchpad functionality for Hyprland"
 homepage = "https://github.com/sashetophizika/hyprscratch"
 repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 hyprland = "0.4.0-alpha.2"

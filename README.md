@@ -38,9 +38,13 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
 
-* `onstart`: spawns the scratchpad at the start of the hyprland session.
+* `onstart`: spawns the scratchpad at the start of the Hyprland session.
 
-* `special`: uses the special workspace. Ignores `stack`, `shiny` and is ignored by `clean spotless` and `cycle`.
+* `summon`: only creates or brings up the scratchpad.
+
+* `hide`: only hides the scrachpad.
+
+* `special`: uses the special workspace. Ignores all other scratchpad options and is ignored by `clean spotless` and `cycle`.
 
 ### Extra hyprscratch commands:
 

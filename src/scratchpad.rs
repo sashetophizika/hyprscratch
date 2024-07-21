@@ -51,7 +51,7 @@ fn summon_normal(args: &[String]) -> Result<()> {
 fn summon(args: &[String]) -> Result<()> {
     if args[2..].contains(&"special".to_string()) {
         summon_special(args)?;
-    } else {
+    } else if !args[2..].contains(&"hide".to_string()) {
         summon_normal(args)?;
     }
     Ok(())
@@ -77,6 +77,11 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
+
+    if args[2..].contains(&"summon".to_string()) && !args[2..].contains(&"special".to_string()) {
+        summon(args)?;
+        return Ok(());
+    }
 
     if let Some(active_client) = Client::get_active()? {
         let mut clients_with_title = Clients::get()?
