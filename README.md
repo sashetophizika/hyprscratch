@@ -42,7 +42,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `summon`: only creates or brings up the scratchpad.
 
-* `hide`: only hides the scrachpad.
+* `hide`: only hides the scratchpad.
 
 * `special`: uses the special workspace. Ignores all other scratchpad options and is ignored by `clean spotless` and `cycle`.
 
