@@ -23,6 +23,7 @@ fn main() -> Result<()> {
         "reload" => reload()?,
         "cycle" => cycle()?,
         "help" => help(),
+        "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {
             if args[2..].is_empty() {
                 println!("Unknown command or not enough arguments given for scratchpad.\nTry 'hyprscratch help'.");

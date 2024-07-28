@@ -100,6 +100,8 @@ EXTRA COMMANDS
   cycle               Cycle between non-special scratchpads
   hideall             Hidall all scratchpads simultaneously
   reload              Reparse file without restarting daemon
-  get-config          Print parsed config file"
+  get-config          Print parsed config file
+  help                Print this help message
+  version             Print current version"
     )
 }
