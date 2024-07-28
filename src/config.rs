@@ -103,11 +103,11 @@ fn split_args(line: String) -> Vec<String> {
             }
 
             if !word.is_empty() {
-                args.push(word.clone());
+                args.push(word);
                 word = String::new();
             }
         } else if let '\"' | '\'' = char {
-            if (open_quote != '\0' && char != open_quote) || previous_char == '\\' {
+            if (open_quote != '\0' && open_quote != char) || previous_char == '\\' {
                 word.push(char);
                 continue;
             }
@@ -119,11 +119,11 @@ fn split_args(line: String) -> Vec<String> {
             }
 
             if !word.is_empty() {
-                args.push(word.clone());
+                args.push(word);
                 word = String::new();
             }
         } else {
-            word.push(char)
+            word.push(char);
         }
 
         previous_char = char;
@@ -131,9 +131,9 @@ fn split_args(line: String) -> Vec<String> {
     args
 }
 
-fn get_hyprscratch_lines(input: String) -> Vec<String> {
+fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     let mut lines = vec![];
-    for line in input.lines() {
+    for line in config_file.lines() {
         if let Some(i) = line.find("hyprscratch") {
             lines.push(line.split_at(i).1.to_string());
         }
