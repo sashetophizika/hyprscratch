@@ -125,7 +125,6 @@ fn split_args(line: String) -> Vec<String> {
         } else {
             word.push(char);
         }
-
         previous_char = char;
     }
     args
