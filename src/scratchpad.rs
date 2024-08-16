@@ -21,8 +21,8 @@ fn summon_special(
             hyprland::dispatch!(
                 MoveToWorkspace,
                 WorkspaceIdentifierWithSpecial::Special(Some(&title)),
-                Some(WindowIdentifier::ProcessId(
-                    clients_with_title[0].pid as u32
+                Some(WindowIdentifier::Address(
+                    clients_with_title[0].address.clone()
                 ))
             )?;
 
@@ -52,15 +52,15 @@ fn summon_normal(
     if clients_with_title.is_empty() {
         hyprland::dispatch!(Exec, &args[1])?;
     } else {
-        let pid = clients_with_title[0].pid as u32;
+        let addr = clients_with_title[0].address.clone();
         if clients_with_title[0].workspace.id != active_workspace.id {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::ProcessId(pid))
+                Some(WindowIdentifier::Address(addr.clone()))
             )?;
         }
-        hyprland::dispatch!(FocusWindow, WindowIdentifier::ProcessId(pid))?;
+        hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
     }
     Ok(())
 }
@@ -86,7 +86,7 @@ fn hide_active(args: &[String], titles: String, active_client: &Client) -> Resul
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
             WorkspaceIdentifierWithSpecial::Id(42),
-            Some(WindowIdentifier::ProcessId(active_client.pid as u32))
+            Some(WindowIdentifier::Address(active_client.address.clone()))
         )?;
     }
     Ok(())
@@ -116,7 +116,6 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
             .into_iter()
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
-
         if args[2..].contains(&"special".to_string())
             || (clients_on_active.peek().is_none() && active_client.initial_title != args[0])
         {
@@ -127,7 +126,7 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::ProcessId(x.pid as u32))
+                    Some(WindowIdentifier::Address(x.address))
                 )
                 .unwrap()
             });

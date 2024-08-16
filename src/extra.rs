@@ -24,7 +24,7 @@ pub fn hideall() -> Result<()> {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Id(42),
-                Some(WindowIdentifier::ProcessId(x.pid as u32))
+                Some(WindowIdentifier::Address(x.address.clone()))
             )
             .unwrap()
         });

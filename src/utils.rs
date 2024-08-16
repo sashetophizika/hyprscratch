@@ -13,7 +13,7 @@ pub fn move_floating(titles: Vec<String>) {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
                     WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::ProcessId(x.pid as u32))
+                    Some(WindowIdentifier::Address(x.address.clone()))
                 )
                 .unwrap()
             })
@@ -65,7 +65,7 @@ pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Special(Some(title)),
-                Some(WindowIdentifier::ProcessId(x.pid as u32))
+                Some(WindowIdentifier::Address(x.address.clone()))
             )
             .unwrap()
         });
@@ -76,7 +76,7 @@ pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Id(42),
-                Some(WindowIdentifier::ProcessId(x.pid as u32))
+                Some(WindowIdentifier::Address(x.address.clone()))
             )
             .unwrap()
         });
