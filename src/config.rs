@@ -91,41 +91,39 @@ impl Config {
 
 fn split_args(line: String) -> Vec<String> {
     let mut args: Vec<String> = vec![];
-    let mut word = String::new();
-    let mut open_quote = '\0';
-    let mut previous_char = '\0';
+    let mut long_word = String::new();
+    let mut inquote = 0;
 
-    for char in line.chars() {
-        if let ' ' | '\n' = char {
-            if open_quote != '\0' {
-                word.push(char);
-                continue;
-            }
-
-            if !word.is_empty() {
-                args.push(word);
-                word = String::new();
-            }
-        } else if let '\"' | '\'' = char {
-            if (open_quote != '\0' && open_quote != char) || previous_char == '\\' {
-                word.push(char);
-                continue;
-            }
-
-            if open_quote == '\0' {
-                open_quote = char;
-            } else {
-                open_quote = '\0';
-            }
-
-            if !word.is_empty() {
-                args.push(word);
-                word = String::new();
-            }
-        } else {
-            word.push(char);
+    for word in line.split(' ') {
+        if word.is_empty() {
+            continue;
         }
-        previous_char = char;
+
+        let word_bytes = word.as_bytes();
+        if let b'\"' | b'\'' = word_bytes[word_bytes.len() - 1] {
+            inquote -= 1;
+            if inquote == 0 {
+                long_word += word;
+            }
+        }
+
+        if let b'\"' | b'\'' = word_bytes[0] {
+            inquote += 1;
+        } else if word_bytes[0] == b'\\' {
+            if let b'\"' | b'\'' = word_bytes[1] {
+                inquote += 1;
+            }
+        }
+
+        if inquote != 0 {
+            long_word += word;
+            long_word += " ";
+        } else if long_word.is_empty() {
+            args.push(word.to_string());
+        } else {
+            args.push(long_word);
+            long_word = String::new();
+        }
     }
     args
 }
