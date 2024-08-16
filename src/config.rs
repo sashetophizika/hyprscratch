@@ -1,6 +1,7 @@
 use hyprland::Result;
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
+use std::vec;
 
 pub struct Config {
     pub titles: Vec<String>,
@@ -90,9 +91,11 @@ impl Config {
 }
 
 fn split_args(line: String) -> Vec<String> {
+    let quote_types = [b'\"', b'\''];
+
     let mut args: Vec<String> = vec![];
-    let mut long_word = String::new();
-    let mut inquote = 0;
+    let mut quotes = vec![];
+    let mut inquote_word = String::new();
 
     for word in line.split(' ') {
         if word.is_empty() {
@@ -100,31 +103,38 @@ fn split_args(line: String) -> Vec<String> {
         }
 
         let word_bytes = word.as_bytes();
-        if let b'\"' | b'\'' = word_bytes[word_bytes.len() - 1] {
-            inquote -= 1;
-            if inquote == 0 {
-                long_word += word;
+        if word_bytes.len() == 1 && quote_types.contains(&word_bytes[0]) {
+            if !quotes.is_empty() && quotes[quotes.len() - 1] == word_bytes[0] {
+                quotes.pop();
+            } else {
+                quotes.push(word_bytes[0]);
+            }
+        } else {
+            if quote_types.contains(&word_bytes[0]) {
+                quotes.push(word_bytes[0]);
+            } else if word_bytes[0] == b'\\' && quote_types.contains(&word_bytes[1]) {
+                quotes.push(word_bytes[1]);
+            }
+
+            if quote_types.contains(&word_bytes[word_bytes.len() - 1]) {
+                quotes.pop();
+                if quotes.is_empty() {
+                    inquote_word += word;
+                }
             }
         }
 
-        if let b'\"' | b'\'' = word_bytes[0] {
-            inquote += 1;
-        } else if word_bytes[0] == b'\\' {
-            if let b'\"' | b'\'' = word_bytes[1] {
-                inquote += 1;
-            }
-        }
-
-        if inquote != 0 {
-            long_word += word;
-            long_word += " ";
-        } else if long_word.is_empty() {
+        if !quotes.is_empty() {
+            inquote_word += word;
+            inquote_word += " ";
+        } else if inquote_word.is_empty() {
             args.push(word.to_string());
         } else {
-            args.push(long_word);
-            long_word = String::new();
+            args.push(inquote_word);
+            inquote_word = String::new();
         }
     }
+    println!("{args:?}");
     args
 }
 
