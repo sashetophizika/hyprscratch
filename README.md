@@ -1,6 +1,5 @@
 # Hyprscratch
-
-A scratchpad utility for Hyprland
+A small tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, configured entirely inside of `hyprland.conf`.
 
 ## Installation
 ### Cargo:
@@ -38,7 +37,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
 
-* `onstart`: spawns the scratchpad at the start of the Hyprland session.
+* `onstart`: spawns the scratchpad when the daemon is started.
 
 * `summon`: only creates or brings up the scratchpad.
 
@@ -48,15 +47,17 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Extra hyprscratch commands:
 
-* `cycle`: cycles between non-special scratchpads in the order they are defined in the config file.
+* `cycle`: cycles between non-special scratchpads in the order they are defined in the configuration file.
 
-* `hideall`: hides all scratchpads, useful mostly for stacked ones.
+* `hideall`: hides all scratchpads, useful mostly when stacking multiple of them.
 
-* `reload`: reparses changes to the config file without restarting the daemon.
+* `reload`: re-parses the configuration file without restarting the daemon.
 
-* `get-config`: prints out the parsed config, useful for debugging potential syntax issues.
+* `get-config`: prints out the parsed configuration, useful for debugging potential syntax issues.
 
 ## Other Relevant information
+The program doesn't use Hyprland's special workspace by default, it uses workspace 42.
+
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
@@ -64,5 +65,3 @@ Terminal applications often all use the title of the terminal emulator. Usually 
 If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
 
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.
-
-The program doesn't use hyprland's special workspace by default, it uses workspace 42.
