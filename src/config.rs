@@ -134,7 +134,6 @@ fn split_args(line: String) -> Vec<String> {
             inquote_word = String::new();
         }
     }
-    println!("{args:?}");
     args
 }
 
