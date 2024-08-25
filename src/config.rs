@@ -15,7 +15,12 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Result<Config> {
-        let [titles, commands, options] = parse_config()?;
+        let config_file = format!(
+            "{}/.config/hypr/hyprland.conf",
+            std::env::var("HOME").unwrap()
+        );
+
+        let [titles, commands, options] = parse_config(config_file)?;
         let normal_titles = titles
             .iter()
             .enumerate()
@@ -54,7 +59,12 @@ impl Config {
     }
 
     pub fn reload(self: &mut Config) -> Result<()> {
-        [self.titles, self.commands, self.options] = parse_config()?;
+        let config_file = format!(
+            "{}/.config/hypr/hyprland.conf",
+            std::env::var("HOME").unwrap()
+        );
+
+        [self.titles, self.commands, self.options] = parse_config(config_file)?;
         self.normal_titles = self
             .titles
             .iter()
@@ -155,18 +165,14 @@ fn dequote(string: &String) -> String {
     dequoted.to_string()
 }
 
-fn parse_config() -> Result<[Vec<String>; 3]> {
+fn parse_config(config_path: String) -> Result<[Vec<String>; 3]> {
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
 
-    std::fs::File::open(format!(
-        "{}/.config/hypr/hyprland.conf",
-        std::env::var("HOME").unwrap()
-    ))?
-    .read_to_string(&mut buf)?;
+    std::fs::File::open(config_path)?.read_to_string(&mut buf)?;
 
     let lines: Vec<String> = get_hyprscratch_lines(buf);
     for line in lines {
@@ -177,7 +183,7 @@ fn parse_config() -> Result<[Vec<String>; 3]> {
         }
 
         match parsed_args[1].as_str() {
-            "clean" | "hideall" | "reload" | "cycle" => (),
+            "clean" | "hideall" | "reload" | "cycle" | "get-config" | "spotless" => (),
             _ => {
                 titles.push(dequote(&parsed_args[1]));
                 commands.push(dequote(&parsed_args[2]));
@@ -192,4 +198,42 @@ fn parse_config() -> Result<[Vec<String>; 3]> {
     }
 
     Ok([titles, commands, options])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parsing() {
+        let et = vec![
+            "btop",
+            "Loading…",
+            "\\\"",
+            " a program with ' a wierd ' name",
+        ];
+        let ec = vec![
+            "[float;size 85% 85%;center] kitty --title btop -e btop",
+            "[float;size 70% 80%;center] nautilus",
+            "\\'",
+            " a \"command with\" \\'a wierd\\' format",
+        ];
+        let eo = vec![
+            "stack shiny onstart summon hide special",
+            "",
+            "hide summon",
+            "stack onstart special",
+        ];
+
+        let [t, c, o] = parse_config("./test_config.txt".to_owned()).unwrap();
+
+        assert!(t.iter().all(|x| et.contains(&x.as_str())));
+        assert!(et.iter().all(|x| t.contains(&x.to_string())));
+
+        assert!(c.iter().all(|x| ec.contains(&x.as_str())));
+        assert!(ec.iter().all(|x| c.contains(&x.to_string())));
+
+        assert!(o.iter().all(|x| eo.contains(&x.as_str())));
+        assert!(eo.iter().all(|x| o.contains(&x.to_string())));
+    }
 }
