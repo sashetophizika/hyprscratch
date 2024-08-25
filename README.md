@@ -2,12 +2,12 @@
 A small tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, configured entirely inside of `hyprland.conf`.
 
 ## Installation
-### Cargo:
+### [Cargo](https://crates.io/crates/hyprscratch):
 
 ```
 cargo install hyprscratch
 ```
-### AUR:
+### [AUR](https://aur.archlinux.org/packages/hyprscratch):
 ```
 paru -S hyprscratch
 ```
@@ -29,7 +29,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Daemon options:
 
-* `clean [spotless]`: starts the daemon and hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
+* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
 
 ### Scratchpad options:
 
@@ -37,7 +37,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
 
-* `onstart`: spawns the scratchpad when the daemon is started.
+* `onstart`: spawns the scratchpad hidden when the daemon is started.
 
 * `summon`: only creates or brings up the scratchpad.
 
