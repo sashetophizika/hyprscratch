@@ -94,6 +94,8 @@ SCRATCHPAD OPTIONS
   stack               Prevent the scratchpad from hiding the one that is already present
   shiny               Prevent the scratchpad from being affected by 'clean spotless'
   onstart             Spawn the scratchpads at the start of a hyprland session
+  summon              Only creates or brings up the scratchpad
+  hide                Only hides the scratchpad
   special             Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
