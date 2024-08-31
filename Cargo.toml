@@ -9,5 +9,4 @@ repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
 
 [dependencies]
-hyprland = { git = "https://github.com/hyprland-community/hyprland-rs", branch = "master" }
-
+hyprland = "0.4.0-alpha.3"
