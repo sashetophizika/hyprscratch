@@ -178,7 +178,7 @@ fn parse_config(config_path: String) -> Result<[Vec<String>; 3]> {
     for line in lines {
         let parsed_args = split_args(line);
 
-        if parsed_args.len() == 1 {
+        if parsed_args.len() <= 1 {
             continue;
         }
 
