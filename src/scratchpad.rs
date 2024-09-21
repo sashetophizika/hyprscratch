@@ -6,11 +6,12 @@ use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
 
 fn summon_special(
-    args: &[String],
+    title: &String,
+    command: &String,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
-    let title = args[0].clone();
+    let title = title.clone();
     let special_with_title = clients_with_title
         .iter()
         .filter(|x| x.workspace.id < 0)
@@ -30,8 +31,8 @@ fn summon_special(
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;
             }
         } else {
-            let mut special_cmd = args[1].clone();
-            if args[1].find('[').is_none() {
+            let mut special_cmd = command.clone();
+            if command.find('[').is_none() {
                 special_cmd.insert_str(0, "[]");
             }
 
@@ -45,12 +46,12 @@ fn summon_special(
 }
 
 fn summon_normal(
-    args: &[String],
+    command: &String,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
     if clients_with_title.is_empty() {
-        hyprland::dispatch!(Exec, &args[1])?;
+        hyprland::dispatch!(Exec, &command)?;
     } else {
         let addr = clients_with_title[0].address.clone();
         if clients_with_title[0].workspace.id != active_workspace.id {
@@ -66,20 +67,22 @@ fn summon_normal(
 }
 
 fn summon(
-    args: &[String],
+    title: &String,
+    command: &String,
+    options: &String,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
-    if args[2..].contains(&"special".to_string()) {
-        summon_special(args, active_workspace, clients_with_title)?;
-    } else if !args[2..].contains(&"hide".to_string()) {
-        summon_normal(args, active_workspace, clients_with_title)?;
+    if options.contains("special") {
+        summon_special(title, command, active_workspace, clients_with_title)?;
+    } else if !options.contains("hide") {
+        summon_normal(command, active_workspace, clients_with_title)?;
     }
     Ok(())
 }
 
-fn hide_active(args: &[String], titles: String, active_client: &Client) -> Result<()> {
-    if !args[2..].contains(&"stack".to_string())
+fn hide_active(options: &String, titles: String, active_client: &Client) -> Result<()> {
+    if !options.contains(&"stack".to_string())
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
@@ -92,7 +95,7 @@ fn hide_active(args: &[String], titles: String, active_client: &Client) -> Resul
     Ok(())
 }
 
-pub fn scratchpad(args: &[String]) -> Result<()> {
+pub fn scratchpad(title: &String, command: &String, options: &String) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"s")?;
 
@@ -102,11 +105,17 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
     let active_workspace = Workspace::get_active()?;
     let clients_with_title: Vec<Client> = Clients::get()?
         .into_iter()
-        .filter(|x| x.initial_title == args[0])
+        .filter(|x| &x.initial_title == title)
         .collect();
 
-    if args[2..].contains(&"summon".to_string()) && !args[2..].contains(&"special".to_string()) {
-        summon(args, &active_workspace, &clients_with_title)?;
+    if options.contains("summon") && !options.contains("special") {
+        summon(
+            title,
+            command,
+            options,
+            &active_workspace,
+            &clients_with_title,
+        )?;
         return Ok(());
     }
 
@@ -116,11 +125,17 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
             .into_iter()
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
-        if args[2..].contains(&"special".to_string())
-            || (clients_on_active.peek().is_none() && active_client.initial_title != args[0])
+        if options.contains(&"special".to_string())
+            || (clients_on_active.peek().is_none() && &active_client.initial_title != title)
         {
-            hide_active(args, titles, &active_client)?;
-            summon(args, &active_workspace, &clients_with_title)?;
+            hide_active(options, titles, &active_client)?;
+            summon(
+                title,
+                command,
+                options,
+                &active_workspace,
+                &clients_with_title,
+            )?;
         } else {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
@@ -132,7 +147,13 @@ pub fn scratchpad(args: &[String]) -> Result<()> {
             });
         }
     } else {
-        summon(args, &active_workspace, &clients_with_title)?;
+        summon(
+            title,
+            command,
+            options,
+            &active_workspace,
+            &clients_with_title,
+        )?;
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
