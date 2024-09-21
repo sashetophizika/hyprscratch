@@ -24,9 +24,14 @@ fn handle_reload(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_cycle(stream: &mut UnixStream, cycle_index: &mut usize, config: &Config) -> Result<()> {
+fn handle_cycle(
+    stream: &mut UnixStream,
+    cycle_index: &mut usize,
+    is_special: bool,
+    config: &Config,
+) -> Result<()> {
     let mut current_index = *cycle_index % config.titles.len();
-    while config.options[current_index].contains("special") {
+    while is_special != config.options[current_index].contains("special") {
         *cycle_index += 1;
         current_index = *cycle_index % config.titles.len();
     }
@@ -110,7 +115,8 @@ pub fn initialize(args: &[String]) -> Result<()> {
                 match buf.as_str() {
                     "s" => handle_scratchpad(&mut stream, &config)?,
                     "r" => handle_reload(&mut config)?,
-                    "c" => handle_cycle(&mut stream, &mut cycle_index, &config)?,
+                    "c" => handle_cycle(&mut stream, &mut cycle_index, false, &config)?,
+                    "l" => handle_cycle(&mut stream, &mut cycle_index, true, &config)?,
                     e => println!("Unknown request {e}"),
                 }
             }

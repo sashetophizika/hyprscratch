@@ -21,14 +21,14 @@ fn main() -> Result<()> {
         "get-config" => get_config()?,
         "hideall" => hideall()?,
         "reload" => reload()?,
-        "cycle" => cycle()?,
+        "cycle" => cycle(&args)?,
         "help" => help(),
         "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {
             if args[2..].is_empty() {
                 println!("Unknown command or not enough arguments given for scratchpad.\nTry 'hyprscratch help'.");
             } else {
-                scratchpad(&args[1..])?;
+                scratchpad(&args[1], &args[2], &args[3..].join(" "))?;
             }
         }
     }
