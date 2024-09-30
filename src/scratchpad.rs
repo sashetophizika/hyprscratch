@@ -6,12 +6,11 @@ use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
 
 fn summon_special(
-    title: &String,
-    command: &String,
+    title: &str,
+    command: &str,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
-    let title = title.clone();
     let special_with_title = clients_with_title
         .iter()
         .filter(|x| x.workspace.id < 0)
@@ -21,17 +20,17 @@ fn summon_special(
         if !clients_with_title.is_empty() {
             hyprland::dispatch!(
                 MoveToWorkspace,
-                WorkspaceIdentifierWithSpecial::Special(Some(&title)),
+                WorkspaceIdentifierWithSpecial::Special(Some(title)),
                 Some(WindowIdentifier::Address(
                     clients_with_title[0].address.clone()
                 ))
             )?;
 
             if clients_with_title[0].workspace.id == active_workspace.id {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
             }
         } else {
-            let mut special_cmd = command.clone();
+            let mut special_cmd = command.to_string();
             if command.find('[').is_none() {
                 special_cmd.insert_str(0, "[]");
             }
@@ -40,13 +39,13 @@ fn summon_special(
             hyprland::dispatch!(Exec, &cmd)?;
         }
     } else {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(title))?;
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
     }
     Ok(())
 }
 
 fn summon_normal(
-    command: &String,
+    command: &str,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
@@ -67,9 +66,9 @@ fn summon_normal(
 }
 
 fn summon(
-    title: &String,
-    command: &String,
-    options: &String,
+    title: &str,
+    command: &str,
+    options: &str,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
@@ -81,7 +80,7 @@ fn summon(
     Ok(())
 }
 
-fn hide_active(options: &String, titles: String, active_client: &Client) -> Result<()> {
+fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<()> {
     if !options.contains(&"stack".to_string())
         && active_client.floating
         && titles.contains(&active_client.initial_title)
@@ -95,7 +94,7 @@ fn hide_active(options: &String, titles: String, active_client: &Client) -> Resu
     Ok(())
 }
 
-pub fn scratchpad(title: &String, command: &String, options: &String) -> Result<()> {
+pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"s")?;
 
@@ -105,7 +104,7 @@ pub fn scratchpad(title: &String, command: &String, options: &String) -> Result<
     let active_workspace = Workspace::get_active()?;
     let clients_with_title: Vec<Client> = Clients::get()?
         .into_iter()
-        .filter(|x| &x.initial_title == title)
+        .filter(|x| x.initial_title == title)
         .collect();
 
     if options.contains("summon") && !options.contains("special") {
@@ -126,7 +125,7 @@ pub fn scratchpad(title: &String, command: &String, options: &String) -> Result<
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
         if options.contains(&"special".to_string())
-            || (clients_on_active.peek().is_none() && &active_client.initial_title != title)
+            || (clients_on_active.peek().is_none() && active_client.initial_title != title)
         {
             hide_active(options, titles, &active_client)?;
             summon(
