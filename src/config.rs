@@ -137,11 +137,11 @@ fn split_args(line: String) -> Vec<String> {
         if !quotes.is_empty() {
             inquote_word += word;
             inquote_word += " ";
-        } else if inquote_word.is_empty() {
-            args.push(word.to_string());
-        } else {
+        } else if !inquote_word.is_empty() {
             args.push(inquote_word);
             inquote_word = String::new();
+        } else {
+            args.push(word.to_string());
         }
     }
     args
@@ -221,19 +221,19 @@ mod tests {
         let eo = vec![
             "stack shiny onstart summon hide special",
             "",
-            "hide summon",
             "stack onstart special",
+            "hide summon",
         ];
 
         let [t, c, o] = parse_config("./test_config.txt".to_owned()).unwrap();
 
-        assert!(t.iter().all(|x| et.contains(&x.as_str())));
-        assert!(et.iter().all(|x| t.contains(&x.to_string())));
+        assert_eq!(t.len(), c.len());
+        assert_eq!(t.len(), o.len());
 
-        assert!(c.iter().all(|x| ec.contains(&x.as_str())));
-        assert!(ec.iter().all(|x| c.contains(&x.to_string())));
-
-        assert!(o.iter().all(|x| eo.contains(&x.as_str())));
-        assert!(eo.iter().all(|x| o.contains(&x.to_string())));
+        for i in 0..t.len() {
+            assert_eq!(t[i], et[i]);
+            assert_eq!(c[i], ec[i]);
+            assert_eq!(o[i], eo[i]);
+        }
     }
 }
