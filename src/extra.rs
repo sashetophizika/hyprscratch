@@ -36,13 +36,9 @@ pub fn hideall() -> Result<()> {
     Ok(())
 }
 
-pub fn cycle(args: &Vec<String>) -> Result<()> {
+pub fn cycle() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-    if args.contains(&"special".to_string()) {
-        stream.write_all(b"l")?;
-    } else {
-        stream.write_all(b"c")?;
-    }
+    stream.write_all(b"c")?;
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
@@ -103,7 +99,7 @@ SCRATCHPAD OPTIONS
   special             Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
-  cycle [special]     Cycle between normal or special scratchpads
+  cycle               Cycle between scratchpads
   hideall             Hidall all scratchpads simultaneously
   reload              Reparse file without restarting daemon
   get-config          Print parsed config file
