@@ -21,7 +21,7 @@ fn main() -> Result<()> {
         "get-config" => get_config()?,
         "hideall" => hideall()?,
         "reload" => reload()?,
-        "cycle" => cycle()?,
+        "cycle" => cycle(args.join(" "))?,
         "help" => help(),
         "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {

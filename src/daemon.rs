@@ -24,14 +24,24 @@ fn handle_reload(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_cycle(stream: &mut UnixStream, cycle_index: &mut usize, config: &Config) -> Result<()> {
-    let current_index = *cycle_index % config.titles.len();
+fn handle_cycle(
+    stream: &mut UnixStream,
+    cycle_index: &mut usize,
+    config: &Config,
+    mode: Option<bool>,
+) -> Result<()> {
+    let mut current_index = *cycle_index % config.titles.len();
+    if let Some(m) = mode {
+        while m != config.options[current_index].contains("special") {
+            current_index = (current_index + 1) % config.titles.len();
+        }
+    }
     let next_scratchpad = format!(
         "{}:{}:{}",
         config.titles[current_index], config.commands[current_index], config.options[current_index]
     );
     stream.write_all(next_scratchpad.as_bytes())?;
-    *cycle_index += 1;
+    *cycle_index = current_index + 1;
     Ok(())
 }
 
@@ -105,7 +115,9 @@ pub fn initialize(args: &[String]) -> Result<()> {
                 match buf.as_str() {
                     "s" => handle_scratchpad(&mut stream, &config)?,
                     "r" => handle_reload(&mut config)?,
-                    "c" => handle_cycle(&mut stream, &mut cycle_index, &config)?,
+                    "c" => handle_cycle(&mut stream, &mut cycle_index, &config, None)?,
+                    "n" => handle_cycle(&mut stream, &mut cycle_index, &config, Some(false))?,
+                    "l" => handle_cycle(&mut stream, &mut cycle_index, &config, Some(true))?,
                     e => println!("Unknown request {e}"),
                 }
             }

@@ -36,9 +36,15 @@ pub fn hideall() -> Result<()> {
     Ok(())
 }
 
-pub fn cycle() -> Result<()> {
+pub fn cycle(args: String) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-    stream.write_all(b"c")?;
+    if args.contains("special") {
+        stream.write_all(b"l")?;
+    } else if args.contains("normal") {
+        stream.write_all(b"n")?;
+    } else {
+        stream.write_all(b"c")?;
+    }
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
