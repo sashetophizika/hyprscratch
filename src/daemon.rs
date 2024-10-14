@@ -11,9 +11,20 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-fn handle_scratchpad(stream: &mut UnixStream, config: &Config) -> Result<()> {
+fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
+    if request.len() > 1 {
+        let mut unshiny_titles = config.unshiny_titles.lock().unwrap();
+        unshiny_titles.retain(|x| *x != request[2..]);
+    }
+
     let titles_string = format!("{:?}", config.normal_titles);
     stream.write_all(titles_string.as_bytes())?;
+    Ok(())
+}
+
+fn handle_return(title: String, config: &Config) -> Result<()> {
+    let mut unshiny_titles = config.unshiny_titles.lock().unwrap();
+    unshiny_titles.push(title[2..].to_string());
     Ok(())
 }
 
@@ -28,14 +39,29 @@ fn handle_cycle(
     stream: &mut UnixStream,
     cycle_index: &mut usize,
     config: &Config,
-    mode: Option<bool>,
+    request: String,
 ) -> Result<()> {
+    if config.titles.is_empty() {
+        return Ok(());
+    }
+
     let mut current_index = *cycle_index % config.titles.len();
+    let mode = if request.len() == 1 {
+        None
+    } else {
+        Some((request.as_bytes()[2] - 48) != 0)
+    };
+
     if let Some(m) = mode {
+        if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
+            return Ok(());
+        }
+
         while m != config.options[current_index].contains("special") {
             current_index = (current_index + 1) % config.titles.len();
         }
     }
+
     let next_scratchpad = format!(
         "{}:{}:{}",
         config.titles[current_index], config.commands[current_index], config.options[current_index]
@@ -110,15 +136,16 @@ pub fn initialize(args: &[String]) -> Result<()> {
         match stream {
             Ok(mut stream) => {
                 let mut buf = String::new();
-                stream.try_clone()?.take(1).read_to_string(&mut buf)?;
+                stream.try_clone()?.read_to_string(&mut buf)?;
 
                 match buf.as_str() {
-                    "s" => handle_scratchpad(&mut stream, &config)?,
-                    "r" => handle_reload(&mut config)?,
-                    "c" => handle_cycle(&mut stream, &mut cycle_index, &config, None)?,
-                    "n" => handle_cycle(&mut stream, &mut cycle_index, &config, Some(false))?,
-                    "l" => handle_cycle(&mut stream, &mut cycle_index, &config, Some(true))?,
-                    e => println!("Unknown request {e}"),
+                    "reload" => handle_reload(&mut config)?,
+                    b if b.starts_with("c") => {
+                        handle_cycle(&mut stream, &mut cycle_index, &config, buf)?
+                    }
+                    b if b.starts_with("s") => handle_scratchpad(&mut stream, buf, &config)?,
+                    b if b.starts_with("r") => handle_return(buf, &config)?,
+                    e => println!("Unknown request: {e}"),
                 }
             }
             Err(_) => {

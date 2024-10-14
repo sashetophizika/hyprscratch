@@ -6,10 +6,12 @@ use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
+use std::net::Shutdown;
 
 pub fn hideall() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"s")?;
+    stream.shutdown(Shutdown::Write)?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
@@ -39,12 +41,13 @@ pub fn hideall() -> Result<()> {
 pub fn cycle(args: String) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     if args.contains("special") {
-        stream.write_all(b"l")?;
+        stream.write_all(b"c?1")?;
     } else if args.contains("normal") {
-        stream.write_all(b"n")?;
+        stream.write_all(b"c?0")?;
     } else {
         stream.write_all(b"c")?;
     }
+    stream.shutdown(Shutdown::Write)?;
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
@@ -57,7 +60,8 @@ pub fn cycle(args: String) -> Result<()> {
 
 pub fn reload() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-    stream.write_all(b"r")?;
+    stream.write_all(b"reload")?;
+    stream.shutdown(Shutdown::Write)?;
     Ok(())
 }
 

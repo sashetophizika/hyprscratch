@@ -94,9 +94,19 @@ fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<
     Ok(())
 }
 
+fn remove_temp_shiny(title: &str, options: &str) -> Result<()> {
+    if !options.contains("shiny") {
+        let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+        stream.write_all(format!("r?{title}").as_bytes())?;
+        stream.shutdown(std::net::Shutdown::Write)?;
+    }
+    Ok(())
+}
+
 pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-    stream.write_all(b"s")?;
+    stream.write_all(format!("s?{title}").as_bytes())?;
+    stream.shutdown(std::net::Shutdown::Write)?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
@@ -156,5 +166,6 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
+    remove_temp_shiny(title, options)?;
     Ok(())
 }
