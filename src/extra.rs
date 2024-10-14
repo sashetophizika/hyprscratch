@@ -98,22 +98,22 @@ pub fn help() {
     hyprscratch title command [options...]
 
 DAEMON OPTIONS
-  clean [spotless]    Hide scratchpads on workspace change and focus change with spotless
+  clean [spotless]            Hide scratchpads on workspace change [and focus change]
 
 SCRATCHPAD OPTIONS
-  stack               Prevent the scratchpad from hiding the one that is already present
-  shiny               Prevent the scratchpad from being affected by 'clean spotless'
-  onstart             Spawn the scratchpads at the start of a hyprland session
-  summon              Only creates or brings up the scratchpad
-  hide                Only hides the scratchpad
-  special             Use Hyprland's special workspace, ignores most other options
+  stack                       Prevent the scratchpad from hiding the one that is already present
+  shiny                       Prevent the scratchpad from being affected by 'clean spotless'
+  onstart                     Spawn the scratchpads at the start of a Hyprland session
+  summon                      Only creates or brings up the scratchpad
+  hide                        Only hides the scratchpad
+  special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
-  cycle               Cycle between scratchpads
-  hideall             Hidall all scratchpads simultaneously
-  reload              Reparse file without restarting daemon
-  get-config          Print parsed config file
-  help                Print this help message
-  version             Print current version"
+  cycle [normal|special]      Cycle between [only normal | only special] scratchpads
+  hideall                     Hide all scratchpads
+  reload                      Reparse config file
+  get-config                  Print parsed config file
+  help                        Print this help message
+  version                     Print current version"
     )
 }
