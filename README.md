@@ -47,7 +47,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Extra hyprscratch commands:
 
-* `cycle`: cycles between scratchpads in the order they are defined in the configuration file.
+* `cycle [normal|special]`: cycles between scratchpads (optionally only normal or only special ones) in the order they are defined in the configuration file.
 
 * `hideall`: hides all scratchpads, useful mostly when stacking multiple of them.
 
