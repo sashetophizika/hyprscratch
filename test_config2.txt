@@ -1,0 +1,4 @@
+bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special
+bind = $mainMod, b, exec, hyprscratch ytop 'kitty --title btop -e ytop'
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' stack shiny
+bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special
