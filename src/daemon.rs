@@ -29,7 +29,7 @@ fn handle_return(title: String, config: &Config) -> Result<()> {
 }
 
 fn handle_reload(config: &mut Config) -> Result<()> {
-    config.reload()?;
+    config.reload(None)?;
     shuffle_normal_special(&config.normal_titles, &config.special_titles)?;
     autospawn(config)?;
     Ok(())
@@ -101,12 +101,14 @@ fn clean(
     Ok(())
 }
 
-pub fn initialize(args: &[String]) -> Result<()> {
-    let mut config = Config::new()?;
-
-    autospawn(&mut config)?;
-
+pub fn initialize(
+    args: &[String],
+    config_path: Option<String>,
+    socket_path: Option<&str>,
+) -> Result<()> {
+    let mut config = Config::new(config_path)?;
     let mut cycle_index: usize = 0;
+    autospawn(&mut config)?;
 
     if args.contains(&"clean".to_string()) {
         let shiny_titles = Arc::clone(&config.shiny_titles);
@@ -121,12 +123,17 @@ pub fn initialize(args: &[String]) -> Result<()> {
         }
     }
 
-    let temp_dir = Path::new("/tmp/hyprscratch/");
-    if !temp_dir.exists() {
-        create_dir(temp_dir)?;
-    }
+    let path_to_sock = match socket_path {
+        Some(sp) => Path::new(sp),
+        None => {
+            let temp_dir = Path::new("/tmp/hyprscratch/");
+            if !temp_dir.exists() {
+                create_dir(temp_dir)?;
+            }
+            Path::new("/tmp/hyprscratch/hyprscratch.sock")
+        }
+    };
 
-    let path_to_sock = Path::new("/tmp/hyprscratch/hyprscratch.sock");
     if path_to_sock.exists() {
         remove_file(path_to_sock)?;
     }
@@ -145,7 +152,11 @@ pub fn initialize(args: &[String]) -> Result<()> {
                     }
                     b if b.starts_with("s") => handle_scratchpad(&mut stream, buf, &config)?,
                     b if b.starts_with("r") => handle_return(buf, &config)?,
-                    e => println!("Unknown request: {e}"),
+                    e => {
+                        let error_message = format!("Unknown request: {e}");
+                        stream.write_all(error_message.as_bytes()).unwrap();
+                        println!("{error_message}");
+                    }
                 }
             }
             Err(_) => {
@@ -154,4 +165,44 @@ pub fn initialize(args: &[String]) -> Result<()> {
         };
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn test_handle(request: &str, expectation: &str) {
+        let mut stream = UnixStream::connect("/tmp/hyprscratch_test.sock").unwrap();
+
+        stream.write_all(request.as_bytes()).unwrap();
+        stream.shutdown(std::net::Shutdown::Write).unwrap();
+
+        let mut buf = String::new();
+        stream.read_to_string(&mut buf).unwrap();
+        assert_eq!(expectation, buf);
+    }
+
+    #[test]
+    fn test_handlers() {
+        std::thread::spawn(|| {
+            let args = vec!["".to_string()];
+            initialize(
+                &args,
+                Some("./test_config2.txt".to_string()),
+                Some("/tmp/hyprscratch_test.sock"),
+            )
+            .unwrap();
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        test_handle("c", "firefox:firefox --private-window:special");
+        test_handle("c?0", "ytop:kitty --title btop -e ytop:");
+        test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
+
+        test_handle("s?btop", "[\"ytop\", \"htop\"]");
+        test_handle("r?btop", "");
+
+        test_handle("reload", "");
+        test_handle("unknown", "Unknown request: unknown");
+    }
 }

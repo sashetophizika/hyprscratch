@@ -14,11 +14,14 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Result<Config> {
-        let config_file = format!(
-            "{}/.config/hypr/hyprland.conf",
-            std::env::var("HOME").unwrap()
-        );
+    pub fn new(config_path: Option<String>) -> Result<Config> {
+        let config_file = match config_path {
+            Some(config) => config,
+            None => format!(
+                "{}/.config/hypr/hyprland.conf",
+                std::env::var("HOME").unwrap()
+            ),
+        };
 
         let [titles, commands, options] = parse_config(config_file)?;
         let normal_titles = titles
@@ -58,11 +61,14 @@ impl Config {
         })
     }
 
-    pub fn reload(self: &mut Config) -> Result<()> {
-        let config_file = format!(
-            "{}/.config/hypr/hyprland.conf",
-            std::env::var("HOME").unwrap()
-        );
+    pub fn reload(self: &mut Config, config_path: Option<String>) -> Result<()> {
+        let config_file = match config_path {
+            Some(config) => config,
+            None => format!(
+                "{}/.config/hypr/hyprland.conf",
+                std::env::var("HOME").unwrap()
+            ),
+        };
 
         [self.titles, self.commands, self.options] = parse_config(config_file)?;
         self.normal_titles = self
@@ -165,14 +171,14 @@ fn dequote(string: &String) -> String {
     dequoted.to_string()
 }
 
-fn parse_config(config_path: String) -> Result<[Vec<String>; 3]> {
+fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
 
-    std::fs::File::open(config_path)?.read_to_string(&mut buf)?;
+    std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
 
     let lines: Vec<String> = get_hyprscratch_lines(buf);
     for line in lines {
@@ -203,6 +209,7 @@ fn parse_config(config_path: String) -> Result<[Vec<String>; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
 
     #[test]
     fn test_parsing() {
@@ -227,13 +234,112 @@ mod tests {
 
         let [t, c, o] = parse_config("./test_config.txt".to_owned()).unwrap();
 
-        assert_eq!(t.len(), c.len());
-        assert_eq!(t.len(), o.len());
+        assert_eq!(t, et);
+        assert_eq!(c, ec);
+        assert_eq!(o, eo);
+    }
 
-        for i in 0..t.len() {
-            assert_eq!(t[i], et[i]);
-            assert_eq!(c[i], ec[i]);
-            assert_eq!(o[i], eo[i]);
-        }
+    #[test]
+    fn test_handle_reload() {
+        let mut cf = File::create("./test_config2.txt").unwrap();
+        cf.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny onstart summon hide special 
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
+bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' onstart").unwrap();
+
+        let mut c = Config::new(Some("./test_config2.txt".to_string())).unwrap();
+        let ec = Config {
+            titles: vec![
+                "firefox".to_string(),
+                "btop".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
+            normal_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            special_titles: vec!["btop".to_string(), "htop".to_string()],
+            commands: vec![
+                "firefox".to_string(),
+                "kitty --title btop -e btop".to_string(),
+                "kitty --title htop -e htop".to_string(),
+                "kitty --title cmatrix -e cmatrix".to_string(),
+            ],
+            options: vec![
+                "stack".to_string(),
+                "stack shiny onstart summon hide special".to_string(),
+                "special".to_string(),
+                "onstart".to_string(),
+            ],
+            shiny_titles: Arc::new(Mutex::new(vec![
+                "firefox".to_string(),
+                "cmatrix".to_string(),
+            ])),
+            unshiny_titles: Arc::new(Mutex::new(vec![
+                "firefox".to_string(),
+                "cmatrix".to_string(),
+            ])),
+        };
+
+        assert_eq!(c.titles, ec.titles);
+        assert_eq!(c.normal_titles, ec.normal_titles);
+        assert_eq!(c.special_titles, ec.special_titles);
+        assert_eq!(c.commands, ec.commands);
+        assert_eq!(c.options, ec.options);
+        assert_eq!(
+            *c.shiny_titles.lock().unwrap(),
+            *ec.shiny_titles.lock().unwrap()
+        );
+        assert_eq!(
+            *c.unshiny_titles.lock().unwrap(),
+            *ec.unshiny_titles.lock().unwrap()
+        );
+
+        let mut cf = File::create("./test_config2.txt").unwrap();
+        cf.write(
+            b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special
+bind = $mainMod, b, exec, hyprscratch ytop 'kitty --title btop -e ytop'
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' stack shiny
+bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special",
+        )
+        .unwrap();
+
+        c.reload(Some("./test_config2.txt".to_string())).unwrap();
+        let ec = Config {
+            titles: vec![
+                "firefox".to_string(),
+                "ytop".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
+            normal_titles: vec!["ytop".to_string(), "htop".to_string()],
+            special_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            commands: vec![
+                "firefox --private-window".to_string(),
+                "kitty --title btop -e ytop".to_string(),
+                "kitty --title htop -e htop".to_string(),
+                "kitty --title cmatrix -e cmatrix".to_string(),
+            ],
+            options: vec![
+                "special".to_string(),
+                "".to_string(),
+                "stack shiny".to_string(),
+                "special".to_string(),
+            ],
+            shiny_titles: Arc::new(Mutex::new(vec!["ytop".to_string(), "htop".to_string()])),
+            unshiny_titles: Arc::new(Mutex::new(vec!["ytop".to_string()])),
+        };
+
+        assert_eq!(c.titles, ec.titles);
+        assert_eq!(c.normal_titles, ec.normal_titles);
+        assert_eq!(c.special_titles, ec.special_titles);
+        assert_eq!(c.commands, ec.commands);
+        assert_eq!(c.options, ec.options);
+        assert_eq!(
+            *c.shiny_titles.lock().unwrap(),
+            *ec.shiny_titles.lock().unwrap()
+        );
+        assert_eq!(
+            *c.unshiny_titles.lock().unwrap(),
+            *ec.unshiny_titles.lock().unwrap()
+        );
     }
 }

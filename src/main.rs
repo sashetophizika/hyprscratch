@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     };
 
     match title.as_str() {
-        "clean" | "" => initialize(&args)?,
+        "clean" | "" => initialize(&args, None, None)?,
         "get-config" => get_config()?,
         "hideall" => hideall()?,
         "reload" => reload()?,

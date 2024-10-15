@@ -5,8 +5,8 @@ use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::prelude::*;
-use std::os::unix::net::UnixStream;
 use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 
 pub fn hideall() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
@@ -66,7 +66,7 @@ pub fn reload() -> Result<()> {
 }
 
 pub fn get_config() -> Result<()> {
-    let conf = Config::new()?;
+    let conf = Config::new(None)?;
     let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
     let padding = |x: usize, y: &str| " ".repeat(x - y.chars().count());
 
