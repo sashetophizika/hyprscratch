@@ -1,5 +1,5 @@
 {
-  description = "Scratchpad functionality for Hyprland ";
+  description = "Improved scratchpad functionality for Hyprland";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
