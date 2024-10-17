@@ -4,20 +4,19 @@ use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 
-pub fn move_floating(titles: Vec<String>) {
-    if let Ok(clients) = Clients::get() {
-        clients
-            .iter()
-            .filter(|x| x.floating && x.workspace.id != 42 && titles.contains(&x.initial_title))
-            .for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
-                    Some(WindowIdentifier::Address(x.address.clone()))
-                )
-                .unwrap()
-            })
-    }
+pub fn move_floating(titles: Vec<String>) -> Result<()> {
+    Clients::get()?
+        .into_iter()
+        .filter(|x| x.floating && x.workspace.id != 42 && titles.contains(&x.initial_title))
+        .for_each(|x| {
+            hyprland::dispatch!(
+                MoveToWorkspaceSilent,
+                WorkspaceIdentifierWithSpecial::Id(42),
+                Some(WindowIdentifier::Address(x.address.clone()))
+            )
+            .unwrap()
+        });
+    Ok(())
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
@@ -29,24 +28,19 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
     config
         .commands
         .iter()
-        .enumerate()
-        .filter(|&(i, _)| {
-            config.options[i].contains("onstart") && !client_titles.contains(&config.titles[i])
-        })
-        .for_each(|(i, x)| {
-            let mut cmd = x.clone();
-            if x.find('[').is_none() {
+        .zip(&config.titles)
+        .zip(&config.options)
+        .filter(|((_, title), option)| option.contains("onstart") && !client_titles.contains(title))
+        .for_each(|((command, title), option)| {
+            let mut cmd = command.clone();
+            if command.find('[').is_none() {
                 cmd.insert_str(0, "[]");
             }
 
-            if config.options[i].contains("special") {
+            if option.contains("special") {
                 hyprland::dispatch!(
                     Exec,
-                    &cmd.replacen(
-                        '[',
-                        &format!("[workspace special:{} silent;", config.titles[i]),
-                        1
-                    )
+                    &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
                 )
                 .unwrap()
             } else {
@@ -88,72 +82,167 @@ pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String
 mod tests {
     use super::*;
     use hyprland::data::{Client, Workspace};
+    use std::sync::{Arc, Mutex};
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    struct TestResources {
+        titles: [String; 3],
+        commands: [String; 3],
+        expected_workspace: [String; 3],
+        spawned: [bool; 3],
+    }
+
+    impl Drop for TestResources {
+        fn drop(&mut self) {
+            self.titles
+                .clone()
+                .into_iter()
+                .zip(self.spawned)
+                .for_each(|(title, spawned)| {
+                    if spawned {
+                        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
+                    }
+                });
+            sleep(Duration::from_millis(1000));
+        }
+    }
 
     #[test]
     fn test_move_floating() {
-        let mut cls = Clients::get().unwrap().into_iter();
-        assert_eq!(cls.any(|x| x.initial_title == "test_nonfloating"), false);
-        assert_eq!(cls.any(|x| x.initial_title == "test_notcontained"), false);
-        assert_eq!(cls.any(|x| x.initial_title == "test_scratchpad"), false);
+        let active_workspace = Workspace::get_active().unwrap();
+        let resources = TestResources {
+            titles: [
+                "test_nonfloating_move".to_string(),
+                "test_notcontained_move".to_string(),
+                "test_scratchpad_move".to_string(),
+            ],
+            commands: [
+                "kitty --title test_nonfloating_move".to_string(),
+                "[float; size 30% 30%; move 0 0] kitty --title test_notcontained_move".to_string(),
+                "[float; size 30% 30%; move 30% 0] kitty --title test_scratchpad_move".to_string(),
+            ],
+            expected_workspace: [
+                active_workspace.name.clone(),
+                active_workspace.name,
+                "42".to_string(),
+            ],
+            spawned: [true; 3],
+        };
 
-        hyprland::dispatch!(Exec, "kitty --title test_nonfloating").unwrap();
-        hyprland::dispatch!(
-            Exec,
-            "[float;size 30% 30%;move 0 0] kitty --title test_notcontained"
-        )
-        .unwrap();
-        hyprland::dispatch!(
-            Exec,
-            "[float;size 30% 30%;move 30% 0] kitty --title test_scratchpad"
-        )
-        .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        let mut clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
+            .clone()
+            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
 
-        cls = Clients::get().unwrap().into_iter();
-        assert_eq!(
-            cls.clone().any(|x| x.initial_title == "test_nonfloating"),
-            true
-        );
-        assert_eq!(
-            cls.clone().any(|x| x.initial_title == "test_notcontained"),
-            true
-        );
-        assert_eq!(
-            cls.clone().any(|x| x.initial_title == "test_scratchpad"),
-            true
-        );
+        resources
+            .commands
+            .clone()
+            .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
+        sleep(Duration::from_millis(2000));
+
+        clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
+            .clone()
+            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), true));
 
         move_floating(vec![
-            "test_nonfloating".to_owned(),
-            "test_scratchpad".to_owned(),
-        ]);
-        std::thread::sleep(std::time::Duration::from_millis(500));
+            "test_nonfloating_move".to_owned(),
+            "test_scratchpad_move".to_owned(),
+        ])
+        .unwrap();
+        sleep(Duration::from_millis(1000));
 
-        cls = Clients::get().unwrap().into_iter();
-        let clnf: Vec<Client> = cls
+        clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
             .clone()
-            .filter(|x| x.initial_title == "test_nonfloating")
-            .collect();
-        let clnc: Vec<Client> = cls
+            .into_iter()
+            .zip(&resources.expected_workspace)
+            .for_each(|(title, workspace)| {
+                let clients_with_title: Vec<Client> = clients
+                    .clone()
+                    .filter(|x| x.initial_title == title)
+                    .collect();
+
+                assert_eq!(clients_with_title.len(), 1);
+                assert_eq!(&clients_with_title[0].workspace.name, workspace);
+            });
+
+        sleep(Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_autospawn() {
+        let resources = TestResources {
+            titles: [
+                "test_normal_autospawn".to_string(),
+                "test_special_autospawn".to_string(),
+                "test_notonstart_autospawn".to_string(),
+            ],
+            commands: [
+                "kitty --title test_normal_autospawn".to_string(),
+                "[float] kitty --title test_special_autospawn".to_string(),
+                "kitty --title test_notonstart_autospawn".to_string(),
+            ],
+            expected_workspace: [
+                "42".to_string(),
+                "special:test_special_autospawn".to_string(),
+                "".to_string(),
+            ],
+            spawned: [true, true, false],
+        };
+
+        let mut clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
             .clone()
-            .filter(|x| x.initial_title == "test_notcontained")
-            .collect();
-        let clns: Vec<Client> = cls
-            .filter(|x| x.initial_title == "test_scratchpad")
-            .collect();
+            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
 
-        assert_eq!(clnf.len(), 1);
-        assert_eq!(clnc.len(), 1);
-        assert_eq!(clns.len(), 1);
+        let mut config = Config {
+            titles: resources.titles.to_vec(),
+            normal_titles: Vec::new(),
+            special_titles: Vec::new(),
+            commands: resources.commands.to_vec(),
+            options: vec![
+                "onstart".to_string(),
+                "special onstart".to_string(),
+                "".to_string(),
+            ],
+            shiny_titles: Arc::new(Mutex::new(Vec::new())),
+            unshiny_titles: Arc::new(Mutex::new(Vec::new())),
+        };
 
-        let aw = Workspace::get_active().unwrap();
-        assert_eq!(clnf[0].workspace.id, aw.id);
-        assert_eq!(clnc[0].workspace.id, aw.id);
-        assert_eq!(clns[0].workspace.id, 42);
+        autospawn(&mut config).unwrap();
+        sleep(Duration::from_millis(2000));
 
-        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title("test_nonfloating")).unwrap();
-        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title("test_notcontained")).unwrap();
-        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title("test_scratchpad")).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
+            .clone()
+            .into_iter()
+            .zip(resources.spawned)
+            .for_each(|(title, spawned)| {
+                assert_eq!(clients.clone().any(|x| x.initial_title == title), spawned)
+            });
+
+        resources
+            .titles
+            .clone()
+            .into_iter()
+            .zip(&resources.expected_workspace)
+            .zip(resources.spawned)
+            .filter(|(_, spawned)| *spawned)
+            .for_each(|((title, workspace), _)| {
+                let clients_with_title: Vec<Client> = clients
+                    .clone()
+                    .filter(|x| x.initial_title == title)
+                    .collect();
+
+                assert_eq!(clients_with_title.len(), 1);
+                assert_eq!(&clients_with_title[0].workspace.name, workspace);
+            });
     }
 }

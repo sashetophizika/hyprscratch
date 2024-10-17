@@ -17,7 +17,7 @@ fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &Config) 
         unshiny_titles.retain(|x| *x != request[2..]);
     }
 
-    let titles_string = format!("{:?}", config.normal_titles);
+    let titles_string = config.normal_titles.join(" ");
     stream.write_all(titles_string.as_bytes())?;
     Ok(())
 }
@@ -54,6 +54,7 @@ fn handle_cycle(
 
     if let Some(m) = mode {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
+            stream.write_all(b"empty")?;
             return Ok(());
         }
 
@@ -79,7 +80,7 @@ fn clean(
     let mut ev = EventListener::new();
 
     ev.add_workspace_change_handler(move |_| {
-        move_floating(shiny_titles.lock().unwrap().to_vec());
+        move_floating(shiny_titles.lock().unwrap().to_vec()).unwrap();
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
@@ -91,7 +92,7 @@ fn clean(
         ev.add_active_window_change_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(unshiny_titles.lock().unwrap().to_vec());
+                    move_floating(unshiny_titles.lock().unwrap().to_vec()).unwrap();
                 }
             }
         });
@@ -101,7 +102,7 @@ fn clean(
     Ok(())
 }
 
-pub fn initialize(
+pub fn initialize_daemon(
     args: &[String],
     config_path: Option<String>,
     socket_path: Option<&str>,
@@ -146,6 +147,7 @@ pub fn initialize(
                 stream.try_clone()?.read_to_string(&mut buf)?;
 
                 match buf.as_str() {
+                    "kill" => break,
                     "reload" => handle_reload(&mut config)?,
                     b if b.starts_with("c") => {
                         handle_cycle(&mut stream, &mut cycle_index, &config, buf)?
@@ -170,6 +172,8 @@ pub fn initialize(
 #[cfg(test)]
 mod test {
     use super::*;
+    use hyprland::data::{Clients, Workspace};
+    use std::{thread::sleep, time::Duration};
 
     fn test_handle(request: &str, expectation: &str) {
         let mut stream = UnixStream::connect("/tmp/hyprscratch_test.sock").unwrap();
@@ -182,13 +186,12 @@ mod test {
         assert_eq!(expectation, buf);
     }
 
-    #[test]
     fn test_handlers() {
         std::thread::spawn(|| {
             let args = vec!["".to_string()];
-            initialize(
+            initialize_daemon(
                 &args,
-                Some("./test_config2.txt".to_string()),
+                Some("./test_configs/test_config2.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
             .unwrap();
@@ -199,10 +202,152 @@ mod test {
         test_handle("c?0", "ytop:kitty --title btop -e ytop:");
         test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
-        test_handle("s?btop", "[\"ytop\", \"htop\"]");
+        test_handle("s?btop", "ytop htop");
         test_handle("r?btop", "");
 
         test_handle("reload", "");
         test_handle("unknown", "Unknown request: unknown");
+        test_handle("kill", "");
+    }
+
+    struct TestResources {
+        titles: [String; 3],
+        commands: [String; 3],
+        expected_workspace: [String; 3],
+    }
+
+    impl Drop for TestResources {
+        fn drop(&mut self) {
+            self.titles.clone().into_iter().for_each(|title| {
+                hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
+            });
+            sleep(Duration::from_millis(1000));
+        }
+    }
+
+    fn setup_test(resources: &TestResources) {
+        let clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
+            .clone()
+            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
+
+        resources
+            .commands
+            .clone()
+            .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
+        sleep(Duration::from_millis(2000));
+    }
+
+    fn verify_test(resources: &TestResources) {
+        let clients = Clients::get().unwrap().into_iter();
+        resources
+            .titles
+            .clone()
+            .into_iter()
+            .zip(&resources.expected_workspace)
+            .for_each(|(title, workspace)| {
+                let clients_with_title: Vec<Client> = clients
+                    .clone()
+                    .filter(|x| x.initial_title == title)
+                    .collect();
+
+                assert_eq!(clients_with_title.len(), 1);
+                assert_eq!(&clients_with_title[0].workspace.name, workspace);
+            });
+    }
+
+    fn test_clean() {
+        std::thread::spawn(|| {
+            let args = vec!["clean".to_string()];
+            initialize_daemon(
+                &args,
+                Some("./test_configs/test_config3.txt".to_string()),
+                Some("/tmp/hyprscratch_test.sock"),
+            )
+            .unwrap();
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let active_workspace = Workspace::get_active().unwrap();
+        let resources = TestResources {
+            titles: [
+                "test_normal_clean".to_string(),
+                "test_nonfloating_clean".to_string(),
+                "test_special_clean".to_string(),
+            ],
+            commands: [
+                "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
+                "kitty --title test_nonfloating_clean".to_string(),
+                "[float; workspace special:test_special_clean; size 30% 30%; move 30% 0] kitty --title test_special_clean".to_string(),
+            ],
+            expected_workspace: [
+                "42".to_string(),
+                active_workspace.name,
+                "special:test_special_clean".to_string(),
+            ],
+        };
+
+        setup_test(&resources);
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        sleep(Duration::from_millis(1000));
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
+
+        verify_test(&resources);
+        test_handle("kill", "");
+        sleep(Duration::from_millis(1000));
+    }
+
+    fn test_clean_spotless() {
+        std::thread::spawn(|| {
+            let args = vec!["clean".to_string(), "spotless".to_string()];
+            initialize_daemon(
+                &args,
+                Some("./test_configs/test_config3.txt".to_string()),
+                Some("/tmp/hyprscratch_test.sock"),
+            )
+            .unwrap();
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let active_workspace = Workspace::get_active().unwrap();
+        let resources = TestResources {
+            titles: [
+                "test_nonfloating_clean".to_string(),
+                "test_shiny_clean".to_string(),
+                "test_normal_clean".to_string(),
+            ],
+            commands: [
+                "kitty --title test_nonfloating_clean".to_string(),
+                "[float; size 30% 30%; move 30% 0] kitty --title test_shiny_clean".to_string(),
+                "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
+            ],
+            expected_workspace: [
+                active_workspace.name.clone(),
+                active_workspace.name,
+                "42".to_string(),
+            ],
+        };
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        setup_test(&resources);
+
+        hyprland::dispatch!(
+            FocusWindow,
+            WindowIdentifier::Address(active_client.address)
+        )
+        .unwrap();
+        sleep(Duration::from_millis(200));
+
+        verify_test(&resources);
+        test_handle("kill", "");
+        sleep(Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_daemon() {
+        test_handlers();
+        test_clean();
+        test_clean_spotless();
     }
 }

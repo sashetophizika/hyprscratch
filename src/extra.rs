@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::scratchpad::scratchpad;
-use hyprland::data::{Client, Clients, Workspace};
+use crate::utils::move_floating;
+use hyprland::data::Client;
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -15,22 +16,8 @@ pub fn hideall() -> Result<()> {
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
-    let active_workspace = Workspace::get_active()?;
 
-    Clients::get()?
-        .iter()
-        .filter(|x| {
-            x.floating && x.workspace.id == active_workspace.id && titles.contains(&x.title)
-        })
-        .for_each(|x| {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(42),
-                Some(WindowIdentifier::Address(x.address.clone()))
-            )
-            .unwrap()
-        });
-
+    move_floating(titles.split(" ").map(|x| x.to_string()).collect())?;
     let active_client = Client::get_active()?.unwrap();
     if active_client.workspace.id < 0 {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(active_client.initial_title))?;
@@ -51,7 +38,9 @@ pub fn cycle(args: String) -> Result<()> {
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
-    stream.flush()?;
+    if buf == "empty" {
+        return Ok(());
+    }
 
     let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
     scratchpad(&args[0], &args[1], &args[2])?;
@@ -65,8 +54,15 @@ pub fn reload() -> Result<()> {
     Ok(())
 }
 
-pub fn get_config() -> Result<()> {
-    let conf = Config::new(None)?;
+pub fn kill() -> Result<()> {
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+    stream.write_all(b"kill")?;
+    stream.shutdown(Shutdown::Write)?;
+    Ok(())
+}
+
+pub fn get_config(config_file: Option<String>) -> Result<()> {
+    let conf = Config::new(config_file)?;
     let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
     let padding = |x: usize, y: &str| " ".repeat(x - y.chars().count());
 

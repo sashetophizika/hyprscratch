@@ -25,28 +25,45 @@ impl Config {
 
         let [titles, commands, options] = parse_config(config_file)?;
         let normal_titles = titles
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| !options[i].contains("special"))
-            .map(|(_, x)| x.to_owned())
+            .clone()
+            .into_iter()
+            .zip(options.clone())
+            .filter_map(|(title, option)| {
+                if !option.contains("special") {
+                    Some(title)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<String>>();
 
         let special_titles = titles
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| options[i].contains("special"))
-            .map(|(_, x)| x.to_owned())
+            .clone()
+            .into_iter()
+            .zip(options.clone())
+            .filter_map(|(title, option)| {
+                if option.contains("special") {
+                    Some(title)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<String>>();
 
         let shiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(normal_titles.clone()));
 
         let unshiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(
             titles
-                .iter()
-                .cloned()
-                .enumerate()
-                .filter(|&(i, _)| !(options[i].contains("shiny") || options[i].contains("special")))
-                .map(|(_, x)| x)
+                .clone()
+                .into_iter()
+                .zip(options.clone())
+                .filter_map(|(title, option)| {
+                    if !option.contains("shiny") && !option.contains("special") {
+                        Some(title)
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
         ));
 
@@ -73,18 +90,30 @@ impl Config {
         [self.titles, self.commands, self.options] = parse_config(config_file)?;
         self.normal_titles = self
             .titles
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| !self.options[i].contains("special"))
-            .map(|(_, x)| x.to_owned())
+            .clone()
+            .into_iter()
+            .zip(self.options.clone())
+            .filter_map(|(title, option)| {
+                if !option.contains("special") {
+                    Some(title)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<String>>();
 
         self.special_titles = self
             .titles
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| self.options[i].contains("special"))
-            .map(|(_, x)| x.to_owned())
+            .clone()
+            .into_iter()
+            .zip(self.options.clone())
+            .filter_map(|(title, option)| {
+                if option.contains("special") {
+                    Some(title)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<String>>();
 
         let mut current_shiny_titles = self.shiny_titles.lock().unwrap();
@@ -93,13 +122,16 @@ impl Config {
         let mut current_unshiny_titles = self.unshiny_titles.lock().unwrap();
         *current_unshiny_titles = self
             .titles
-            .iter()
-            .cloned()
-            .enumerate()
-            .filter(|&(i, _)| {
-                !self.options[i].contains("shiny") && !self.options[i].contains("special")
+            .clone()
+            .into_iter()
+            .zip(self.options.clone())
+            .filter_map(|(title, option)| {
+                if !option.contains("shiny") && !option.contains("special") {
+                    Some(title)
+                } else {
+                    None
+                }
             })
-            .map(|(_, x)| x)
             .collect();
 
         Ok(())
@@ -213,42 +245,42 @@ mod tests {
 
     #[test]
     fn test_parsing() {
-        let et = vec![
+        let expected_titles = vec![
             "btop",
             "Loading…",
             "\\\"",
             " a program with ' a wierd ' name",
         ];
-        let ec = vec![
+        let expected_commands = vec![
             "[float;size 85% 85%;center] kitty --title btop -e btop",
             "[float;size 70% 80%;center] nautilus",
             "\\'",
             " a \"command with\" \\'a wierd\\' format",
         ];
-        let eo = vec![
+        let expected_options = vec![
             "stack shiny onstart summon hide special",
             "",
             "stack onstart special",
             "hide summon",
         ];
 
-        let [t, c, o] = parse_config("./test_config.txt".to_owned()).unwrap();
+        let [titles, commands, options] = parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
 
-        assert_eq!(t, et);
-        assert_eq!(c, ec);
-        assert_eq!(o, eo);
+        assert_eq!(titles, expected_titles);
+        assert_eq!(commands, expected_commands);
+        assert_eq!(options, expected_options);
     }
 
     #[test]
     fn test_handle_reload() {
-        let mut cf = File::create("./test_config2.txt").unwrap();
-        cf.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
+        let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
+        config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny onstart summon hide special 
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' onstart").unwrap();
 
-        let mut c = Config::new(Some("./test_config2.txt".to_string())).unwrap();
-        let ec = Config {
+        let mut config = Config::new(Some("./test_configs/test_config2.txt".to_string())).unwrap();
+        let expected_config = Config {
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
@@ -279,31 +311,34 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
             ])),
         };
 
-        assert_eq!(c.titles, ec.titles);
-        assert_eq!(c.normal_titles, ec.normal_titles);
-        assert_eq!(c.special_titles, ec.special_titles);
-        assert_eq!(c.commands, ec.commands);
-        assert_eq!(c.options, ec.options);
+        assert_eq!(config.titles, expected_config.titles);
+        assert_eq!(config.normal_titles, expected_config.normal_titles);
+        assert_eq!(config.special_titles, expected_config.special_titles);
+        assert_eq!(config.commands, expected_config.commands);
+        assert_eq!(config.options, expected_config.options);
         assert_eq!(
-            *c.shiny_titles.lock().unwrap(),
-            *ec.shiny_titles.lock().unwrap()
+            *config.shiny_titles.lock().unwrap(),
+            *expected_config.shiny_titles.lock().unwrap()
         );
         assert_eq!(
-            *c.unshiny_titles.lock().unwrap(),
-            *ec.unshiny_titles.lock().unwrap()
+            *config.unshiny_titles.lock().unwrap(),
+            *expected_config.unshiny_titles.lock().unwrap()
         );
 
-        let mut cf = File::create("./test_config2.txt").unwrap();
-        cf.write(
-            b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special
+        let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
+        config_file
+            .write(
+                b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special
 bind = $mainMod, b, exec, hyprscratch ytop 'kitty --title btop -e ytop'
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' stack shiny
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special",
-        )
-        .unwrap();
+            )
+            .unwrap();
 
-        c.reload(Some("./test_config2.txt".to_string())).unwrap();
-        let ec = Config {
+        config
+            .reload(Some("./test_configs/test_config2.txt".to_string()))
+            .unwrap();
+        let expected_config = Config {
             titles: vec![
                 "firefox".to_string(),
                 "ytop".to_string(),
@@ -328,18 +363,18 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
             unshiny_titles: Arc::new(Mutex::new(vec!["ytop".to_string()])),
         };
 
-        assert_eq!(c.titles, ec.titles);
-        assert_eq!(c.normal_titles, ec.normal_titles);
-        assert_eq!(c.special_titles, ec.special_titles);
-        assert_eq!(c.commands, ec.commands);
-        assert_eq!(c.options, ec.options);
+        assert_eq!(config.titles, expected_config.titles);
+        assert_eq!(config.normal_titles, expected_config.normal_titles);
+        assert_eq!(config.special_titles, expected_config.special_titles);
+        assert_eq!(config.commands, expected_config.commands);
+        assert_eq!(config.options, expected_config.options);
         assert_eq!(
-            *c.shiny_titles.lock().unwrap(),
-            *ec.shiny_titles.lock().unwrap()
+            *config.shiny_titles.lock().unwrap(),
+            *expected_config.shiny_titles.lock().unwrap()
         );
         assert_eq!(
-            *c.unshiny_titles.lock().unwrap(),
-            *ec.unshiny_titles.lock().unwrap()
+            *config.unshiny_titles.lock().unwrap(),
+            *expected_config.unshiny_titles.lock().unwrap()
         );
     }
 }

@@ -173,158 +173,161 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    struct TestResources {
+        title: String,
+        command: String,
+    }
+
+    impl Drop for TestResources {
+        fn drop(&mut self) {
+            hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&self.title)).unwrap();
+            sleep(Duration::from_millis(1000));
+        }
+    }
 
     fn test_summon_normal() {
+        let resources = TestResources {
+            title: "test_normal_scratchpad".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_normal_scratchpad".to_string(),
+        };
+
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             false
         );
 
         let cls: Vec<Client> = Vec::new();
-        summon_normal(
-            "[float;size 30% 30%] kitty --title test_scratchpad",
-            &Workspace::get_active().unwrap(),
-            &cls,
-        )
-        .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        summon_normal(&resources.command, &Workspace::get_active().unwrap(), &cls).unwrap();
+        sleep(Duration::from_millis(1000));
 
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             true
         );
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
 
-        let cla = Client::get_active().unwrap().unwrap();
-        hide_active("", "test_scratchpad".to_string(), &cla).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        let active_client = Client::get_active().unwrap().unwrap();
+        hide_active("", resources.title.clone(), &active_client).unwrap();
+        sleep(Duration::from_millis(1000));
 
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             true
         );
         assert_ne!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
 
-        let cls: Vec<Client> = Clients::get()
+        let clients_with_title: Vec<Client> = Clients::get()
             .unwrap()
             .into_iter()
-            .filter(|x| x.initial_title == "test_scratchpad")
+            .filter(|x| x.initial_title == resources.title)
             .collect();
-        let aw = Workspace::get_active().unwrap();
-        summon_normal(
-            "[float;size 30% 30%] kitty --title test_scratchpad",
-            &aw,
-            &cls,
-        )
-        .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        assert_eq!(Workspace::get_active().unwrap().id, aw.id);
+        let active_workspace = Workspace::get_active().unwrap();
+        summon_normal(&resources.command, &active_workspace, &clients_with_title).unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
-        hyprland::dispatch!(
-            CloseWindow,
-            WindowIdentifier::Address(Client::get_active().unwrap().unwrap().address)
-        )
-        .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 
     fn test_summon_special() {
+        let resources = TestResources {
+            title: "test_special_scratchpad".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_special_scratchpad".to_string(),
+        };
+
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             false
         );
 
-        let cls: Vec<Client> = Vec::new();
+        let clients_with_title: Vec<Client> = Vec::new();
         summon_special(
-            "test_scratchpad",
-            "[float;size 30% 30%] kitty --title test_scratchpad",
+            &resources.title,
+            &resources.command,
             &Workspace::get_active().unwrap(),
-            &cls,
+            &clients_with_title,
         )
         .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        sleep(Duration::from_millis(1000));
 
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             true
         );
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
 
-        let cls: Vec<Client> = Clients::get()
+        let clients_with_title: Vec<Client> = Clients::get()
             .unwrap()
             .into_iter()
-            .filter(|x| x.initial_title == "test_scratchpad")
+            .filter(|x| x.initial_title == resources.title)
             .collect();
         summon_special(
-            "test_scratchpad",
-            "[float;size 30% 30%] kitty --title test_scratchpad",
+            &resources.title,
+            &resources.command,
             &Workspace::get_active().unwrap(),
-            &cls,
+            &clients_with_title,
         )
         .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        sleep(Duration::from_millis(1000));
 
         assert_eq!(
             Clients::get()
                 .unwrap()
                 .iter()
-                .any(|x| x.initial_title == "test_scratchpad"),
+                .any(|x| x.initial_title == resources.title),
             true
         );
         assert_ne!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
 
-        let aw = Workspace::get_active().unwrap();
+        let active_workspace = Workspace::get_active().unwrap();
         summon_special(
-            "test_scratchpad",
-            "[float;size 30% 30%] kitty --title test_scratchpad",
-            &aw,
-            &cls,
+            &resources.title,
+            &resources.command,
+            &active_workspace,
+            &clients_with_title,
         )
         .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        sleep(Duration::from_millis(1000));
 
-        assert_eq!(Workspace::get_active().unwrap().id, aw.id);
+        assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
-            "test_scratchpad"
+            resources.title
         );
-        hyprland::dispatch!(
-            CloseWindow,
-            WindowIdentifier::Address(Client::get_active().unwrap().unwrap().address)
-        )
-        .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 
     #[test]

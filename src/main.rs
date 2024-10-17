@@ -4,7 +4,7 @@ mod extra;
 mod scratchpad;
 mod utils;
 
-use crate::daemon::initialize;
+use crate::daemon::initialize_daemon;
 use crate::extra::*;
 use crate::scratchpad::scratchpad;
 use hyprland::Result;
@@ -17,11 +17,12 @@ fn main() -> Result<()> {
     };
 
     match title.as_str() {
-        "clean" | "" => initialize(&args, None, None)?,
-        "get-config" => get_config()?,
+        "clean" | "" => initialize_daemon(&args, None, None)?,
+        "get-config" => get_config(None)?,
         "hideall" => hideall()?,
         "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
+        "kill" => kill()?,
         "help" => help(),
         "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {
