@@ -90,7 +90,7 @@ mod tests {
         titles: [String; 3],
         commands: [String; 3],
         expected_workspace: [String; 3],
-        spawned: [bool; 3],
+        spawned: [usize; 3],
     }
 
     impl Drop for TestResources {
@@ -99,10 +99,9 @@ mod tests {
                 .clone()
                 .into_iter()
                 .zip(self.spawned)
-                .for_each(|(title, spawned)| {
-                    if spawned {
-                        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
-                    }
+                .filter(|(_, spawned)| *spawned == 1)
+                .for_each(|(title, _)| {
+                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
                 });
             sleep(Duration::from_millis(1000));
         }
@@ -127,7 +126,7 @@ mod tests {
                 active_workspace.name,
                 "42".to_string(),
             ],
-            spawned: [true; 3],
+            spawned: [1; 3],
         };
 
         let mut clients = Clients::get().unwrap().into_iter();
@@ -192,7 +191,7 @@ mod tests {
                 "special:test_special_autospawn".to_string(),
                 "".to_string(),
             ],
-            spawned: [true, true, false],
+            spawned: [1, 1, 0],
         };
 
         let mut clients = Clients::get().unwrap().into_iter();
@@ -223,26 +222,18 @@ mod tests {
             .titles
             .clone()
             .into_iter()
-            .zip(resources.spawned)
-            .for_each(|(title, spawned)| {
-                assert_eq!(clients.clone().any(|x| x.initial_title == title), spawned)
-            });
-
-        resources
-            .titles
-            .clone()
-            .into_iter()
             .zip(&resources.expected_workspace)
             .zip(resources.spawned)
-            .filter(|(_, spawned)| *spawned)
-            .for_each(|((title, workspace), _)| {
+            .for_each(|((title, workspace), spawned)| {
                 let clients_with_title: Vec<Client> = clients
                     .clone()
                     .filter(|x| x.initial_title == title)
                     .collect();
 
-                assert_eq!(clients_with_title.len(), 1);
-                assert_eq!(&clients_with_title[0].workspace.name, workspace);
+                assert_eq!(clients_with_title.len(), spawned);
+                if spawned == 1 {
+                    assert_eq!(&clients_with_title[0].workspace.name, workspace);
+                }
             });
     }
 }
