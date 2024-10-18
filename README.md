@@ -55,6 +55,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `get-config`: prints out the parsed configuration, useful for debugging potential syntax issues.
 
+* `kill`: kills the hyprsctatch daemon
+
 ## Other Relevant information
 The program doesn't use Hyprland's special workspace by default, it uses workspace 42.
 

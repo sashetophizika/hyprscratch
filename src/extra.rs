@@ -109,6 +109,7 @@ EXTRA COMMANDS
   hideall                     Hide all scratchpads
   reload                      Reparse config file
   get-config                  Print parsed config file
+  kill                        Kill the hyprscratch daemon
   help                        Print this help message
   version                     Print current version"
     )
