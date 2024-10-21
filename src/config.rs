@@ -79,61 +79,7 @@ impl Config {
     }
 
     pub fn reload(self: &mut Config, config_path: Option<String>) -> Result<()> {
-        let config_file = match config_path {
-            Some(config) => config,
-            None => format!(
-                "{}/.config/hypr/hyprland.conf",
-                std::env::var("HOME").unwrap()
-            ),
-        };
-
-        [self.titles, self.commands, self.options] = parse_config(config_file)?;
-        self.normal_titles = self
-            .titles
-            .clone()
-            .into_iter()
-            .zip(self.options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
-
-        self.special_titles = self
-            .titles
-            .clone()
-            .into_iter()
-            .zip(self.options.clone())
-            .filter_map(|(title, option)| {
-                if option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
-
-        let mut current_shiny_titles = self.shiny_titles.lock().unwrap();
-        current_shiny_titles.clone_from(&self.normal_titles);
-
-        let mut current_unshiny_titles = self.unshiny_titles.lock().unwrap();
-        *current_unshiny_titles = self
-            .titles
-            .clone()
-            .into_iter()
-            .zip(self.options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("shiny") && !option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
+        *self = Config::new(config_path)?;
         Ok(())
     }
 }
@@ -264,7 +210,8 @@ mod tests {
             "hide summon",
         ];
 
-        let [titles, commands, options] = parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
+        let [titles, commands, options] =
+            parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
 
         assert_eq!(titles, expected_titles);
         assert_eq!(commands, expected_commands);
