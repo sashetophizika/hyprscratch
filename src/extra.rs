@@ -95,18 +95,19 @@ pub fn help() {
 
 DAEMON OPTIONS
   clean [spotless]            Hide scratchpads on workspace change [and focus change]
+  no-auto-reload              Don't reload the configuration when the configuration file is updated
 
 SCRATCHPAD OPTIONS
   stack                       Prevent the scratchpad from hiding the one that is already present
   shiny                       Prevent the scratchpad from being affected by 'clean spotless'
-  onstart                     Spawn the scratchpads at the start of a Hyprland session
+  on-start                    Spawn the scratchpads at the start of a Hyprland session
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
-  hideall                     Hide all scratchpads
+  hide-all                    Hide all scratchpads
   reload                      Reparse config file
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
