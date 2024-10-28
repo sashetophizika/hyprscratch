@@ -8,6 +8,7 @@ use hyprland::Result;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
+use std::path::Path;
 
 pub fn hideall() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
@@ -82,6 +83,24 @@ pub fn get_config(config_file: Option<String>) -> Result<()> {
         )
     }
 
+    Ok(())
+}
+
+pub fn logs() -> Result<()> {
+    let path = Path::new("/tmp/hyprscratch/hyprscratch.log");
+    if path.exists() {
+        let mut file = std::fs::File::open(path)?;
+        let mut buf = String::new();
+
+        file.read_to_string(&mut buf)?;
+        let b = buf
+            .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
+            .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
+            .replace("INFO", "\x1b[0;36mINFO\x1b[0;0m");
+        println!("{}", b.trim());
+    } else {
+        println!("Logs are empty");
+    }
     Ok(())
 }
 
