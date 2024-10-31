@@ -9,10 +9,6 @@ use crate::extra::*;
 use crate::scratchpad::scratchpad;
 use hyprland::Result;
 
-fn warn_deprecated(arg: &str) {
-    println!("The '{arg}' function is deprecated.\nTry 'hyprscratch help' and modify your configuration before it is removed.");
-}
-
 fn main() -> Result<()> {
     let args = std::env::args().collect::<Vec<String>>();
     let title = match args.len() {
@@ -20,16 +16,10 @@ fn main() -> Result<()> {
         2.. => args[1].clone(),
     };
 
-    for arg in ["hideall", "onstart"] {
-        if args.contains(&arg.to_string()) {
-            warn_deprecated(arg);
-        }
-    }
-
     match title.as_str() {
-        "clean" | "no-auto-reload" | "init" | "" => initialize_daemon(&args, None, None)?,
+        "clean" | "" => initialize_daemon(&args, None, None)?,
         "get-config" => get_config(None)?,
-        "hideall" | "hide-all" => hideall()?,
+        "hideall" => hideall()?,
         "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
         "kill" => kill()?,
