@@ -149,13 +149,6 @@ pub fn initialize_daemon(
     }
 
     let listener = UnixListener::bind(path_to_sock)?;
-    log(
-        format!(
-            "Daemon successfully started, listening on {:?}",
-            path_to_sock
-        ),
-        "INFO",
-    )?;
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
