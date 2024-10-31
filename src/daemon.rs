@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::log;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::dispatch::*;
@@ -10,11 +11,11 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
-fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
+fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &mut Config) -> Result<()> {
     if request.len() > 1 {
-        let mut unshiny_titles = config.unshiny_titles.lock().unwrap();
-        unshiny_titles.retain(|x| *x != request[2..]);
+        config.unshiny_titles.retain(|x| *x != request[2..]);
     }
 
     let titles_string = config.normal_titles.join(" ");
@@ -22,9 +23,8 @@ fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &Config) 
     Ok(())
 }
 
-fn handle_return(title: String, config: &Config) -> Result<()> {
-    let mut unshiny_titles = config.unshiny_titles.lock().unwrap();
-    unshiny_titles.push(title[2..].to_string());
+fn handle_return(title: String, config: &mut Config) -> Result<()> {
+    config.unshiny_titles.push(title[2..].to_string());
     Ok(())
 }
 
@@ -72,15 +72,12 @@ fn handle_cycle(
     Ok(())
 }
 
-fn clean(
-    spotless: &str,
-    shiny_titles: Arc<Mutex<Vec<String>>>,
-    unshiny_titles: Arc<Mutex<Vec<String>>>,
-) -> Result<()> {
+fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
 
-    ev.add_workspace_change_handler(move |_| {
-        move_floating(shiny_titles.lock().unwrap().to_vec()).unwrap();
+    let config1 = Arc::clone(&config);
+    ev.add_workspace_changed_handler(move |_| {
+        move_floating(config1.lock().unwrap().normal_titles.clone()).unwrap();
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
@@ -88,15 +85,26 @@ fn clean(
         }
     });
 
+    let config2 = Arc::clone(&config);
     if spotless == "spotless" {
-        ev.add_active_window_change_handler(move |_| {
+        ev.add_active_window_changed_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(unshiny_titles.lock().unwrap().to_vec()).unwrap();
+                    move_floating(config2.lock().unwrap().unshiny_titles.clone()).unwrap();
                 }
             }
         });
     }
+
+    ev.start_listener()?;
+    Ok(())
+}
+
+fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
+    let mut ev = EventListener::new();
+    ev.add_config_reloaded_handler(move || {
+        config.lock().unwrap().reload(None).unwrap();
+    });
 
     ev.start_listener()?;
     Ok(())
@@ -107,20 +115,21 @@ pub fn initialize_daemon(
     config_path: Option<String>,
     socket_path: Option<&str>,
 ) -> Result<()> {
-    let mut config = Config::new(config_path)?;
+    let config = Arc::new(Mutex::new(Config::new(config_path)?));
     let mut cycle_index: usize = 0;
-    autospawn(&mut config)?;
+    autospawn(&mut config.lock().unwrap())?;
+
+    if !args.contains(&"no-auto-reload".to_string()) {
+        let config_clone = Arc::clone(&config);
+        thread::spawn(move || auto_reload(config_clone));
+    }
 
     if args.contains(&"clean".to_string()) {
-        let shiny_titles = Arc::clone(&config.shiny_titles);
-        let unshiny_titles = Arc::clone(&config.unshiny_titles);
-
+        let config_clone = Arc::clone(&config);
         if args[1..].contains(&"spotless".to_string()) {
-            std::thread::spawn(move || {
-                clean("spotless", shiny_titles.clone(), unshiny_titles.clone())
-            });
+            thread::spawn(move || clean("spotless", config_clone));
         } else {
-            std::thread::spawn(move || clean(" ", shiny_titles.clone(), unshiny_titles.clone()));
+            thread::spawn(move || clean(" ", config_clone));
         }
     }
 
@@ -140,6 +149,13 @@ pub fn initialize_daemon(
     }
 
     let listener = UnixListener::bind(path_to_sock)?;
+    log(
+        format!(
+            "Daemon successfully started, listening on {:?}",
+            path_to_sock
+        ),
+        "INFO",
+    )?;
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
@@ -148,16 +164,18 @@ pub fn initialize_daemon(
 
                 match buf.as_str() {
                     "kill" => break,
-                    "reload" => handle_reload(&mut config)?,
+                    "reload" => handle_reload(&mut config.lock().unwrap())?,
                     b if b.starts_with("c") => {
-                        handle_cycle(&mut stream, &mut cycle_index, &config, buf)?
+                        handle_cycle(&mut stream, &mut cycle_index, &config.lock().unwrap(), buf)?
                     }
-                    b if b.starts_with("s") => handle_scratchpad(&mut stream, buf, &config)?,
-                    b if b.starts_with("r") => handle_return(buf, &config)?,
+                    b if b.starts_with("s") => {
+                        handle_scratchpad(&mut stream, buf, &mut config.lock().unwrap())?
+                    }
+                    b if b.starts_with("r") => handle_return(buf, &mut config.lock().unwrap())?,
                     e => {
-                        let error_message = format!("Unknown request: {e}");
+                        let error_message = format!("Daemon: unknown request - {e}");
                         stream.write_all(error_message.as_bytes()).unwrap();
-                        println!("{error_message}");
+                        log(error_message, "ERROR")?;
                     }
                 }
             }
@@ -206,7 +224,7 @@ mod test {
         test_handle("r?btop", "");
 
         test_handle("reload", "");
-        test_handle("unknown", "Unknown request: unknown");
+        test_handle("unknown", "Daemon: unknown request - unknown");
         test_handle("kill", "");
     }
 

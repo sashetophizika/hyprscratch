@@ -8,6 +8,7 @@ use hyprland::Result;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
+use std::path::Path;
 
 pub fn hideall() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
@@ -85,6 +86,24 @@ pub fn get_config(config_file: Option<String>) -> Result<()> {
     Ok(())
 }
 
+pub fn logs() -> Result<()> {
+    let path = Path::new("/tmp/hyprscratch/hyprscratch.log");
+    if path.exists() {
+        let mut file = std::fs::File::open(path)?;
+        let mut buf = String::new();
+
+        file.read_to_string(&mut buf)?;
+        let b = buf
+            .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
+            .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
+            .replace("INFO", "\x1b[0;36mINFO\x1b[0;0m");
+        println!("{}", b.trim());
+    } else {
+        println!("Logs are empty");
+    }
+    Ok(())
+}
+
 pub fn help() {
     println!(
         "Usage:
@@ -95,18 +114,19 @@ pub fn help() {
 
 DAEMON OPTIONS
   clean [spotless]            Hide scratchpads on workspace change [and focus change]
+  no-auto-reload              Don't reload the configuration when the configuration file is updated
 
 SCRATCHPAD OPTIONS
   stack                       Prevent the scratchpad from hiding the one that is already present
   shiny                       Prevent the scratchpad from being affected by 'clean spotless'
-  onstart                     Spawn the scratchpads at the start of a Hyprland session
+  on-start                    Spawn the scratchpads at the start of a Hyprland session
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
-  hideall                     Hide all scratchpads
+  hide-all                    Hide all scratchpads
   reload                      Reparse config file
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
