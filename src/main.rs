@@ -7,29 +7,9 @@ mod utils;
 use crate::daemon::initialize_daemon;
 use crate::extra::*;
 use crate::scratchpad::scratchpad;
-use chrono::offset::Local;
 use hyprland::shared::HyprError;
 use hyprland::Result;
-use std::fs::File;
-use std::io::Write;
-
-pub fn log(msg: String, level: &str) -> Result<()> {
-    let mut file = File::options()
-        .create(true)
-        .read(true)
-        .append(true)
-        .open("/tmp/hyprscratch/hyprscratch.log")?;
-
-    println!("{msg}");
-    file.write_all(
-        format!(
-            "{} [{level}] {msg}\n",
-            Local::now().format("%d.%m.%Y %H:%M:%S")
-        )
-        .as_bytes(),
-    )?;
-    Ok(())
-}
+use utils::log;
 
 fn warn_deprecated(feature: &str) -> Result<()> {
     let msg = format!("The '{feature}' feature is deprecated.");

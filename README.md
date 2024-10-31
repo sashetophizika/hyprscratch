@@ -35,7 +35,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Scratchpad options:
 
-* `stack`: makes it so that the scratchpad doesn't hide one that is already present. This can be used to group multiple scratchpads by binding them to the same key and using `stack` on all except the first one. 
+* `stack`: makes it so that the scratchpad doesn't hide one that is already present.
 
 * `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
 
@@ -49,23 +49,27 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Extra hyprscratch commands:
 
-* `cycle [normal|special]`: cycles between scratchpads (optionally only normal or only special ones) in the order they are defined in the configuration file.
+* `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
 * `hideall`: hides all scratchpads, useful mostly when stacking multiple of them.
 
 * `reload`: re-parses the configuration file without restarting the daemon.
 
-* `get-config`: prints out the parsed configuration, useful for debugging potential syntax issues.
+* `get-config`: prints out the parsed configuration.
 
 * `kill`: kills the hyprsctatch daemon
+
+* `logs`: show logs
 
 ## Other Relevant information
 The program doesn't use Hyprland's special workspace by default, it uses workspace 42.
 
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
+To group multiple scratchpads together, bind them to the same key and use `stack` on all of them. 
+
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
+If there are multiple scratchpads with the same initial title, this program just grabs the first one it finds.
 
 Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.

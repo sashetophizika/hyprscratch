@@ -130,6 +130,7 @@ EXTRA COMMANDS
   reload                      Reparse config file
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
+  logs                        Print log file contents
   help                        Print this help message
   version                     Print current version"
     )
