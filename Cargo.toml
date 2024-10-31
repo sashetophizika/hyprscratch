@@ -1,6 +1,6 @@
 [package]
 name = "hyprscratch"
-version = "0.4.4"
+version = "0.4.5"
 edition = "2021"
 license = "MIT"
 description = "Improved scratchpad functionality for Hyprland"
@@ -9,4 +9,5 @@ repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
 
 [dependencies]
-hyprland = "0.4.0-alpha.3"
+chrono = "0.4.38"
+hyprland = "0.4.0-beta.1"
