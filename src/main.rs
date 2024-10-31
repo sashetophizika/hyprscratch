@@ -12,8 +12,7 @@ use hyprland::Result;
 use utils::log;
 
 fn warn_deprecated(feature: &str) -> Result<()> {
-    let msg = format!("The '{feature}' feature is deprecated.");
-    log(msg, "WARN")?;
+    log(format!("The '{feature}' feature is deprecated."), "WARN")?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
 }
@@ -59,9 +58,9 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 }
 
 fn main() {
-    let args = std::env::args().collect::<Vec<String>>();
+    let args: Vec<String> = std::env::args().collect();
     let log_err = |err: HyprError| {
-        log(format!("{}: '{}'", err, args[1..].join(" ")), "ERROR").unwrap();
+        log(format!("{}: '{}'.", err, args[1..].join(" ")), "ERROR").unwrap();
     };
 
     hyprscratch(&args).unwrap_or_else(log_err);

@@ -29,11 +29,11 @@ pub fn log(msg: String, level: &str) -> Result<()> {
 pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Clients::get()?
         .into_iter()
-        .filter(|x| x.floating && x.workspace.id != 42 && titles.contains(&x.initial_title))
+        .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
         .for_each(|x| {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(42),
+                WorkspaceIdentifierWithSpecial::Special(Some(&x.initial_title)),
                 Some(WindowIdentifier::Address(x.address.clone()))
             )
             .unwrap()
@@ -56,50 +56,19 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
             (option.contains("on-start") || option.contains("onstart"))
                 && !client_titles.contains(title)
         })
-        .for_each(|((command, title), option)| {
+        .for_each(|((command, title), _)| {
             let mut cmd = command.clone();
             if command.find('[').is_none() {
                 cmd.insert_str(0, "[]");
             }
 
-            if option.contains("special") {
-                hyprland::dispatch!(
-                    Exec,
-                    &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
-                )
-                .unwrap()
-            } else {
-                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1)).unwrap()
-            }
-        });
-
-    Ok(())
-}
-
-pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String]) -> Result<()> {
-    let clients = Clients::get()?;
-
-    for title in special_titles.iter() {
-        clients.iter().filter(|x| &x.title == title).for_each(|x| {
             hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Special(Some(title)),
-                Some(WindowIdentifier::Address(x.address.clone()))
+                Exec,
+                &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
             )
             .unwrap()
         });
-    }
 
-    for title in normal_titles.iter() {
-        clients.iter().filter(|x| &x.title == title).for_each(|x| {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(42),
-                Some(WindowIdentifier::Address(x.address.clone()))
-            )
-            .unwrap()
-        });
-    }
     Ok(())
 }
 
@@ -148,7 +117,7 @@ mod tests {
             expected_workspace: [
                 active_workspace.name.clone(),
                 active_workspace.name,
-                "42".to_string(),
+                "special:test_scratchpad_move".to_string(),
             ],
             spawned: [1; 3],
         };
@@ -211,7 +180,7 @@ mod tests {
                 "kitty --title test_notonstart_autospawn".to_string(),
             ],
             expected_workspace: [
-                "42".to_string(),
+                "special:test_normal_autospawn".to_string(),
                 "special:test_special_autospawn".to_string(),
                 "".to_string(),
             ],

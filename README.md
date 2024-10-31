@@ -64,8 +64,6 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 * `logs`: show logs
 
 ## Other Relevant information
-The program doesn't use Hyprland's special workspace by default, it uses workspace 42.
-
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
 To group multiple scratchpads together, bind them to the same key and use `stack` on all of them. 

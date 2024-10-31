@@ -30,7 +30,6 @@ fn handle_return(title: String, config: &mut Config) -> Result<()> {
 
 fn handle_reload(config: &mut Config) -> Result<()> {
     config.reload(None)?;
-    shuffle_normal_special(&config.normal_titles, &config.special_titles)?;
     autospawn(config)?;
     Ok(())
 }
@@ -300,7 +299,7 @@ mod test {
                 "[float; workspace special:test_special_clean; size 30% 30%; move 30% 0] kitty --title test_special_clean".to_string(),
             ],
             expected_workspace: [
-                "42".to_string(),
+                "special:test_normal_clean".to_string(),
                 active_workspace.name,
                 "special:test_special_clean".to_string(),
             ],
@@ -343,7 +342,7 @@ mod test {
             expected_workspace: [
                 active_workspace.name.clone(),
                 active_workspace.name,
-                "42".to_string(),
+                "special:test_normal_clean".to_string(),
             ],
         };
 

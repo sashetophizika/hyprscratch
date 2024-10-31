@@ -87,7 +87,7 @@ fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<
     {
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Id(42),
+            WorkspaceIdentifierWithSpecial::Special(Some(&active_client.initial_title)),
             Some(WindowIdentifier::Address(active_client.address.clone()))
         )?;
     }
@@ -143,7 +143,7 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
+                    WorkspaceIdentifierWithSpecial::Special(Some(&x.initial_title)),
                     Some(WindowIdentifier::Address(x.address))
                 )
                 .unwrap()
@@ -196,8 +196,13 @@ mod tests {
             false
         );
 
-        let cls: Vec<Client> = Vec::new();
-        summon_normal(&resources.command, &Workspace::get_active().unwrap(), &cls).unwrap();
+        let clients_with_title: Vec<Client> = Vec::new();
+        summon_normal(
+            &resources.command,
+            &Workspace::get_active().unwrap(),
+            &clients_with_title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         let active_client = Client::get_active().unwrap().unwrap();
@@ -307,9 +312,121 @@ mod tests {
         );
     }
 
+    fn test_stack() {
+        let resources = TestResources {
+            title: "test_stack".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_stack".to_string(),
+        };
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            false
+        );
+
+        let clients_with_title: Vec<Client> = Vec::new();
+        summon_normal(
+            &resources.command,
+            &Workspace::get_active().unwrap(),
+            &clients_with_title,
+        )
+        .unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        assert_eq!(active_client.initial_title, resources.title);
+
+        hide_active("stack", resources.title.clone(), &active_client).unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        assert_eq!(active_client.initial_title, resources.title);
+    }
+
+    fn test_summon_hide() {
+        let resources = TestResources {
+            title: "test_summon_hide".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
+        };
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            false
+        );
+
+        scratchpad(&resources.title, &resources.command, "summon").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_eq!(
+            Client::get_active().unwrap().unwrap().initial_title,
+            resources.title
+        );
+
+        scratchpad(&resources.title, &resources.command, "summon").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let clients_with_title: Vec<Client> = Clients::get()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.initial_title == resources.title)
+            .collect();
+
+        assert_eq!(clients_with_title.len(), 1);
+        assert_eq!(
+            Client::get_active().unwrap().unwrap().initial_title,
+            resources.title
+        );
+
+        scratchpad(&resources.title, &resources.command, "hide").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_ne!(
+            Client::get_active().unwrap().unwrap().initial_title,
+            resources.title,
+        );
+
+        let clients_with_title: Vec<Client> = Clients::get()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.initial_title == resources.title)
+            .collect();
+
+        assert_eq!(clients_with_title.len(), 1);
+        assert_eq!(
+            clients_with_title[0].workspace.name,
+            "special:".to_owned() + &clients_with_title[0].initial_title
+        );
+
+        scratchpad(&resources.title, &resources.command, "hide").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let clients_with_title: Vec<Client> = Clients::get()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.initial_title == resources.title)
+            .collect();
+
+        assert_eq!(clients_with_title.len(), 1);
+        assert_eq!(
+            clients_with_title[0].workspace.name,
+            "special:".to_owned() + &clients_with_title[0].initial_title
+        );
+    }
+
     #[test]
     fn test_summon() {
         test_summon_normal();
         test_summon_special();
+    }
+
+    #[test]
+    fn test_options() {
+        test_stack();
+        test_summon_hide();
     }
 }
