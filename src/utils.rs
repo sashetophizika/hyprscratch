@@ -30,10 +30,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .iter()
         .zip(&config.titles)
         .zip(&config.options)
-        .filter(|((_, title), option)| {
-            (option.contains("on-start") || option.contains("onstart"))
-                && !client_titles.contains(title)
-        })
+        .filter(|((_, title), option)| option.contains("onstart") && !client_titles.contains(title))
         .for_each(|((command, title), option)| {
             let mut cmd = command.clone();
             if command.find('[').is_none() {
@@ -85,6 +82,7 @@ pub fn shuffle_normal_special(normal_titles: &[String], special_titles: &[String
 mod tests {
     use super::*;
     use hyprland::data::{Client, Workspace};
+    use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -212,7 +210,8 @@ mod tests {
                 "special onstart".to_string(),
                 "".to_string(),
             ],
-            unshiny_titles: Vec::new(),
+            shiny_titles: Arc::new(Mutex::new(Vec::new())),
+            unshiny_titles: Arc::new(Mutex::new(Vec::new())),
         };
 
         autospawn(&mut config).unwrap();

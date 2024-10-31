@@ -117,8 +117,14 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
         .filter(|x| x.initial_title == title)
         .collect();
 
-    if !options.contains("special") && options.contains("summon") {
-        summon_normal(command, &active_workspace, &clients_with_title)?;
+    if options.contains("summon") && !options.contains("special") {
+        summon(
+            title,
+            command,
+            options,
+            &active_workspace,
+            &clients_with_title,
+        )?;
         return Ok(());
     }
 
@@ -200,9 +206,19 @@ mod tests {
         summon_normal(&resources.command, &Workspace::get_active().unwrap(), &cls).unwrap();
         sleep(Duration::from_millis(1000));
 
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources.title);
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            true
+        );
+        assert_eq!(
+            Client::get_active().unwrap().unwrap().initial_title,
+            resources.title
+        );
 
+        let active_client = Client::get_active().unwrap().unwrap();
         hide_active("", resources.title.clone(), &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -259,6 +275,13 @@ mod tests {
         .unwrap();
         sleep(Duration::from_millis(1000));
 
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            true
+        );
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
             resources.title

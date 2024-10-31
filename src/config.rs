@@ -1,5 +1,6 @@
 use hyprland::Result;
 use std::io::prelude::*;
+use std::sync::{Arc, Mutex};
 use std::vec;
 
 pub struct Config {
@@ -8,7 +9,8 @@ pub struct Config {
     pub special_titles: Vec<String>,
     pub commands: Vec<String>,
     pub options: Vec<String>,
-    pub unshiny_titles: Vec<String>,
+    pub shiny_titles: Arc<Mutex<Vec<String>>>,
+    pub unshiny_titles: Arc<Mutex<Vec<String>>>,
 }
 
 impl Config {
@@ -48,18 +50,22 @@ impl Config {
             })
             .collect::<Vec<String>>();
 
-        let unshiny_titles: Vec<String> = titles
-            .clone()
-            .into_iter()
-            .zip(options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("shiny") && !option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let shiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(normal_titles.clone()));
+
+        let unshiny_titles: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(
+            titles
+                .clone()
+                .into_iter()
+                .zip(options.clone())
+                .filter_map(|(title, option)| {
+                    if !option.contains("shiny") && !option.contains("special") {
+                        Some(title)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        ));
 
         Ok(Config {
             titles,
@@ -67,6 +73,7 @@ impl Config {
             special_titles,
             commands,
             options,
+            shiny_titles,
             unshiny_titles,
         })
     }
@@ -241,7 +248,14 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "special".to_string(),
                 "onstart".to_string(),
             ],
-            unshiny_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            shiny_titles: Arc::new(Mutex::new(vec![
+                "firefox".to_string(),
+                "cmatrix".to_string(),
+            ])),
+            unshiny_titles: Arc::new(Mutex::new(vec![
+                "firefox".to_string(),
+                "cmatrix".to_string(),
+            ])),
         };
 
         assert_eq!(config.titles, expected_config.titles);
@@ -249,7 +263,14 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.commands, expected_config.commands);
         assert_eq!(config.options, expected_config.options);
-        assert_eq!(*config.unshiny_titles, *expected_config.unshiny_titles);
+        assert_eq!(
+            *config.shiny_titles.lock().unwrap(),
+            *expected_config.shiny_titles.lock().unwrap()
+        );
+        assert_eq!(
+            *config.unshiny_titles.lock().unwrap(),
+            *expected_config.unshiny_titles.lock().unwrap()
+        );
 
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file
@@ -285,7 +306,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "stack shiny".to_string(),
                 "special".to_string(),
             ],
-            unshiny_titles: vec!["ytop".to_string()],
+            shiny_titles: Arc::new(Mutex::new(vec!["ytop".to_string(), "htop".to_string()])),
+            unshiny_titles: Arc::new(Mutex::new(vec!["ytop".to_string()])),
         };
 
         assert_eq!(config.titles, expected_config.titles);
@@ -293,6 +315,13 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.commands, expected_config.commands);
         assert_eq!(config.options, expected_config.options);
-        assert_eq!(*config.unshiny_titles, *expected_config.unshiny_titles);
+        assert_eq!(
+            *config.shiny_titles.lock().unwrap(),
+            *expected_config.shiny_titles.lock().unwrap()
+        );
+        assert_eq!(
+            *config.unshiny_titles.lock().unwrap(),
+            *expected_config.unshiny_titles.lock().unwrap()
+        );
     }
 }
