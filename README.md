@@ -33,6 +33,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
 
+* `no-auto-reload`: does not reload the configuration when the configuration file is updated.
+
 ### Scratchpad options:
 
 * `stack`: makes it so that the scratchpad doesn't hide one that is already present.
