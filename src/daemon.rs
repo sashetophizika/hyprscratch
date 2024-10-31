@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::log;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::dispatch::*;
@@ -166,9 +165,9 @@ pub fn initialize_daemon(
                     }
                     b if b.starts_with("r") => handle_return(buf, &mut config.lock().unwrap())?,
                     e => {
-                        let error_message = format!("Daemon: unknown request - {e}");
+                        let error_message = format!("Unknown request: {e}");
                         stream.write_all(error_message.as_bytes()).unwrap();
-                        log(error_message, "ERROR")?;
+                        println!("{error_message}");
                     }
                 }
             }
@@ -217,7 +216,7 @@ mod test {
         test_handle("r?btop", "");
 
         test_handle("reload", "");
-        test_handle("unknown", "Daemon: unknown request - unknown");
+        test_handle("unknown", "Unknown request: unknown");
         test_handle("kill", "");
     }
 
