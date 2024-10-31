@@ -15,7 +15,7 @@ use std::thread;
 
 fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &mut Config) -> Result<()> {
     if request.len() > 1 {
-        config.unshiny_titles.retain(|x| *x != request[2..]);
+        config.dirty_titles.retain(|x| *x != request[2..]);
     }
 
     let titles_string = config.normal_titles.join(" ");
@@ -24,7 +24,7 @@ fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &mut Conf
 }
 
 fn handle_return(title: String, config: &mut Config) -> Result<()> {
-    config.unshiny_titles.push(title[2..].to_string());
+    config.dirty_titles.push(title[2..].to_string());
     Ok(())
 }
 
@@ -76,7 +76,7 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
 
     let config1 = Arc::clone(&config);
     ev.add_workspace_changed_handler(move |_| {
-        move_floating(config1.lock().unwrap().normal_titles.clone()).unwrap();
+        move_floating(config1.lock().unwrap().slick_titles.clone()).unwrap();
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
@@ -89,7 +89,7 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
         ev.add_active_window_changed_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(config2.lock().unwrap().unshiny_titles.clone()).unwrap();
+                    move_floating(config2.lock().unwrap().dirty_titles.clone()).unwrap();
                 }
             }
         });
@@ -228,9 +228,9 @@ mod test {
     }
 
     struct TestResources {
-        titles: [String; 3],
-        commands: [String; 3],
-        expected_workspace: [String; 3],
+        titles: [String; 4],
+        commands: [String; 4],
+        expected_workspace: [String; 4],
     }
 
     impl Drop for TestResources {
@@ -289,19 +289,22 @@ mod test {
         let active_workspace = Workspace::get_active().unwrap();
         let resources = TestResources {
             titles: [
+                "test_sticky_clean".to_string(),
                 "test_normal_clean".to_string(),
-                "test_nonfloating_clean".to_string(),
                 "test_special_clean".to_string(),
+                "test_nonfloating_clean".to_string(),
             ],
             commands: [
+                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky_clean".to_string(),
+                "[float; workspace special:test_special_clean; size 30% 30%; move 30% 0] kitty --title test_special_clean".to_string(),
                 "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
                 "kitty --title test_nonfloating_clean".to_string(),
-                "[float; workspace special:test_special_clean; size 30% 30%; move 30% 0] kitty --title test_special_clean".to_string(),
             ],
             expected_workspace: [
+                active_workspace.name.clone(),
                 "special:test_normal_clean".to_string(),
-                active_workspace.name,
                 "special:test_special_clean".to_string(),
+                active_workspace.name,
             ],
         };
 
@@ -331,15 +334,18 @@ mod test {
         let resources = TestResources {
             titles: [
                 "test_nonfloating_clean".to_string(),
+                "test_sticky_clean".to_string(),
                 "test_shiny_clean".to_string(),
                 "test_normal_clean".to_string(),
             ],
             commands: [
                 "kitty --title test_nonfloating_clean".to_string(),
+                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky_clean".to_string(),
                 "[float; size 30% 30%; move 30% 0] kitty --title test_shiny_clean".to_string(),
                 "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
             ],
             expected_workspace: [
+                active_workspace.name.clone(),
                 active_workspace.name.clone(),
                 active_workspace.name,
                 "special:test_normal_clean".to_string(),

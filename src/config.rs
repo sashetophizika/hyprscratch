@@ -8,7 +8,8 @@ pub struct Config {
     pub special_titles: Vec<String>,
     pub commands: Vec<String>,
     pub options: Vec<String>,
-    pub unshiny_titles: Vec<String>,
+    pub slick_titles: Vec<String>,
+    pub dirty_titles: Vec<String>,
 }
 
 impl Config {
@@ -48,12 +49,28 @@ impl Config {
             })
             .collect::<Vec<String>>();
 
-        let unshiny_titles: Vec<String> = titles
+        let slick_titles: Vec<String> = titles
             .clone()
             .into_iter()
             .zip(options.clone())
             .filter_map(|(title, option)| {
-                if !option.contains("shiny") && !option.contains("special") {
+                if !option.contains("sticky") {
+                    Some(title)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let dirty_titles: Vec<String> = titles
+            .clone()
+            .into_iter()
+            .zip(options.clone())
+            .filter_map(|(title, option)| {
+                if !option.contains("sticky")
+                    && !option.contains("shiny")
+                    && !option.contains("special")
+                {
                     Some(title)
                 } else {
                     None
@@ -67,7 +84,8 @@ impl Config {
             special_titles,
             commands,
             options,
-            unshiny_titles,
+            slick_titles,
+            dirty_titles,
         })
     }
 
@@ -241,7 +259,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "special".to_string(),
                 "onstart".to_string(),
             ],
-            unshiny_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            slick_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            dirty_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
         };
 
         assert_eq!(config.titles, expected_config.titles);
@@ -249,7 +268,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.commands, expected_config.commands);
         assert_eq!(config.options, expected_config.options);
-        assert_eq!(*config.unshiny_titles, *expected_config.unshiny_titles);
+        assert_eq!(config.slick_titles, expected_config.slick_titles);
+        assert_eq!(config.dirty_titles, expected_config.dirty_titles);
 
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file
@@ -285,7 +305,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "stack shiny".to_string(),
                 "special".to_string(),
             ],
-            unshiny_titles: vec!["ytop".to_string()],
+            slick_titles: vec!["ytop".to_string(), "htop".to_string()],
+            dirty_titles: vec!["ytop".to_string()],
         };
 
         assert_eq!(config.titles, expected_config.titles);
@@ -293,6 +314,7 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.commands, expected_config.commands);
         assert_eq!(config.options, expected_config.options);
-        assert_eq!(*config.unshiny_titles, *expected_config.unshiny_titles);
+        assert_eq!(config.slick_titles, expected_config.slick_titles);
+        assert_eq!(config.dirty_titles, expected_config.dirty_titles);
     }
 }

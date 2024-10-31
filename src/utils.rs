@@ -53,7 +53,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .zip(&config.titles)
         .zip(&config.options)
         .filter(|((_, title), option)| {
-            (option.contains("on-start") || option.contains("onstart"))
+            (option.contains("eager") || option.contains("onstart"))
                 && !client_titles.contains(title)
         })
         .for_each(|((command, title), _)| {
@@ -203,7 +203,8 @@ mod tests {
                 "special onstart".to_string(),
                 "".to_string(),
             ],
-            unshiny_titles: Vec::new(),
+            slick_titles: Vec::new(),
+            dirty_titles: Vec::new(),
         };
 
         autospawn(&mut config).unwrap();
