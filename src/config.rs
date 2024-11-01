@@ -2,6 +2,7 @@ use hyprland::Result;
 use std::io::prelude::*;
 use std::vec;
 
+#[derive(Debug)]
 pub struct Config {
     pub titles: Vec<String>,
     pub normal_titles: Vec<String>,
@@ -178,7 +179,8 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
         }
 
         match parsed_args[1].as_str() {
-            "clean" | "hideall" | "reload" | "cycle" | "get-config" | "spotless" => (),
+            "clean" | "no-auto-reload" | "hideall" | "hide-all" | "reload" | "cycle"
+            | "get-config" | "spotless" | "kill" | "previous" => (),
             _ => {
                 titles.push(dequote(&parsed_args[1]));
                 commands.push(dequote(&parsed_args[2]));
@@ -215,9 +217,9 @@ mod tests {
             " a \"command with\" \\'a wierd\\' format",
         ];
         let expected_options = vec![
-            "stack shiny onstart summon hide special",
+            "stack shiny eager summon hide special sticky",
             "",
-            "stack onstart special",
+            "stack eager special",
             "hide summon",
         ];
 
@@ -233,9 +235,9 @@ mod tests {
     fn test_handle_reload() {
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny onstart summon hide special 
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny eager summon hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' onstart").unwrap();
+bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' eager").unwrap();
 
         let mut config = Config::new(Some("./test_configs/test_config2.txt".to_string())).unwrap();
         let expected_config = Config {
@@ -255,11 +257,15 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
             ],
             options: vec![
                 "stack".to_string(),
-                "stack shiny onstart summon hide special".to_string(),
+                "stack shiny eager summon hide special sticky".to_string(),
                 "special".to_string(),
-                "onstart".to_string(),
+                "eager".to_string(),
             ],
-            slick_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            slick_titles: vec![
+                "firefox".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
             dirty_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
         };
 
@@ -274,7 +280,7 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file
             .write(
-                b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special
+                b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
 bind = $mainMod, b, exec, hyprscratch ytop 'kitty --title btop -e ytop'
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' stack shiny
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special",
@@ -300,12 +306,16 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "kitty --title cmatrix -e cmatrix".to_string(),
             ],
             options: vec![
-                "special".to_string(),
+                "special sticky".to_string(),
                 "".to_string(),
                 "stack shiny".to_string(),
                 "special".to_string(),
             ],
-            slick_titles: vec!["ytop".to_string(), "htop".to_string()],
+            slick_titles: vec![
+                "ytop".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
             dirty_titles: vec!["ytop".to_string()],
         };
 
