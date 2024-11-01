@@ -182,9 +182,10 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
             "clean" | "no-auto-reload" | "hideall" | "hide-all" | "reload" | "cycle"
             | "get-config" | "spotless" | "kill" | "previous" => (),
             _ => {
-                titles.push(dequote(&parsed_args[1]));
-                commands.push(dequote(&parsed_args[2]));
-
+                if parsed_args.len() > 2 {
+                    titles.push(dequote(&parsed_args[1]));
+                    commands.push(dequote(&parsed_args[2]));
+                }
                 if parsed_args.len() > 3 {
                     options.push(parsed_args[3..].join(" "));
                 } else {
