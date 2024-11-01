@@ -1,3 +1,4 @@
+use crate::utils::log;
 use hyprland::Result;
 use std::io::prelude::*;
 use std::vec;
@@ -185,7 +186,13 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
                 if parsed_args.len() > 2 {
                     titles.push(dequote(&parsed_args[1]));
                     commands.push(dequote(&parsed_args[2]));
+                } else {
+                    log(
+                        "Unrecognized configuration option: ".to_string() + &parsed_args[1],
+                        "WARN",
+                    )?;
                 }
+
                 if parsed_args.len() > 3 {
                     options.push(parsed_args[3..].join(" "));
                 } else {

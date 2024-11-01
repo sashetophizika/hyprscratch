@@ -84,6 +84,7 @@ fn summon(
 
 fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<()> {
     if !options.contains(&"stack".to_string())
+        && !options.contains(&"cover".to_string())
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
@@ -314,10 +315,10 @@ mod tests {
         );
     }
 
-    fn test_stack() {
+    fn test_cover() {
         let resources = TestResources {
-            title: "test_stack".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_stack".to_string(),
+            title: "test_cover".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_cover".to_string(),
         };
 
         assert_eq!(
@@ -340,11 +341,47 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("stack", resources.title.clone(), &active_client).unwrap();
+        hide_active("cover", resources.title.clone(), &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
+    }
+
+    fn test_persist() {
+        let resources = TestResources {
+            title: "test_persist".to_string(),
+            command: "[float;size 30% 30%] kitty --title test_persist".to_string(),
+        };
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            false
+        );
+
+        let clients_with_title: Vec<Client> = Vec::new();
+        summon_normal(
+            &resources.command,
+            &Workspace::get_active().unwrap(),
+            &clients_with_title,
+        )
+        .unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        assert_eq!(active_client.initial_title, resources.title);
+
+        hide_active("", "".to_string(), &active_client).unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert!(Clients::get()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.workspace.id == Workspace::get_active().unwrap().id)
+            .any(|x| x.initial_title == resources.title));
     }
 
     fn test_summon_hide() {
@@ -399,10 +436,7 @@ mod tests {
             .collect();
 
         assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(
-            clients_with_title[0].workspace.name,
-            "special:".to_owned() + &clients_with_title[0].initial_title
-        );
+        assert_eq!(clients_with_title[0].workspace.name, "42");
 
         scratchpad(&resources.title, &resources.command, "hide").unwrap();
         sleep(Duration::from_millis(1000));
@@ -414,10 +448,7 @@ mod tests {
             .collect();
 
         assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(
-            clients_with_title[0].workspace.name,
-            "special:".to_owned() + &clients_with_title[0].initial_title
-        );
+        assert_eq!(clients_with_title[0].workspace.name, "42");
     }
 
     #[test]
@@ -428,7 +459,8 @@ mod tests {
 
     #[test]
     fn test_options() {
-        test_stack();
+        test_cover();
+        test_persist();
         test_summon_hide();
     }
 }

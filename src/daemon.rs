@@ -12,7 +12,6 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::usize;
 
 fn handle_scratchpad(
     stream: &mut UnixStream,
@@ -24,13 +23,22 @@ fn handle_scratchpad(
         config.dirty_titles.retain(|x| *x != request[2..]);
     }
 
-    if request[2..].to_string() != prev_titles[0] {
+    if request[2..] != prev_titles[0] {
         prev_titles[1] = prev_titles[0].clone();
         prev_titles[0] = request[2..].to_string();
     }
 
-    let titles_string = config.normal_titles.join(" ");
-    stream.write_all(titles_string.as_bytes())?;
+    let non_persist_titles = config
+        .normal_titles
+        .clone()
+        .into_iter()
+        .zip(config.options.clone())
+        .filter(|(_, option)| !option.contains("persist"))
+        .map(|(title, _)| title)
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    stream.write_all(non_persist_titles.as_bytes())?;
     Ok(())
 }
 

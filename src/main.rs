@@ -23,7 +23,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         2.. => args[1].clone(),
     };
 
-    for feature in ["hideall", "onstart"] {
+    for feature in ["hideall", "onstart", "stack"] {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }
@@ -37,7 +37,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
         "kill" => kill()?,
-        "logs" => logs()?,
+        "logs" | "-l" | "--logs" => logs()?,
         "help" | "-h" | "--help" => help(),
         "version" | "-v" | "--version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {
