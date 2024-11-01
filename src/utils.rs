@@ -33,10 +33,10 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
         .for_each(|x| {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Special(Some(&x.initial_title)),
+                WorkspaceIdentifierWithSpecial::Id(42),
                 Some(WindowIdentifier::Address(x.address.clone()))
             )
-            .unwrap()
+            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
         });
     Ok(())
 }
@@ -66,7 +66,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
                 Exec,
                 &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
             )
-            .unwrap()
+            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap())
         });
 
     Ok(())

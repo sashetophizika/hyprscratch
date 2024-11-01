@@ -48,6 +48,23 @@ pub fn cycle(args: String) -> Result<()> {
     Ok(())
 }
 
+pub fn previous() -> Result<()> {
+    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+    let active_title = Client::get_active()?.unwrap().initial_title;
+    stream.write_all(format!("p?{active_title}").as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
+
+    let mut buf = String::new();
+    stream.read_to_string(&mut buf)?;
+    if buf == "empty" {
+        return Ok(());
+    }
+
+    let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
+    scratchpad(&args[0], &args[1], &args[2])?;
+    Ok(())
+}
+
 pub fn reload() -> Result<()> {
     let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
     stream.write_all(b"reload")?;
@@ -119,7 +136,7 @@ DAEMON OPTIONS
 SCRATCHPAD OPTIONS
   stack                       Prevent the scratchpad from hiding the one that is already present
   shiny                       Prevent the scratchpad from being affected by 'clean spotless'
-  on-start                    Spawn the scratchpads at the start of a Hyprland session
+  eager                       Spawn the scratchpads at the start of a Hyprland session
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   special                     Use Hyprland's special workspace, ignores most other options

@@ -33,6 +33,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         "clean" | "no-auto-reload" | "init" | "" => initialize_daemon(args, None, None)?,
         "hideall" | "hide-all" => hideall()?,
         "get-config" => get_config(None)?,
+        "previous" => previous()?,
         "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
         "kill" => kill()?,

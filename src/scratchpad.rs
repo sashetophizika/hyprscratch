@@ -5,6 +5,8 @@ use hyprland::Result;
 use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
 
+use crate::utils::log;
+
 fn summon_special(
     title: &str,
     command: &str,
@@ -87,7 +89,7 @@ fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<
     {
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Special(Some(&active_client.initial_title)),
+            WorkspaceIdentifierWithSpecial::Id(42),
             Some(WindowIdentifier::Address(active_client.address.clone()))
         )?;
     }
@@ -143,10 +145,10 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Special(Some(&x.initial_title)),
+                    WorkspaceIdentifierWithSpecial::Id(42),
                     Some(WindowIdentifier::Address(x.address))
                 )
-                .unwrap()
+                .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap())
             });
         }
     } else {

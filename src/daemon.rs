@@ -12,10 +12,21 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::usize;
 
-fn handle_scratchpad(stream: &mut UnixStream, request: String, config: &mut Config) -> Result<()> {
+fn handle_scratchpad(
+    stream: &mut UnixStream,
+    request: String,
+    config: &mut Config,
+    prev_titles: &mut [String; 2],
+) -> Result<()> {
     if request.len() > 1 {
         config.dirty_titles.retain(|x| *x != request[2..]);
+    }
+
+    if request[2..].to_string() != prev_titles[0] {
+        prev_titles[1] = prev_titles[0].clone();
+        prev_titles[0] = request[2..].to_string();
     }
 
     let titles_string = config.normal_titles.join(" ");
@@ -36,9 +47,9 @@ fn handle_reload(config: &mut Config) -> Result<()> {
 
 fn handle_cycle(
     stream: &mut UnixStream,
-    cycle_index: &mut usize,
-    config: &Config,
     request: String,
+    config: &Config,
+    cycle_index: &mut usize,
 ) -> Result<()> {
     if config.titles.is_empty() {
         return Ok(());
@@ -71,15 +82,48 @@ fn handle_cycle(
     Ok(())
 }
 
+fn handle_previous(
+    stream: &mut UnixStream,
+    request: String,
+    config: &Config,
+    prev_titles: &mut [String; 2],
+) -> Result<()> {
+    let previous_active = (request[2..] == prev_titles[0]) as usize;
+    if prev_titles[previous_active].is_empty() {
+        stream.write_all(b"empty")?;
+        return Ok(());
+    }
+
+    let index = config
+        .titles
+        .clone()
+        .into_iter()
+        .position(|x| x == prev_titles[previous_active]);
+
+    if let Some(prev_index) = index {
+        let prev_scratchpad = format!(
+            "{}:{}:{}",
+            config.titles[prev_index], config.commands[prev_index], config.options[prev_index]
+        );
+        stream.write_all(prev_scratchpad.as_bytes())?;
+    } else {
+        stream.write_all(b"empty")?;
+    }
+
+    Ok(())
+}
+
 fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
 
     let config1 = Arc::clone(&config);
     ev.add_workspace_changed_handler(move |_| {
-        move_floating(config1.lock().unwrap().slick_titles.clone()).unwrap();
+        move_floating(config1.lock().unwrap().slick_titles.clone())
+            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title)).unwrap();
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title))
+                    .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
             }
         }
     });
@@ -89,7 +133,8 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
         ev.add_active_window_changed_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(config2.lock().unwrap().dirty_titles.clone()).unwrap();
+                    move_floating(config2.lock().unwrap().dirty_titles.clone())
+                        .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
                 }
             }
         });
@@ -102,7 +147,11 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
 fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
     ev.add_config_reloaded_handler(move || {
-        config.lock().unwrap().reload(None).unwrap();
+        config
+            .lock()
+            .unwrap()
+            .reload(None)
+            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
     });
 
     ev.start_listener()?;
@@ -116,6 +165,7 @@ pub fn initialize_daemon(
 ) -> Result<()> {
     let config = Arc::new(Mutex::new(Config::new(config_path)?));
     let mut cycle_index: usize = 0;
+    let mut prev_titles: [String; 2] = [String::new(), String::new()];
     autospawn(&mut config.lock().unwrap())?;
 
     if !args.contains(&"no-auto-reload".to_string()) {
@@ -159,18 +209,22 @@ pub fn initialize_daemon(
         match stream {
             Ok(mut stream) => {
                 let mut buf = String::new();
-                stream.try_clone()?.read_to_string(&mut buf)?;
+                stream.read_to_string(&mut buf)?;
 
+                let conf = &mut config.lock().unwrap();
                 match buf.as_str() {
                     "kill" => break,
-                    "reload" => handle_reload(&mut config.lock().unwrap())?,
+                    "reload" => handle_reload(conf)?,
+                    b if b.starts_with("p") => {
+                        handle_previous(&mut stream, buf, conf, &mut prev_titles)?
+                    }
+                    b if b.starts_with("r") => handle_return(buf, conf)?,
                     b if b.starts_with("c") => {
-                        handle_cycle(&mut stream, &mut cycle_index, &config.lock().unwrap(), buf)?
+                        handle_cycle(&mut stream, buf, conf, &mut cycle_index)?
                     }
                     b if b.starts_with("s") => {
-                        handle_scratchpad(&mut stream, buf, &mut config.lock().unwrap())?
+                        handle_scratchpad(&mut stream, buf, conf, &mut prev_titles)?
                     }
-                    b if b.starts_with("r") => handle_return(buf, &mut config.lock().unwrap())?,
                     e => {
                         let error_message = format!("Daemon: unknown request - {e}");
                         stream.write_all(error_message.as_bytes()).unwrap();
