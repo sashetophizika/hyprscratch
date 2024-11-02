@@ -1,11 +1,10 @@
+use crate::utils::log;
 use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
-
-use crate::utils::log;
 
 fn summon_special(
     title: &str,
@@ -48,21 +47,32 @@ fn summon_special(
 
 fn summon_normal(
     command: &str,
+    options: &str,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
     if clients_with_title.is_empty() {
         hyprland::dispatch!(Exec, &command)?;
     } else {
-        let addr = clients_with_title[0].address.clone();
-        if clients_with_title[0].workspace.id != active_workspace.id {
+        for client in clients_with_title
+            .into_iter()
+            .filter(|x| x.workspace.id != active_workspace.id)
+        {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::Address(addr.clone()))
-            )?;
+                Some(WindowIdentifier::Address(client.address.clone()))
+            )
+            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+            if !options.contains("poly") {
+                break;
+            }
         }
-        hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(addr))?;
+
+        hyprland::dispatch!(
+            FocusWindow,
+            WindowIdentifier::Address(clients_with_title[0].address.clone())
+        )?;
     }
     Ok(())
 }
@@ -77,14 +87,14 @@ fn summon(
     if options.contains("special") {
         summon_special(title, command, active_workspace, clients_with_title)?;
     } else if !options.contains("hide") {
-        summon_normal(command, active_workspace, clients_with_title)?;
+        summon_normal(command, options, active_workspace, clients_with_title)?;
     }
     Ok(())
 }
 
 fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<()> {
-    if !options.contains(&"stack".to_string())
-        && !options.contains(&"cover".to_string())
+    if !options.contains(&"cover".to_string())
+        && !options.contains(&"stack".to_string())
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
@@ -121,7 +131,7 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
         .collect();
 
     if !options.contains("special") && options.contains("summon") {
-        summon_normal(command, &active_workspace, &clients_with_title)?;
+        summon_normal(command, options, &active_workspace, &clients_with_title)?;
         return Ok(());
     }
 
@@ -131,9 +141,8 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             .into_iter()
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
-        if options.contains(&"special".to_string())
-            || (clients_on_active.peek().is_none() && active_client.initial_title != title)
-        {
+
+        if options.contains(&"special".to_string()) || clients_on_active.peek().is_none() {
             hide_active(options, titles, &active_client)?;
             summon(
                 title,
@@ -142,6 +151,15 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
                 &active_workspace,
                 &clients_with_title,
             )?;
+        } else if active_client.floating
+            && active_client.initial_title != title
+            && clients_on_active.peek().is_some()
+        {
+            hyprland::dispatch!(
+                FocusWindow,
+                WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
+            )?;
+            Dispatch::call(DispatchType::BringActiveToTop)?;
         } else {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
@@ -202,6 +220,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
+            "",
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
@@ -233,7 +252,13 @@ mod tests {
             .collect();
 
         let active_workspace = Workspace::get_active().unwrap();
-        summon_normal(&resources.command, &active_workspace, &clients_with_title).unwrap();
+        summon_normal(
+            &resources.command,
+            "",
+            &active_workspace,
+            &clients_with_title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
@@ -332,6 +357,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
+            "",
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
@@ -365,6 +391,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
+            "",
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
