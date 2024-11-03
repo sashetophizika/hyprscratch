@@ -134,21 +134,25 @@ DAEMON OPTIONS
   no-auto-reload              Don't reload the configuration when the configuration file is updated
 
 SCRATCHPAD OPTIONS
-  stack                       Prevent the scratchpad from hiding the one that is already present
+  persist                     Prevent the scratchpad from beign replaced when a new one is summoned
+  cover                       Prevent the scratchpad from replacing another one if one is already present
+  sticky                      Prevent the scratchpad from being affected by 'clean'
   shiny                       Prevent the scratchpad from being affected by 'clean spotless'
   eager                       Spawn the scratchpads at the start of a Hyprland session
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
+  poly                        Toggles all scratchpads matching the title
   special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
+  previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
   reload                      Reparse config file
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
   logs                        Print log file contents
-  help                        Print this help message
-  version                     Print current version"
+  version                     Print current version
+  help                        Print this help message"
     )
 }
