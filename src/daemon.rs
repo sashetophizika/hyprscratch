@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::log;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::dispatch::*;
@@ -132,12 +131,18 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
 
     let config1 = Arc::clone(&config);
     ev.add_workspace_changed_handler(move |_| {
-        move_floating(config1.lock().unwrap().slick_titles.clone())
-            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+        move_floating(
+            config1
+                .lock()
+                .unwrap_log(file!(), line!())
+                .slick_titles
+                .clone(),
+        )
+        .unwrap_log(file!(), line!());
         if let Some(cl) = Client::get_active().unwrap() {
             if cl.workspace.id < 0 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title))
-                    .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+                    .unwrap_log(file!(), line!());
             }
         }
     });
@@ -147,8 +152,14 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
         ev.add_active_window_changed_handler(move |_| {
             if let Some(cl) = Client::get_active().unwrap() {
                 if !cl.floating {
-                    move_floating(config2.lock().unwrap().dirty_titles.clone())
-                        .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+                    move_floating(
+                        config2
+                            .lock()
+                            .unwrap_log(file!(), line!())
+                            .dirty_titles
+                            .clone(),
+                    )
+                    .unwrap_log(file!(), line!());
                 }
             }
         });
@@ -163,9 +174,9 @@ fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_config_reloaded_handler(move || {
         config
             .lock()
-            .unwrap()
+            .unwrap_log(file!(), line!())
             .reload(None)
-            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+            .unwrap_log(file!(), line!())
     });
 
     ev.start_listener()?;
@@ -180,7 +191,7 @@ pub fn initialize_daemon(
     let config = Arc::new(Mutex::new(Config::new(config_path)?));
     let mut cycle_index: usize = 0;
     let mut prev_titles: [String; 2] = [String::new(), String::new()];
-    autospawn(&mut config.lock().unwrap())?;
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
 
     if !args.contains(&"no-auto-reload".to_string()) {
         let config_clone = Arc::clone(&config);
@@ -225,7 +236,7 @@ pub fn initialize_daemon(
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf)?;
 
-                let conf = &mut config.lock().unwrap();
+                let conf = &mut config.lock().unwrap_log(file!(), line!());
                 match buf.as_str() {
                     "kill" => break,
                     "reload" => handle_reload(conf)?,

@@ -1,4 +1,4 @@
-use crate::utils::log;
+use crate::utils::LogErr;
 use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -54,10 +54,10 @@ fn summon_normal(
     if clients_with_title.is_empty() {
         command
             .split("?")
-            .for_each(|x| hyprland::dispatch!(Exec, &x).unwrap());
+            .for_each(|x| hyprland::dispatch!(Exec, &x).unwrap_log(file!(), line!()));
     } else {
         for client in clients_with_title
-            .into_iter()
+            .iter()
             .filter(|x| x.workspace.id != active_workspace.id)
         {
             hyprland::dispatch!(
@@ -65,7 +65,7 @@ fn summon_normal(
                 WorkspaceIdentifierWithSpecial::Relative(0),
                 Some(WindowIdentifier::Address(client.address.clone()))
             )
-            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+            .unwrap_log(file!(), line!());
             if !options.contains("poly") {
                 break;
             }
@@ -169,7 +169,7 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
                     WorkspaceIdentifierWithSpecial::Id(42),
                     Some(WindowIdentifier::Address(x.address))
                 )
-                .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap())
+                .unwrap_log(file!(), line!())
             });
         }
     } else {

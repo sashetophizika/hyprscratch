@@ -61,7 +61,11 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let log_err = |err: HyprError| {
-        log(format!("{}: '{}'.", err, args[1..].join(" ")), "ERROR").unwrap();
+        log(
+            format!("{} in command '{}'.", err, args[1..].join(" ")),
+            "ERROR",
+        )
+        .unwrap();
     };
 
     hyprscratch(&args).unwrap_or_else(log_err);

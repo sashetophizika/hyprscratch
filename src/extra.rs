@@ -81,7 +81,7 @@ pub fn kill() -> Result<()> {
 
 pub fn get_config(config_file: Option<String>) -> Result<()> {
     let conf = Config::new(config_file)?;
-    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap();
+    let max_len = |xs: &Vec<String>| xs.iter().map(|x| x.chars().count()).max().unwrap_or(0);
     let padding = |x: usize, y: &str| " ".repeat(x - y.chars().count());
 
     let max_titles = max_len(&conf.titles);

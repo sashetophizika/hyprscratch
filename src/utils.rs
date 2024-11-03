@@ -1,12 +1,56 @@
-use std::fs::File;
-use std::io::Write;
-
 use crate::config::Config;
 use chrono::Local;
+use core::panic;
 use hyprland::data::Clients;
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::fs::File;
+use std::io::Write;
+use std::sync::LockResult;
+
+pub trait LogErr<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T;
+}
+
+impl<T> LogErr<T> for Result<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T {
+        match self {
+            Ok(t) => t,
+            Err(err) => {
+                let msg = format!("{} at {}:{}", err, file, line);
+                log(msg.clone(), "ERROR").unwrap();
+                panic!()
+            }
+        }
+    }
+}
+
+impl<T> LogErr<T> for LockResult<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T {
+        match self {
+            Ok(t) => t,
+            Err(err) => {
+                let msg = format!("Error: {} at {}:{}", err, file, line);
+                log(msg.clone(), "ERROR").unwrap();
+                panic!()
+            }
+        }
+    }
+}
+
+impl<T> LogErr<T> for Option<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T {
+        match self {
+            Some(t) => t,
+            None => {
+                let msg = format!("Function returned None in {} at line:{}", file, line);
+                log(msg.clone(), "ERROR").unwrap();
+                panic!()
+            }
+        }
+    }
+}
 
 pub fn log(msg: String, level: &str) -> Result<()> {
     let mut file = File::options()
@@ -36,7 +80,7 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
                 WorkspaceIdentifierWithSpecial::Id(42),
                 Some(WindowIdentifier::Address(x.address.clone()))
             )
-            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap());
+            .unwrap_log(file!(), line!());
         });
     Ok(())
 }
@@ -67,9 +111,10 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
                     Exec,
                     &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
                 )
-                .unwrap()
+                .unwrap_log(file!(), line!())
             } else {
-                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1)).unwrap()
+                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1))
+                    .unwrap_log(file!(), line!())
             }
         });
 
