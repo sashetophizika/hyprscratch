@@ -52,7 +52,9 @@ fn summon_normal(
     clients_with_title: &[Client],
 ) -> Result<()> {
     if clients_with_title.is_empty() {
-        hyprland::dispatch!(Exec, &command)?;
+        command
+            .split("?")
+            .for_each(|x| hyprland::dispatch!(Exec, &x).unwrap());
     } else {
         for client in clients_with_title
             .into_iter()
@@ -203,6 +205,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn test_summon_normal() {
         let resources = TestResources {
             title: "test_normal_scratchpad".to_string(),
@@ -268,6 +271,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn test_summon_special() {
         let resources = TestResources {
             title: "test_special_scratchpad".to_string(),
@@ -340,6 +344,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn test_cover() {
         let resources = TestResources {
             title: "test_cover".to_string(),
@@ -374,6 +379,7 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
     }
 
+    #[test]
     fn test_persist() {
         let resources = TestResources {
             title: "test_persist".to_string(),
@@ -411,6 +417,7 @@ mod tests {
             .any(|x| x.initial_title == resources.title));
     }
 
+    #[test]
     fn test_summon_hide() {
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
@@ -476,18 +483,5 @@ mod tests {
 
         assert_eq!(clients_with_title.len(), 1);
         assert_eq!(clients_with_title[0].workspace.name, "42");
-    }
-
-    #[test]
-    fn test_summon() {
-        test_summon_normal();
-        test_summon_special();
-    }
-
-    #[test]
-    fn test_options() {
-        test_cover();
-        test_persist();
-        test_summon_hide();
     }
 }

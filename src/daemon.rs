@@ -42,8 +42,8 @@ fn handle_scratchpad(
     Ok(())
 }
 
-fn handle_return(title: String, config: &mut Config) -> Result<()> {
-    config.dirty_titles.push(title[2..].to_string());
+fn handle_return(request: String, config: &mut Config) -> Result<()> {
+    config.dirty_titles.push(request[2..].to_string());
     Ok(())
 }
 
@@ -58,6 +58,7 @@ fn handle_cycle(
     request: String,
     config: &Config,
     cycle_index: &mut usize,
+    prev_titles: &mut [String; 2],
 ) -> Result<()> {
     if config.titles.is_empty() {
         return Ok(());
@@ -79,6 +80,11 @@ fn handle_cycle(
         while m != config.options[current_index].contains("special") {
             current_index = (current_index + 1) % config.titles.len();
         }
+    }
+
+    if config.titles[current_index] != prev_titles[0] {
+        prev_titles[1] = prev_titles[0].clone();
+        prev_titles[0] = config.titles[current_index].clone();
     }
 
     let next_scratchpad = format!(
@@ -228,7 +234,7 @@ pub fn initialize_daemon(
                     }
                     b if b.starts_with("r") => handle_return(buf, conf)?,
                     b if b.starts_with("c") => {
-                        handle_cycle(&mut stream, buf, conf, &mut cycle_index)?
+                        handle_cycle(&mut stream, buf, conf, &mut cycle_index, &mut prev_titles)?
                     }
                     b if b.starts_with("s") => {
                         handle_scratchpad(&mut stream, buf, conf, &mut prev_titles)?
@@ -265,6 +271,7 @@ mod test {
         assert_eq!(expectation, buf);
     }
 
+    #[test]
     fn test_handlers() {
         std::thread::spawn(|| {
             let args = vec!["".to_string()];
@@ -277,9 +284,12 @@ mod test {
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        test_handle("c", "firefox:firefox --private-window:special");
+        test_handle("c", "firefox:firefox --private-window:special sticky");
         test_handle("c?0", "ytop:kitty --title btop -e ytop:");
         test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
+
+        test_handle("p?cmatrix", "ytop:kitty --title btop -e ytop:");
+        test_handle("p?htop", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
         test_handle("s?btop", "ytop htop");
         test_handle("r?btop", "");
@@ -336,6 +346,7 @@ mod test {
             });
     }
 
+    #[test]
     fn test_clean() {
         std::thread::spawn(|| {
             let args = vec!["clean".to_string()];
@@ -380,6 +391,7 @@ mod test {
         sleep(Duration::from_millis(1000));
     }
 
+    #[test]
     fn test_clean_spotless() {
         std::thread::spawn(|| {
             let args = vec!["clean".to_string(), "spotless".to_string()];
@@ -427,12 +439,5 @@ mod test {
         verify_test(&resources);
         test_handle("kill", "");
         sleep(Duration::from_millis(1000));
-    }
-
-    #[test]
-    fn test_daemon() {
-        test_handlers();
-        test_clean();
-        test_clean_spotless();
     }
 }

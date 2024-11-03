@@ -8,10 +8,10 @@ pub struct Config {
     pub titles: Vec<String>,
     pub normal_titles: Vec<String>,
     pub special_titles: Vec<String>,
-    pub commands: Vec<String>,
-    pub options: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
+    pub commands: Vec<String>,
+    pub options: Vec<String>,
 }
 
 impl Config {
@@ -84,10 +84,10 @@ impl Config {
             titles,
             normal_titles,
             special_titles,
-            commands,
-            options,
             slick_titles,
             dirty_titles,
+            commands,
+            options,
         })
     }
 
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_reload() {
+    fn test_reload() {
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny eager summon hide special sticky
@@ -280,10 +280,10 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.titles, expected_config.titles);
         assert_eq!(config.normal_titles, expected_config.normal_titles);
         assert_eq!(config.special_titles, expected_config.special_titles);
-        assert_eq!(config.commands, expected_config.commands);
-        assert_eq!(config.options, expected_config.options);
         assert_eq!(config.slick_titles, expected_config.slick_titles);
         assert_eq!(config.dirty_titles, expected_config.dirty_titles);
+        assert_eq!(config.commands, expected_config.commands);
+        assert_eq!(config.options, expected_config.options);
 
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file
@@ -330,9 +330,9 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.titles, expected_config.titles);
         assert_eq!(config.normal_titles, expected_config.normal_titles);
         assert_eq!(config.special_titles, expected_config.special_titles);
-        assert_eq!(config.commands, expected_config.commands);
-        assert_eq!(config.options, expected_config.options);
         assert_eq!(config.slick_titles, expected_config.slick_titles);
         assert_eq!(config.dirty_titles, expected_config.dirty_titles);
+        assert_eq!(config.commands, expected_config.commands);
+        assert_eq!(config.options, expected_config.options);
     }
 }
