@@ -53,20 +53,24 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .zip(&config.titles)
         .zip(&config.options)
         .filter(|((_, title), option)| {
-            (option.contains("eager") || option.contains("onstart"))
+            (option.contains("onstart") || option.contains("eager"))
                 && !client_titles.contains(title)
         })
-        .for_each(|((command, title), _)| {
+        .for_each(|((command, title), option)| {
             let mut cmd = command.clone();
             if command.find('[').is_none() {
                 cmd.insert_str(0, "[]");
             }
 
-            hyprland::dispatch!(
-                Exec,
-                &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
-            )
-            .unwrap_or_else(|err| log(err.to_string(), "ERROR").unwrap())
+            if option.contains("special") {
+                hyprland::dispatch!(
+                    Exec,
+                    &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
+                )
+                .unwrap()
+            } else {
+                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1)).unwrap()
+            }
         });
 
     Ok(())
