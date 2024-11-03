@@ -37,23 +37,31 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Scratchpad options:
 
-* `stack`: makes it so that the scratchpad doesn't hide one that is already present.
+* `persist`: makes it so that the scratchpad doesn't get replaced when a new one is summoned.
 
-* `shiny`: makes it so that the scratchpad is not hidden by `clean spotless`.
+* `cover`: makes it so that the scratchpad doesn't replace another one if one is already present.
 
-* `onstart`: spawns the scratchpad hidden when the daemon is started.
+* `sticky`: makes it so that the scratchpad isn't hidden by `clean`.
+
+* `shiny`: makes it so that the scratchpad isn't hidden only by `clean spotless`.
+
+* `eager`: spawns the scratchpad hidden when the daemon is started.
 
 * `summon`: only creates or brings up the scratchpad.
 
 * `hide`: only hides the scratchpad.
 
-* `special`: uses the special workspace. Ignores all other scratchpad options and is ignored by `clean spotless` and `cycle`.
+* `poly`: toggle all scratchpads with the same title
+
+* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean spotless` and `cycle`.
 
 ### Extra hyprscratch commands:
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
-* `hideall`: hides all scratchpads, useful mostly when stacking multiple of them.
+* `previous`: summon the last used scratchpad that is not currently active.
+
+* `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
 * `reload`: re-parses the configuration file without restarting the daemon.
 
