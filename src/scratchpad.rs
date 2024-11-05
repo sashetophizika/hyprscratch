@@ -102,7 +102,7 @@ fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<
     {
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Id(42),
+            WorkspaceIdentifierWithSpecial::Special(Some(&active_client.initial_title)),
             Some(WindowIdentifier::Address(active_client.address.clone()))
         )?;
     }
@@ -166,7 +166,9 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(42),
+                    WorkspaceIdentifierWithSpecial::Name(
+                        &("special:".to_string() + &x.initial_title)
+                    ),
                     Some(WindowIdentifier::Address(x.address))
                 )
                 .unwrap_log(file!(), line!())
@@ -200,8 +202,10 @@ mod tests {
 
     impl Drop for TestResources {
         fn drop(&mut self) {
-            hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&self.title)).unwrap();
-            sleep(Duration::from_millis(1000));
+            self.command.split("?").for_each(|_| {
+                hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&self.title)).unwrap();
+                sleep(Duration::from_millis(1000));
+            });
         }
     }
 
@@ -418,6 +422,48 @@ mod tests {
     }
 
     #[test]
+    fn test_poly() {
+        let resources = TestResources {
+            title: "test_poly".to_string(),
+            command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
+        };
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            false
+        );
+
+        scratchpad(&resources.title, &resources.command, "poly").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .filter(|x| x.initial_title == resources.title
+                    && x.workspace.name == Workspace::get_active().unwrap().name)
+                .count(),
+            2
+        );
+
+        scratchpad(&resources.title, &resources.command, "poly").unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .filter(|x| x.initial_title == resources.title
+                    && x.workspace.name == Workspace::get_active().unwrap().name)
+                .count(),
+            0
+        );
+    }
+
+    #[test]
     fn test_summon_hide() {
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
@@ -470,7 +516,10 @@ mod tests {
             .collect();
 
         assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(clients_with_title[0].workspace.name, "42");
+        assert_eq!(
+            clients_with_title[0].workspace.name,
+            "special:".to_owned() + &resources.title
+        );
 
         scratchpad(&resources.title, &resources.command, "hide").unwrap();
         sleep(Duration::from_millis(1000));
@@ -482,6 +531,9 @@ mod tests {
             .collect();
 
         assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(clients_with_title[0].workspace.name, "42");
+        assert_eq!(
+            clients_with_title[0].workspace.name,
+            "special:".to_owned() + &resources.title
+        );
     }
 }
