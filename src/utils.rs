@@ -62,7 +62,7 @@ pub fn log(msg: String, level: &str) -> Result<()> {
     println!("{msg}");
     file.write_all(
         format!(
-            "{} [{level}] {msg}\n",
+            "[{}] [{level}] {msg}\n",
             Local::now().format("%d.%m.%Y %H:%M:%S")
         )
         .as_bytes(),
@@ -77,7 +77,7 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
         .for_each(|x| {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(42),
+                WorkspaceIdentifierWithSpecial::Name(&("special:".to_string() + &x.initial_title)),
                 Some(WindowIdentifier::Address(x.address.clone()))
             )
             .unwrap_log(file!(), line!());
@@ -100,22 +100,17 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
             (option.contains("onstart") || option.contains("eager"))
                 && !client_titles.contains(title)
         })
-        .for_each(|((command, title), option)| {
+        .for_each(|((command, title), _)| {
             let mut cmd = command.clone();
             if command.find('[').is_none() {
                 cmd.insert_str(0, "[]");
             }
 
-            if option.contains("special") {
-                hyprland::dispatch!(
-                    Exec,
-                    &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
-                )
-                .unwrap_log(file!(), line!())
-            } else {
-                hyprland::dispatch!(Exec, &cmd.replacen('[', "[workspace 42 silent;", 1))
-                    .unwrap_log(file!(), line!())
-            }
+            hyprland::dispatch!(
+                Exec,
+                &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
+            )
+            .unwrap_log(file!(), line!())
         });
 
     Ok(())

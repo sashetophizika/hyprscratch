@@ -111,6 +111,8 @@ pub fn logs() -> Result<()> {
 
         file.read_to_string(&mut buf)?;
         let b = buf
+            .replace("\n[", "\n[\x1b[0;34m")
+            .replace("] [", "\x1b[0;0m] [")
             .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
             .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
             .replace("INFO", "\x1b[0;36mINFO\x1b[0;0m");
