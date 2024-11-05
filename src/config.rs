@@ -179,11 +179,27 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
             continue;
         }
 
-        let known_options = "cover persist sticky shiny eager summon hide poly special";
-        let known_commands =
-            "clean spotless no-auto-reload hideall hide-all reload previous cycle get-config kill logs version help";
+        let known_options = vec![
+            "cover", "persist", "sticky", "shiny", "eager", "summon", "hide", "poly", "special",
+        ];
+        let known_commands = vec![
+            "clean",
+            "spotless",
+            "no-auto-reload",
+            "hideall",
+            "hide-all",
+            "reload",
+            "previous",
+            "cycle",
+            "get-config",
+            "kill",
+            "logs",
+            "version",
+            "help",
+        ];
+
         match parsed_args[1].as_str() {
-            cmd if known_commands.contains(cmd) => (),
+            cmd if known_commands.contains(&cmd) => (),
             _ => {
                 if parsed_args.len() > 2 {
                     titles.push(dequote(&parsed_args[1]));
@@ -198,7 +214,7 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
                 if parsed_args.len() > 3 {
                     parsed_args[3..]
                         .iter()
-                        .filter(|x| !known_options.contains(*x))
+                        .filter(|x| !known_options.contains(&x.as_str()))
                         .for_each(|x| {
                             log("Unknown scratchpad option: ".to_string() + x, "WARN").unwrap();
                         });
