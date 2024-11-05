@@ -179,21 +179,29 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
             continue;
         }
 
+        let known_options = "cover persist sticky shiny eager summon hide poly special";
+        let known_commands =
+            "clean spotless no-auto-reload hideall hide-all reload previous cycle get-config kill logs version help";
         match parsed_args[1].as_str() {
-            "clean" | "no-auto-reload" | "hideall" | "hide-all" | "reload" | "cycle"
-            | "get-config" | "spotless" | "kill" | "previous" => (),
+            cmd if known_commands.contains(cmd) => (),
             _ => {
                 if parsed_args.len() > 2 {
                     titles.push(dequote(&parsed_args[1]));
                     commands.push(dequote(&parsed_args[2]));
                 } else {
                     log(
-                        "Unrecognized configuration option: ".to_string() + &parsed_args[1],
+                        "Unknown command or no command after title: ".to_string() + &parsed_args[1],
                         "WARN",
                     )?;
                 }
 
                 if parsed_args.len() > 3 {
+                    parsed_args[3..]
+                        .into_iter()
+                        .filter(|x| !known_options.contains(*x))
+                        .for_each(|x| {
+                            log("Unknown scratchpad option: ".to_string() + x, "WARN").unwrap();
+                        });
                     options.push(parsed_args[3..].join(" "));
                 } else {
                     options.push(String::from(""));
@@ -211,7 +219,7 @@ mod tests {
     use std::fs::File;
 
     #[test]
-    fn test_parsing() {
+    fn test_parse_config() {
         let expected_titles = vec![
             "btop",
             "Loading…",
@@ -225,15 +233,16 @@ mod tests {
             " a \"command with\" \\'a wierd\\' format",
         ];
         let expected_options = vec![
-            "stack shiny eager summon hide special sticky",
+            "cover persist sticky shiny eager summon hide poly special",
             "",
-            "stack eager special",
+            "cover eager special",
             "hide summon",
         ];
 
         let [titles, commands, options] =
             parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
 
+        println!("{options:?}");
         assert_eq!(titles, expected_titles);
         assert_eq!(commands, expected_commands);
         assert_eq!(options, expected_options);
@@ -242,8 +251,8 @@ mod tests {
     #[test]
     fn test_reload() {
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
-        config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' stack
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' stack shiny eager summon hide special sticky
+        config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager summon hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' eager").unwrap();
 
@@ -264,8 +273,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "kitty --title cmatrix -e cmatrix".to_string(),
             ],
             options: vec![
-                "stack".to_string(),
-                "stack shiny eager summon hide special sticky".to_string(),
+                "cover".to_string(),
+                "cover shiny eager summon hide special sticky".to_string(),
                 "special".to_string(),
                 "eager".to_string(),
             ],
