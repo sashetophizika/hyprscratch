@@ -1,4 +1,4 @@
-use crate::utils::log;
+use crate::logs::log;
 use hyprland::Result;
 use std::io::prelude::*;
 use std::vec;
@@ -197,7 +197,7 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
 
                 if parsed_args.len() > 3 {
                     parsed_args[3..]
-                        .into_iter()
+                        .iter()
                         .filter(|x| !known_options.contains(*x))
                         .for_each(|x| {
                             log("Unknown scratchpad option: ".to_string() + x, "WARN").unwrap();

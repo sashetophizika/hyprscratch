@@ -1,6 +1,7 @@
 mod config;
 mod daemon;
 mod extra;
+mod logs;
 mod scratchpad;
 mod utils;
 
@@ -9,7 +10,7 @@ use crate::extra::*;
 use crate::scratchpad::scratchpad;
 use hyprland::shared::HyprError;
 use hyprland::Result;
-use utils::log;
+use logs::log;
 
 fn warn_deprecated(feature: &str) -> Result<()> {
     log(format!("The '{feature}' feature is deprecated."), "WARN")?;

@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::logs::*;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::dispatch::*;

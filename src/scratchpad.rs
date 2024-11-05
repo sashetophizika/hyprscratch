@@ -1,4 +1,4 @@
-use crate::utils::LogErr;
+use crate::logs::LogErr;
 use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
