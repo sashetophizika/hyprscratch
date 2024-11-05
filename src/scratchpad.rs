@@ -1,5 +1,5 @@
 use crate::utils::LogErr;
-use hyprland::data::{Client, Clients, Workspace};
+use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -94,7 +94,7 @@ fn summon(
     Ok(())
 }
 
-fn hide_active(options: &str, titles: String, active_client: &Client) -> Result<()> {
+fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()> {
     if !options.contains(&"cover".to_string())
         && !options.contains(&"stack".to_string())
         && active_client.floating
@@ -132,11 +132,6 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
         .filter(|x| x.initial_title == title)
         .collect();
 
-    if !options.contains("special") && options.contains("summon") {
-        summon_normal(command, options, &active_workspace, &clients_with_title)?;
-        return Ok(());
-    }
-
     if let Some(active_client) = Client::get_active()? {
         let mut clients_on_active = clients_with_title
             .clone()
@@ -144,8 +139,11 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
 
-        if options.contains(&"special".to_string()) || clients_on_active.peek().is_none() {
-            hide_active(options, titles, &active_client)?;
+        if options.contains("special")
+            || options.contains("summon")
+            || clients_on_active.peek().is_none()
+        {
+            hide_active(options, &titles, &active_client)?;
             summon(
                 title,
                 command,
@@ -153,16 +151,10 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
                 &active_workspace,
                 &clients_with_title,
             )?;
-        } else if active_client.floating
-            && active_client.initial_title != title
-            && clients_on_active.peek().is_some()
+        } else if !active_client.floating
+            || active_client.initial_title == title
+            || active_client.fullscreen == FullscreenMode::None
         {
-            hyprland::dispatch!(
-                FocusWindow,
-                WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
-            )?;
-            Dispatch::call(DispatchType::BringActiveToTop)?;
-        } else {
             clients_on_active.for_each(|x| {
                 hyprland::dispatch!(
                     MoveToWorkspaceSilent,
@@ -173,6 +165,11 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
                 )
                 .unwrap_log(file!(), line!())
             });
+        } else {
+            hyprland::dispatch!(
+                FocusWindow,
+                WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
+            )?;
         }
     } else {
         summon(
@@ -237,7 +234,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("", resources.title.clone(), &active_client).unwrap();
+        hide_active("", &resources.title, &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -376,7 +373,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("cover", resources.title.clone(), &active_client).unwrap();
+        hide_active("cover", &resources.title, &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         let active_client = Client::get_active().unwrap().unwrap();
@@ -411,7 +408,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("", "".to_string(), &active_client).unwrap();
+        hide_active("", "", &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert!(Clients::get()
