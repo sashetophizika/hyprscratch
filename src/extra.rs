@@ -77,9 +77,14 @@ pub fn kill_all() -> Result<()> {
 
 pub fn get_config(config_file: Option<String>) -> Result<()> {
     let conf = Config::new(config_file)?;
-    let max_len =
-        |xs: &Vec<String>, def: usize| xs.iter().map(|x| x.chars().count()).max().unwrap_or(def);
-    let padding = |x: usize, y: &str| {
+    let max_len = |xs: &Vec<String>, def: usize| {
+        xs.iter()
+            .map(|x| x.chars().count())
+            .max()
+            .unwrap_or(0)
+            .max(def)
+    };
+    let color_pad = |x: usize, y: &str| {
         y.to_string()
             .replace("[", "[\x1b[0;34m")
             .replace("]", "\x1b[0;0m]")
@@ -90,39 +95,35 @@ pub fn get_config(config_file: Option<String>) -> Result<()> {
     let max_commands = max_len(&conf.commands, 8);
     let max_options = max_len(&conf.options, 7);
 
-    println!(
-        "┌{}┬{}┬{}┐",
-        "─".repeat(max_titles + 2),
-        "─".repeat(max_commands + 2),
-        "─".repeat(max_options + 2)
-    );
+    let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
+        println!(
+            "{}{}{}{}",
+            sep_l,
+            "─".repeat(max_titles + 2) + sep_c,
+            "─".repeat(max_commands + 2) + sep_c,
+            "─".repeat(max_options + 2) + sep_r,
+        );
+    };
+
+    print_border("┌", "┬", "┐");
     println!(
         "│ \x1b[0;31m{}\x1b[0;0m │ \x1b[0;31m{}\x1b[0;0m │ \x1b[0;31m{}\x1b[0;0m │",
-        padding(max_titles, "Titles"),
-        padding(max_commands, "Commands"),
-        padding(max_options, "Options")
-    );
-    println!(
-        "├{}┼{}┼{}┤",
-        "─".repeat(max_titles + 2),
-        "─".repeat(max_commands + 2),
-        "─".repeat(max_options + 2)
+        color_pad(max_titles, "Titles"),
+        color_pad(max_commands, "Commands"),
+        color_pad(max_options, "Options")
     );
 
+    print_border("├", "┼", "┤");
     for i in 0..conf.titles.len() {
         println!(
             "│ {} │ {} │ {} │",
-            padding(max_titles, &conf.titles[i]),
-            padding(max_commands, &conf.commands[i]),
-            padding(max_options, &conf.options[i])
+            color_pad(max_titles, &conf.titles[i]),
+            color_pad(max_commands, &conf.commands[i]),
+            color_pad(max_options, &conf.options[i])
         )
     }
-    print!(
-        "└{}┴{}┴{}┘",
-        "─".repeat(max_titles + 2),
-        "─".repeat(max_commands + 2),
-        "─".repeat(max_options + 2)
-    );
+
+    print_border("└", "┴", "┘");
     Ok(())
 }
 
@@ -138,6 +139,7 @@ pub fn logs() -> Result<()> {
             .replace("\n[", "\n[\x1b[0;34m")
             .replace("] [", "\x1b[0;0m] [")
             .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
+            .replace("DEBUG", "\x1b[0;32mDEBUG\x1b[0;0m")
             .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
             .replace("INFO", "\x1b[0;36mINFO\x1b[0;0m");
         println!("{}", b.trim());
@@ -175,6 +177,7 @@ EXTRA COMMANDS
   previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
   reload                      Reparse config file
+  kill-all                    Close all scratchpads
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
   logs                        Print log file contents
