@@ -12,10 +12,10 @@ fn summon_special(
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
-    let special_with_title = clients_with_title
+    let special_with_title: Vec<&Client> = clients_with_title
         .iter()
         .filter(|x| x.workspace.id < 0)
-        .collect::<Vec<_>>();
+        .collect();
 
     if special_with_title.is_empty() {
         if !clients_with_title.is_empty() {

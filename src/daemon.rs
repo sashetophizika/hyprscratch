@@ -138,7 +138,7 @@ fn handle_previous(
     Ok(())
 }
 
-fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
+fn clean(spotless: bool, config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
 
     let config1 = Arc::clone(&config);
@@ -151,12 +151,19 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
                 .clone(),
         )
         .unwrap_log(file!(), line!());
+
+        if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
+            if cl.workspace.id < 0 {
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
+                    .unwrap_log(file!(), line!());
+            }
+        }
     });
 
     let config2 = Arc::clone(&config);
-    if spotless == "spotless" {
+    if spotless {
         ev.add_active_window_changed_handler(move |_| {
-            if let Some(cl) = Client::get_active().unwrap() {
+            if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
                 if !cl.floating {
                     move_floating(
                         config2
@@ -207,9 +214,9 @@ pub fn initialize_daemon(
     if args.contains(&"clean".to_string()) {
         let config_clone = Arc::clone(&config);
         if args[1..].contains(&"spotless".to_string()) {
-            thread::spawn(move || clean("spotless", config_clone));
+            thread::spawn(move || clean(true, config_clone));
         } else {
-            thread::spawn(move || clean(" ", config_clone));
+            thread::spawn(move || clean(false, config_clone));
         }
     }
 
