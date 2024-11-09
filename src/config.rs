@@ -168,7 +168,6 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
-
     std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
 
     let lines: Vec<String> = get_hyprscratch_lines(buf);
@@ -179,10 +178,10 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
             continue;
         }
 
-        let known_options = vec![
+        let known_options = [
             "cover", "persist", "sticky", "shiny", "eager", "summon", "hide", "poly", "special",
         ];
-        let known_commands = vec![
+        let known_commands = [
             "clean",
             "spotless",
             "no-auto-reload",
@@ -258,7 +257,6 @@ mod tests {
         let [titles, commands, options] =
             parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
 
-        println!("{options:?}");
         assert_eq!(titles, expected_titles);
         assert_eq!(commands, expected_commands);
         assert_eq!(options, expected_options);
@@ -314,8 +312,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         config_file
             .write(
                 b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
-bind = $mainMod, b, exec, hyprscratch ytop 'kitty --title btop -e ytop'
-bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' stack shiny
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special",
             )
             .unwrap();
@@ -326,30 +324,30 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         let expected_config = Config {
             titles: vec![
                 "firefox".to_string(),
-                "ytop".to_string(),
+                "btop".to_string(),
                 "htop".to_string(),
                 "cmatrix".to_string(),
             ],
-            normal_titles: vec!["ytop".to_string(), "htop".to_string()],
+            normal_titles: vec!["btop".to_string(), "htop".to_string()],
             special_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
             commands: vec![
                 "firefox --private-window".to_string(),
-                "kitty --title btop -e ytop".to_string(),
+                "kitty --title btop -e btop".to_string(),
                 "kitty --title htop -e htop".to_string(),
                 "kitty --title cmatrix -e cmatrix".to_string(),
             ],
             options: vec![
                 "special sticky".to_string(),
                 "".to_string(),
-                "stack shiny".to_string(),
+                "cover shiny".to_string(),
                 "special".to_string(),
             ],
             slick_titles: vec![
-                "ytop".to_string(),
+                "btop".to_string(),
                 "htop".to_string(),
                 "cmatrix".to_string(),
             ],
-            dirty_titles: vec!["ytop".to_string()],
+            dirty_titles: vec!["btop".to_string()],
         };
 
         assert_eq!(config.titles, expected_config.titles);

@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::logs::*;
 use crate::utils::*;
 use hyprland::data::Client;
+use hyprland::data::Clients;
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
@@ -21,11 +22,10 @@ fn handle_scratchpad(
 ) -> Result<()> {
     if request.len() > 1 {
         config.dirty_titles.retain(|x| *x != request[2..]);
-    }
-
-    if request[2..] != prev_titles[0] {
-        prev_titles[1] = prev_titles[0].clone();
-        prev_titles[0] = request[2..].to_string();
+        if request[2..] != prev_titles[0] {
+            prev_titles[1] = prev_titles[0].clone();
+            prev_titles[0] = request[2..].to_string();
+        }
     }
 
     let non_persist_titles = config
@@ -47,9 +47,20 @@ fn handle_return(request: String, config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_reload(config: &mut Config) -> Result<()> {
-    config.reload(None)?;
+fn handle_reload(config: &mut Config, config_path: Option<String>) -> Result<()> {
+    config.reload(config_path)?;
     autospawn(config)?;
+    Ok(())
+}
+
+fn handle_killall(config: &Config) -> Result<()> {
+    Clients::get()?
+        .into_iter()
+        .filter(|x| config.titles.contains(&x.initial_title))
+        .for_each(|x| {
+            hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address))
+                .unwrap_log(file!(), line!())
+        });
     Ok(())
 }
 
@@ -140,12 +151,6 @@ fn clean(spotless: &str, config: Arc<Mutex<Config>>) -> Result<()> {
                 .clone(),
         )
         .unwrap_log(file!(), line!());
-        if let Some(cl) = Client::get_active().unwrap() {
-            if cl.workspace.id < 0 {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.title))
-                    .unwrap_log(file!(), line!());
-            }
-        }
     });
 
     let config2 = Arc::clone(&config);
@@ -189,7 +194,7 @@ pub fn initialize_daemon(
     config_path: Option<String>,
     socket_path: Option<&str>,
 ) -> Result<()> {
-    let config = Arc::new(Mutex::new(Config::new(config_path)?));
+    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
     let mut cycle_index: usize = 0;
     let mut prev_titles: [String; 2] = [String::new(), String::new()];
     autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
@@ -240,7 +245,8 @@ pub fn initialize_daemon(
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
                 match buf.as_str() {
                     "kill" => break,
-                    "reload" => handle_reload(conf)?,
+                    "killall" => handle_killall(conf)?,
+                    "reload" => handle_reload(conf, config_path.clone())?,
                     b if b.starts_with("p") => {
                         handle_previous(&mut stream, buf, conf, &mut prev_titles)?
                     }
@@ -265,7 +271,6 @@ pub fn initialize_daemon(
     }
     Ok(())
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -297,16 +302,18 @@ mod test {
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         test_handle("c", "firefox:firefox --private-window:special sticky");
-        test_handle("c?0", "ytop:kitty --title btop -e ytop:");
+        test_handle("c?0", "btop:kitty --title btop -e btop:");
         test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
-        test_handle("p?cmatrix", "ytop:kitty --title btop -e ytop:");
+        test_handle("p?cmatrix", "btop:kitty --title btop -e btop:");
         test_handle("p?htop", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
-        test_handle("s?btop", "ytop htop");
+        test_handle("s?btop", "btop htop");
         test_handle("r?btop", "");
 
         test_handle("reload", "");
+        test_handle("killall", "");
+
         test_handle("unknown", "Daemon: unknown request - unknown");
         test_handle("kill", "");
     }

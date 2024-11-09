@@ -32,9 +32,10 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 
     match title.as_str() {
         "clean" | "no-auto-reload" | "init" | "" => initialize_daemon(args, None, None)?,
-        "hideall" | "hide-all" => hideall()?,
+        "hideall" | "hide-all" => hide_all()?,
         "get-config" => get_config(None)?,
         "previous" => previous()?,
+        "kill-all" => kill_all()?,
         "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
         "kill" => kill()?,

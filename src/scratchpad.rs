@@ -102,7 +102,9 @@ fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()
     {
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Special(Some(&active_client.initial_title)),
+            WorkspaceIdentifierWithSpecial::Name(
+                &("special:".to_string() + &active_client.initial_title)
+            ),
             Some(WindowIdentifier::Address(active_client.address.clone()))
         )?;
     }
@@ -188,6 +190,9 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::daemon::initialize_daemon;
+    use crate::kill;
+
     use super::*;
     use std::thread::sleep;
     use std::time::Duration;
@@ -420,6 +425,15 @@ mod tests {
 
     #[test]
     fn test_poly() {
+        std::thread::spawn(|| {
+            initialize_daemon(
+                &["".to_string()],
+                Some("test_configs/test_config3.txt".to_string()),
+                None,
+            )
+        });
+        sleep(Duration::from_millis(1000));
+
         let resources = TestResources {
             title: "test_poly".to_string(),
             command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
@@ -458,10 +472,21 @@ mod tests {
                 .count(),
             0
         );
+        kill().unwrap();
+        sleep(Duration::from_millis(1000));
     }
 
     #[test]
     fn test_summon_hide() {
+        std::thread::spawn(|| {
+            initialize_daemon(
+                &["".to_string()],
+                Some("test_configs/test_config3.txt".to_string()),
+                None,
+            )
+        });
+        sleep(Duration::from_millis(500));
+
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
             command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
@@ -532,5 +557,7 @@ mod tests {
             clients_with_title[0].workspace.name,
             "special:".to_owned() + &resources.title
         );
+        kill().unwrap();
+        sleep(Duration::from_millis(1000));
     }
 }
