@@ -53,7 +53,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `poly`: toggle all scratchpads with the same title
 
-* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean spotless` and `cycle`.
+* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean spotless`.
 
 ### Extra hyprscratch commands:
 
