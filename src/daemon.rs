@@ -279,7 +279,7 @@ pub fn initialize_daemon(
     Ok(())
 }
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use hyprland::data::{Clients, Workspace};
     use std::{thread::sleep, time::Duration};
