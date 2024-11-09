@@ -20,7 +20,7 @@ In `hyprland.conf`:
 exec-once = hyprscratch [DAEMON_OPTIONS]
 
 #configure scratchpads
-bind = $MOD, $KEY, exec, hyprscratch $WINDOW_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS] 
+bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
 ```
 
 Example scratchpad:
@@ -31,7 +31,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Daemon options:
 
-* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating windows.
+* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating cients.
 
 * `no-auto-reload`: does not reload the configuration when the configuration file is updated.
 
@@ -63,6 +63,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
+* `kill-all`: closes all scratchpad clients that are open
+
 * `reload`: re-parses the configuration file without restarting the daemon.
 
 * `get-config`: prints out the parsed configuration.
@@ -80,4 +82,4 @@ Terminal applications often all use the title of the terminal emulator. Usually 
 
 If there are multiple scratchpads with the same initial title, this program just grabs the first one it finds.
 
-Scratchpads don't have to be floating. This can also be used to just spawn a specific window, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.
+Scratchpads don't have to be floating. This can also be used to just spawn a specific client, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.
