@@ -153,7 +153,7 @@ fn clean(spotless: bool, config: Arc<Mutex<Config>>) -> Result<()> {
         .unwrap_log(file!(), line!());
 
         if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
-            if cl.workspace.id < 0 {
+            if cl.workspace.id < 0 && cl.workspace.id > -1000 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
                     .unwrap_log(file!(), line!());
             }
