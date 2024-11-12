@@ -18,8 +18,25 @@ fn warn_deprecated(feature: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_flag_arg(args: &[String], long: &str, short: &str) -> Option<String> {
-    if let Some(ci) = args.into_iter().position(|x| x == long || x == short) {
+fn flag_present(args: &[String], flag: &str) -> Option<String> {
+    let long = format!("--{}", flag);
+    let short = format!("-{}", flag.as_bytes()[0] as char);
+
+    if args.iter().any(|x| x == flag || *x == long || *x == short) {
+        Some(flag.to_string())
+    } else {
+        None
+    }
+}
+
+fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
+    let long = format!("--{}", flag);
+    let short = format!("-{}", flag.as_bytes()[0] as char);
+
+    if let Some(ci) = args
+        .iter()
+        .position(|x| x == flag || *x == long || *x == short)
+    {
         args.get(ci + 1).cloned()
     } else {
         None
@@ -33,32 +50,30 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         }
     }
 
-    let flag_present = |long, short| args.iter().any(|x| x == long || x == short);
-    if flag_present("--help", "-h") {
-        help();
-        return Ok(());
-    }
+    let config = get_flag_arg(args, "config");
+    let socket = get_flag_arg(args, "socket");
 
-    if flag_present("--version", "-v") {
-        println!("hyprscratch v{}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+    for flag in ["help", "logs", "kill", "version", "get-config", "reload"] {
+        if let Some(f) = flag_present(args, flag) {
+            match f.as_str() {
+                "get-config" => get_config(config.clone())?,
+                "reload" => reload()?,
+                "help" => help(),
+                "logs" => logs()?,
+                "kill" => kill()?,
+                "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
+                _ => (),
+            }
+            return Ok(());
+        }
     }
-
-    let config = get_flag_arg(args, "--config", "-c");
-    let socket = get_flag_arg(args, "--socket", "-s");
 
     match args.get(1).map_or("", |v| v.as_str()) {
         "clean" | "no-auto-reload" | "" => initialize_daemon(args, config, socket.as_deref())?,
         "hideall" | "hide-all" => hide_all()?,
-        "get-config" => get_config(config)?,
         "previous" => previous()?,
         "kill-all" => kill_all()?,
-        "reload" => reload()?,
         "cycle" => cycle(args.join(" "))?,
-        "kill" => kill()?,
-        "help" => help(),
-        "logs" | "-l" | "--logs" => logs()?,
-        "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         _ => {
             if args[2..].is_empty() {
                 log(
