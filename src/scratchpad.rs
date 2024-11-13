@@ -429,11 +429,12 @@ mod tests {
             initialize_daemon(
                 &["".to_string()],
                 Some("test_configs/test_config3.txt".to_string()),
-                None,
+                Some("/tmp/hyprscratch_test.sock"),
             )
         });
         sleep(Duration::from_millis(1000));
 
+        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
         let resources = TestResources {
             title: "test_poly".to_string(),
             command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
@@ -472,7 +473,7 @@ mod tests {
                 .count(),
             0
         );
-        kill().unwrap();
+        kill(socket).unwrap();
         sleep(Duration::from_millis(1000));
     }
 
@@ -482,11 +483,12 @@ mod tests {
             initialize_daemon(
                 &["".to_string()],
                 Some("test_configs/test_config3.txt".to_string()),
-                None,
+                Some("/tmp/hyprscratch_test.sock"),
             )
         });
         sleep(Duration::from_millis(500));
 
+        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
             command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
@@ -557,7 +559,7 @@ mod tests {
             clients_with_title[0].workspace.name,
             "special:".to_owned() + &resources.title
         );
-        kill().unwrap();
+        kill(socket).unwrap();
         sleep(Duration::from_millis(1000));
     }
 }

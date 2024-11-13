@@ -19,28 +19,34 @@ fn warn_deprecated(feature: &str) -> Result<()> {
 }
 
 fn flag_present(args: &[String], flag: &str) -> Option<String> {
-    let long = format!("--{}", flag);
+    if flag.is_empty() {
+        return None;
+    }
+
+    let long = format!("--{flag}");
     let short = format!("-{}", flag.as_bytes()[0] as char);
 
     if args.iter().any(|x| x == flag || *x == long || *x == short) {
-        Some(flag.to_string())
-    } else {
-        None
+        return Some(flag.to_string());
     }
+    None
 }
 
 fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
-    let long = format!("--{}", flag);
+    if flag.is_empty() {
+        return None;
+    }
+
+    let long = format!("--{flag}");
     let short = format!("-{}", flag.as_bytes()[0] as char);
 
     if let Some(ci) = args
         .iter()
         .position(|x| x == flag || *x == long || *x == short)
     {
-        args.get(ci + 1).cloned()
-    } else {
-        None
+        return args.get(ci + 1).cloned();
     }
+    None
 }
 
 fn hyprscratch(args: &[String]) -> Result<()> {
@@ -57,10 +63,10 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         if let Some(f) = flag_present(args, flag) {
             match f.as_str() {
                 "get-config" => get_config(config.clone())?,
-                "reload" => reload()?,
+                "reload" => reload(socket)?,
+                "kill" => kill(socket)?,
                 "help" => help(),
                 "logs" => logs()?,
-                "kill" => kill()?,
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
                 _ => (),
             }
@@ -70,10 +76,11 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 
     match args.get(1).map_or("", |v| v.as_str()) {
         "clean" | "no-auto-reload" | "" => initialize_daemon(args, config, socket.as_deref())?,
-        "hideall" | "hide-all" => hide_all()?,
-        "previous" => previous()?,
-        "kill-all" => kill_all()?,
-        "cycle" => cycle(args.join(" "))?,
+        s if s.starts_with("-") => initialize_daemon(args, config, socket.as_deref())?,
+        "hideall" | "hide-all" => hide_all(socket)?,
+        "previous" => previous(socket)?,
+        "kill-all" => kill_all(socket)?,
+        "cycle" => cycle(socket, args.join(" "))?,
         _ => {
             if args[2..].is_empty() {
                 log(

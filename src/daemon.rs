@@ -238,7 +238,7 @@ pub fn initialize_daemon(
     let listener = UnixListener::bind(path_to_sock)?;
     log(
         format!(
-            "Daemon successfully started, listening on {:?}",
+            "Daemon started successfully, listening on {:?}",
             path_to_sock
         ),
         "INFO",

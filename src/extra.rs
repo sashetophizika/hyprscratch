@@ -10,8 +10,9 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
-fn connect_to_sock(request: &str) -> Result<UnixStream> {
-    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+fn connect_to_sock(socket: Option<String>, request: &str) -> Result<UnixStream> {
+    let mut stream =
+        UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock".to_string()))?;
     stream.write_all(request.as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
     Ok(stream)
@@ -29,9 +30,9 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
     Ok(())
 }
 
-pub fn hide_all() -> Result<()> {
+pub fn hide_all(socket: Option<String>) -> Result<()> {
     let mut titles = String::new();
-    let mut stream = connect_to_sock("s")?;
+    let mut stream = connect_to_sock(socket, "s")?;
     stream.read_to_string(&mut titles)?;
 
     move_floating(titles.split(" ").map(|x| x.to_string()).collect())?;
@@ -42,7 +43,7 @@ pub fn hide_all() -> Result<()> {
     Ok(())
 }
 
-pub fn cycle(args: String) -> Result<()> {
+pub fn cycle(socket: Option<String>, args: String) -> Result<()> {
     let request = if args.contains("special") {
         "c?1"
     } else if args.contains("normal") {
@@ -50,28 +51,28 @@ pub fn cycle(args: String) -> Result<()> {
     } else {
         "c"
     };
-    let mut stream = connect_to_sock(request)?;
+    let mut stream = connect_to_sock(socket, request)?;
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn previous() -> Result<()> {
+pub fn previous(socket: Option<String>) -> Result<()> {
     let active_title = Client::get_active()?.unwrap().initial_title;
-    let mut stream = connect_to_sock(format!("p?{active_title}").as_str())?;
+    let mut stream = connect_to_sock(socket, format!("p?{active_title}").as_str())?;
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn reload() -> Result<()> {
-    connect_to_sock("reload")?;
+pub fn reload(socket: Option<String>) -> Result<()> {
+    connect_to_sock(socket, "reload")?;
     Ok(())
 }
 
-pub fn kill() -> Result<()> {
-    connect_to_sock("kill")?;
+pub fn kill(socket: Option<String>) -> Result<()> {
+    connect_to_sock(socket, "kill")?;
     Ok(())
 }
 
-pub fn kill_all() -> Result<()> {
-    connect_to_sock("killall")?;
+pub fn kill_all(socket: Option<String>) -> Result<()> {
+    connect_to_sock(socket, "killall")?;
     Ok(())
 }
 
@@ -199,23 +200,24 @@ mod tests {
             initialize_daemon(
                 &["".to_string()],
                 Some("test_configs/test_config3.txt".to_string()),
-                None,
+                Some("/tmp/hyprscratch_test.sock"),
             )
         });
         sleep(Duration::from_millis(500));
 
-        cycle("".to_string()).unwrap();
-        cycle("special".to_string()).unwrap();
-        cycle("normal".to_string()).unwrap();
-        previous().unwrap();
+        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
+        cycle(socket.clone(), "".to_string()).unwrap();
+        cycle(socket.clone(), "special".to_string()).unwrap();
+        cycle(socket.clone(), "normal".to_string()).unwrap();
+        previous(socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
 
-        hide_all().unwrap();
-        reload().unwrap();
+        hide_all(socket.clone()).unwrap();
+        reload(socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
 
-        kill_all().unwrap();
-        kill().unwrap();
+        kill_all(socket.clone()).unwrap();
+        kill(socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
     }
 }
