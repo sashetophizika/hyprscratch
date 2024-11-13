@@ -17,7 +17,7 @@ In `hyprland.conf`:
 
 ```bash
 #start the hyprscratch daemon
-exec-once = hyprscratch [DAEMON_OPTIONS]
+exec-once = hyprscratch init [DAEMON_OPTIONS]
 
 #configure scratchpads
 bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]

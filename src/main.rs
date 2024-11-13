@@ -75,12 +75,20 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     }
 
     match args.get(1).map_or("", |v| v.as_str()) {
-        "clean" | "no-auto-reload" | "" => initialize_daemon(args, config, socket.as_deref())?,
+        "clean" | "no-auto-reload" | "init" => initialize_daemon(args, config, socket.as_deref())?,
         s if s.starts_with("-") => initialize_daemon(args, config, socket.as_deref())?,
         "hideall" | "hide-all" => hide_all(socket)?,
         "previous" => previous(socket)?,
         "kill-all" => kill_all(socket)?,
         "cycle" => cycle(socket, args.join(" "))?,
+        "" => {
+            log(
+                "Initializing the daemon with no arguments is deprecated".to_string(),
+                "WARN",
+            )?;
+            println!("Use 'hyprscratch init'.");
+            initialize_daemon(args, config, socket.as_deref())?;
+        }
         _ => {
             if args[2..].is_empty() {
                 log(
