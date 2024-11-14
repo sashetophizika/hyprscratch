@@ -1,4 +1,3 @@
-use crate::config::Config;
 use crate::scratchpad::scratchpad;
 use crate::utils::move_floating;
 use hyprland::data::Client;
@@ -76,9 +75,19 @@ pub fn kill_all(socket: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn get_config(config_file: Option<String>) -> Result<()> {
-    let conf = Config::new(config_file)?;
-    let max_len = |xs: &Vec<String>, def: usize| {
+pub fn get_config(socket: Option<String>) -> Result<()> {
+    let mut socket = connect_to_sock(socket, "get-config")?;
+    let mut buf = String::new();
+    socket.read_to_string(&mut buf)?;
+
+    let [titles, commands, options]: [Vec<&str>; 3] = buf
+        .splitn(3, '?')
+        .map(|x| x.split('^').collect::<Vec<_>>())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    let max_len = |xs: &Vec<&str>, def: usize| {
         xs.iter()
             .map(|x| x.chars().count())
             .max()
@@ -92,9 +101,9 @@ pub fn get_config(config_file: Option<String>) -> Result<()> {
             + &" ".repeat(x - y.chars().count())
     };
 
-    let max_titles = max_len(&conf.titles, 6);
-    let max_commands = max_len(&conf.commands, 8);
-    let max_options = max_len(&conf.options, 7);
+    let max_titles = max_len(&titles, 6);
+    let max_commands = max_len(&commands, 8);
+    let max_options = max_len(&options, 7);
 
     let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
         println!(
@@ -115,12 +124,12 @@ pub fn get_config(config_file: Option<String>) -> Result<()> {
     );
 
     print_border("├", "┼", "┤");
-    for i in 0..conf.titles.len() {
+    for i in 0..titles.len() {
         println!(
             "│ {} │ {} │ {} │",
-            color_pad(max_titles, &conf.titles[i]),
-            color_pad(max_commands, &conf.commands[i]),
-            color_pad(max_options, &conf.options[i])
+            color_pad(max_titles, &titles[i]),
+            color_pad(max_commands, &commands[i]),
+            color_pad(max_options, &options[i])
         )
     }
 
@@ -154,7 +163,7 @@ pub fn help() {
     println!(
         "Usage:
   Daemon:
-    hypscratch [options...]
+    hypscratch init [options...]
   Scratchpads:
     hyprscratch title command [options...]
 

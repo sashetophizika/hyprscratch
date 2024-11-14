@@ -183,6 +183,7 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
         ];
         let known_commands = [
             "clean",
+            "init",
             "spotless",
             "no-auto-reload",
             "hideall",

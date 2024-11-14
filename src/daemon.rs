@@ -252,6 +252,7 @@ pub fn initialize_daemon(
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
                 match buf.as_str() {
                     "kill" => break,
+                    "get-config" => handle_get_config(&mut stream, conf)?,
                     "killall" => handle_killall(conf)?,
                     "reload" => handle_reload(conf, config_path.clone())?,
                     b if b.starts_with("p") => {
@@ -276,6 +277,18 @@ pub fn initialize_daemon(
             }
         };
     }
+    Ok(())
+}
+
+fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
+    let config = format!(
+        "{}?{}?{}",
+        conf.titles.join("^"),
+        conf.commands.join("^"),
+        conf.options.join("^")
+    );
+
+    stream.write_all(config.as_bytes())?;
     Ok(())
 }
 #[cfg(test)]

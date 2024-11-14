@@ -62,7 +62,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     for flag in ["help", "logs", "kill", "version", "get-config", "reload"] {
         if let Some(f) = flag_present(args, flag) {
             match f.as_str() {
-                "get-config" => get_config(config.clone())?,
+                "get-config" => get_config(socket)?,
                 "reload" => reload(socket)?,
                 "kill" => kill(socket)?,
                 "help" => help(),
