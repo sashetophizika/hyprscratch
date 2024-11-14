@@ -1,5 +1,6 @@
-use crate::logs::log;
+use crate::logs::{log, LogErr};
 use hyprland::Result;
+use std::env::var;
 use std::io::prelude::*;
 use std::vec;
 
@@ -16,69 +17,28 @@ pub struct Config {
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let config_file = match config_path {
-            Some(config) => config,
-            None => format!(
-                "{}/.config/hypr/hyprland.conf",
-                std::env::var("HOME").unwrap()
-            ),
-        };
+        let home = var("HOME").unwrap_log(file!(), line!());
+        let config_file = config_path.unwrap_or(home + "/.config/hypr/hyprland.conf");
 
         let [titles, commands, options] = parse_config(config_file)?;
-        let normal_titles = titles
-            .clone()
-            .into_iter()
-            .zip(options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
+        let filter_titles = |cond: &dyn Fn(&String) -> bool| {
+            titles
+                .clone()
+                .into_iter()
+                .zip(options.clone())
+                .filter(|(_, option)| cond(option))
+                .map(|(title, _)| title)
+                .collect::<Vec<_>>()
+        };
 
-        let special_titles = titles
-            .clone()
-            .into_iter()
-            .zip(options.clone())
-            .filter_map(|(title, option)| {
-                if option.contains("special") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
-
-        let slick_titles: Vec<String> = titles
-            .clone()
-            .into_iter()
-            .zip(options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("sticky") {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let dirty_titles: Vec<String> = titles
-            .clone()
-            .into_iter()
-            .zip(options.clone())
-            .filter_map(|(title, option)| {
-                if !option.contains("sticky")
-                    && !option.contains("shiny")
-                    && !option.contains("special")
-                {
-                    Some(title)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let normal_titles = filter_titles(&|opts: &String| !opts.contains("special"));
+        let special_titles = filter_titles(&|opts: &String| opts.contains("special"));
+        let slick_titles = filter_titles(&|opts: &String| !opts.contains("sticky"));
+        let dirty_titles = filter_titles(&|opts: &String| {
+            !opts
+                .split(" ")
+                .any(|x| ["sticky", "special", "shiny"].contains(&x))
+        });
 
         Ok(Config {
             titles,
@@ -100,7 +60,7 @@ impl Config {
 fn split_args(line: String) -> Vec<String> {
     let quote_types = [b'\"', b'\''];
 
-    let mut args: Vec<String> = vec![];
+    let mut args = vec![];
     let mut quotes = vec![];
     let mut inquote_word = String::new();
 
@@ -147,19 +107,11 @@ fn split_args(line: String) -> Vec<String> {
 fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     let mut lines = vec![];
     for line in config_file.lines() {
-        if let Some(i) = line.find("hyprscratch") {
-            lines.push(line.split_at(i).1.to_string());
+        if let Some(l) = line.find("hyprscratch") {
+            lines.push(line.split_at(l).1.to_string());
         }
     }
     lines
-}
-
-fn dequote(string: &String) -> String {
-    let dequoted = match &string[0..1] {
-        "\"" | "'" => &string[1..string.len() - 1],
-        _ => string,
-    };
-    dequoted.to_string()
 }
 
 fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
@@ -197,6 +149,13 @@ fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
             "version",
             "help",
         ];
+
+        let dequote = |s: &String| -> String {
+            match &s[..1] {
+                "\"" | "'" => s[1..s.len() - 1].to_string(),
+                _ => s.to_string(),
+            }
+        };
 
         match parsed_args[1].as_str() {
             cmd if known_commands.contains(&cmd) => (),
