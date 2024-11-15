@@ -60,8 +60,8 @@ pub fn previous(socket: Option<String>) -> Result<()> {
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn reload(socket: Option<String>) -> Result<()> {
-    connect_to_sock(socket, "reload")?;
+pub fn reload(socket: Option<String>, config: Option<String>) -> Result<()> {
+    connect_to_sock(socket, &format!("l?{}", config.unwrap_or("".to_string())))?;
     Ok(())
 }
 
@@ -127,9 +127,9 @@ pub fn get_config(socket: Option<String>) -> Result<()> {
     for i in 0..titles.len() {
         println!(
             "│ {} │ {} │ {} │",
-            color_pad(max_titles, &titles[i]),
-            color_pad(max_commands, &commands[i]),
-            color_pad(max_options, &options[i])
+            color_pad(max_titles, titles[i]),
+            color_pad(max_commands, commands[i]),
+            color_pad(max_options, options[i])
         )
     }
 
@@ -222,7 +222,8 @@ mod tests {
         sleep(Duration::from_millis(1000));
 
         hide_all(socket.clone()).unwrap();
-        reload(socket.clone()).unwrap();
+        reload(socket.clone(), None).unwrap();
+        get_config(socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
 
         kill_all(socket.clone()).unwrap();
