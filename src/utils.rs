@@ -173,6 +173,7 @@ mod tests {
             .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
 
         let mut config = Config {
+            config_file: "".to_string(),
             titles: resources.titles.to_vec(),
             normal_titles: Vec::new(),
             special_titles: Vec::new(),

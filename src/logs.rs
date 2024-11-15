@@ -1,5 +1,6 @@
 use chrono::Local;
-use hyprland::Result;
+use core::panic;
+use std::env::VarError;
 use std::fs::File;
 use std::io::Write;
 use std::sync::LockResult;
@@ -8,7 +9,20 @@ pub trait LogErr<T> {
     fn unwrap_log(self, file: &str, line: u32) -> T;
 }
 
-impl<T> LogErr<T> for Result<T> {
+impl<T> LogErr<T> for hyprland::Result<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T {
+        match self {
+            Ok(t) => t,
+            Err(err) => {
+                let msg = format!("{} at {}:{}", err, file, line);
+                log(msg.clone(), "ERROR").unwrap();
+                panic!()
+            }
+        }
+    }
+}
+
+impl<T> LogErr<T> for Result<T, VarError> {
     fn unwrap_log(self, file: &str, line: u32) -> T {
         match self {
             Ok(t) => t,
@@ -47,7 +61,7 @@ impl<T> LogErr<T> for Option<T> {
     }
 }
 
-pub fn log(msg: String, level: &str) -> Result<()> {
+pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
     let mut file = File::options()
         .create(true)
         .read(true)

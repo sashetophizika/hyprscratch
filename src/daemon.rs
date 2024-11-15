@@ -20,7 +20,7 @@ fn handle_scratchpad(
     config: &mut Config,
     prev_titles: &mut [String; 2],
 ) -> Result<()> {
-    if request.len() > 1 {
+    if request.len() > 2 {
         config.dirty_titles.retain(|x| *x != request[2..]);
         if request[2..] != prev_titles[0] {
             prev_titles[1] = prev_titles[0].clone();
@@ -47,7 +47,13 @@ fn handle_return(request: String, config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_reload(config: &mut Config, config_path: Option<String>) -> Result<()> {
+fn handle_reload(request: String, config: &mut Config) -> Result<()> {
+    println!("{request}");
+    let config_path = if request.len() > 2 && Path::new(&request[2..]).exists() {
+        Some(request[2..].to_string())
+    } else {
+        None
+    };
     config.reload(config_path)?;
     autospawn(config)?;
     Ok(())
@@ -76,7 +82,7 @@ fn handle_cycle(
     }
 
     let mut current_index = *cycle_index % config.titles.len();
-    let mode = if request.len() == 1 {
+    let mode = if request.len() <= 2 {
         None
     } else {
         Some((request.as_bytes()[2] - 48) != 0)
@@ -113,6 +119,11 @@ fn handle_previous(
     config: &Config,
     prev_titles: &mut [String; 2],
 ) -> Result<()> {
+    if request.len() <= 2 {
+        stream.write_all(b"empty")?;
+        return Ok(());
+    }
+
     let previous_active = (request[2..] == prev_titles[0]) as usize;
     if prev_titles[previous_active].is_empty() {
         stream.write_all(b"empty")?;
@@ -254,7 +265,7 @@ pub fn initialize_daemon(
                     "kill" => break,
                     "get-config" => handle_get_config(&mut stream, conf)?,
                     "killall" => handle_killall(conf)?,
-                    "reload" => handle_reload(conf, config_path.clone())?,
+                    b if b.starts_with("l") => handle_reload(buf, conf)?,
                     b if b.starts_with("p") => {
                         handle_previous(&mut stream, buf, conf, &mut prev_titles)?
                     }

@@ -6,6 +6,7 @@ use std::vec;
 
 #[derive(Debug)]
 pub struct Config {
+    pub config_file: String,
     pub titles: Vec<String>,
     pub normal_titles: Vec<String>,
     pub special_titles: Vec<String>,
@@ -20,13 +21,13 @@ impl Config {
         let home = var("HOME").unwrap_log(file!(), line!());
         let config_file = config_path.unwrap_or(home + "/.config/hypr/hyprland.conf");
 
-        let [titles, commands, options] = parse_config(config_file)?;
+        let [titles, commands, options] = parse_config(&config_file)?;
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
             titles
                 .clone()
                 .into_iter()
                 .zip(options.clone())
-                .filter(|(_, option)| cond(option))
+                .filter(|(_, opts)| cond(opts))
                 .map(|(title, _)| title)
                 .collect::<Vec<_>>()
         };
@@ -41,6 +42,7 @@ impl Config {
         });
 
         Ok(Config {
+            config_file,
             titles,
             normal_titles,
             special_titles,
@@ -52,7 +54,10 @@ impl Config {
     }
 
     pub fn reload(self: &mut Config, config_path: Option<String>) -> Result<()> {
-        *self = Config::new(config_path)?;
+        *self = match config_path {
+            Some(_) => Config::new(config_path)?,
+            None => Config::new(Some(self.config_file.clone()))?,
+        };
         Ok(())
     }
 }
@@ -114,7 +119,7 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     lines
 }
 
-fn parse_config(config_file: String) -> Result<[Vec<String>; 3]> {
+fn parse_config(config_file: &String) -> Result<[Vec<String>; 3]> {
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
@@ -215,7 +220,7 @@ mod tests {
         ];
 
         let [titles, commands, options] =
-            parse_config("./test_configs/test_config1.txt".to_owned()).unwrap();
+            parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
 
         assert_eq!(titles, expected_titles);
         assert_eq!(commands, expected_commands);
@@ -230,8 +235,10 @@ bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover sh
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
 bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' eager").unwrap();
 
-        let mut config = Config::new(Some("./test_configs/test_config2.txt".to_string())).unwrap();
+        let config_file = "./test_configs/test_config2.txt".to_string();
+        let mut config = Config::new(Some(config_file.clone())).unwrap();
         let expected_config = Config {
+            config_file,
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
@@ -268,8 +275,8 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         assert_eq!(config.commands, expected_config.commands);
         assert_eq!(config.options, expected_config.options);
 
-        let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
-        config_file
+        let mut config_path = File::create("./test_configs/test_config2.txt").unwrap();
+        config_path
             .write(
                 b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
@@ -278,10 +285,10 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
             )
             .unwrap();
 
-        config
-            .reload(Some("./test_configs/test_config2.txt".to_string()))
-            .unwrap();
+        let config_file = "./test_configs/test_config2.txt".to_string();
+        config.reload(Some(config_file.clone())).unwrap();
         let expected_config = Config {
+            config_file,
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),

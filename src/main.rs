@@ -63,7 +63,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         if let Some(f) = flag_present(args, flag) {
             match f.as_str() {
                 "get-config" => get_config(socket)?,
-                "reload" => reload(socket)?,
+                "reload" => reload(socket, config)?,
                 "kill" => kill(socket)?,
                 "help" => help(),
                 "logs" => logs()?,
