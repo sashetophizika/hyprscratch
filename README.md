@@ -26,7 +26,7 @@ bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCR
 Example scratchpad:
 
 ```bash
-bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritty --title btop -e btop" onstart
+bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritty --title btop -e btop" eager
 ```
 
 ### Daemon options:
@@ -73,7 +73,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `logs`: show logs
 
-## Other Relevant information
+## Other Relevant Information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
 
 To group multiple scratchpads together, bind them to the same key and use `stack` on all of them. 
