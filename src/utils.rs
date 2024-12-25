@@ -1,22 +1,26 @@
 use crate::config::Config;
 use crate::logs::LogErr;
+use hyprland::data::Client;
 use hyprland::data::Clients;
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 
+pub fn move_to_special(client: &Client) -> Result<()> {
+    hyprland::dispatch!(
+        MoveToWorkspaceSilent,
+        WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title)),
+        Some(WindowIdentifier::Address(client.address.clone()))
+    )
+    .unwrap_log(file!(), line!());
+    Ok(())
+}
+
 pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Clients::get()?
         .into_iter()
         .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
-        .for_each(|x| {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Name(&("special:".to_string() + &x.initial_title)),
-                Some(WindowIdentifier::Address(x.address.clone()))
-            )
-            .unwrap_log(file!(), line!());
-        });
+        .for_each(|x| move_to_special(&x).unwrap());
     Ok(())
 }
 

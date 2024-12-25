@@ -57,7 +57,8 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     }
 
     let config = get_flag_arg(args, "config");
-    let socket = get_flag_arg(args, "socket");
+    let sock = get_flag_arg(args, "socket");
+    let socket = sock.as_deref();
 
     for flag in ["help", "logs", "kill", "version", "get-config", "reload"] {
         if let Some(f) = flag_present(args, flag) {
@@ -100,7 +101,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 )?;
                 println!("Try 'hyprscratch help'.");
             } else {
-                scratchpad(&args[1], &args[2], &args[3..].join(" "))?
+                scratchpad(&args[1], &args[2], &args[3..].join(" "), None)?
             }
         }
     }

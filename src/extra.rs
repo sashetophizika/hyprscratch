@@ -9,9 +9,8 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
-fn connect_to_sock(socket: Option<String>, request: &str) -> Result<UnixStream> {
-    let mut stream =
-        UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock".to_string()))?;
+fn connect_to_sock(socket: Option<&str>, request: &str) -> Result<UnixStream> {
+    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all(request.as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
     Ok(stream)
@@ -25,11 +24,11 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
     }
 
     let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
-    scratchpad(&args[0], &args[1], &args[2])?;
+    scratchpad(&args[0], &args[1], &args[2], None)?;
     Ok(())
 }
 
-pub fn hide_all(socket: Option<String>) -> Result<()> {
+pub fn hide_all(socket: Option<&str>) -> Result<()> {
     let mut titles = String::new();
     let mut stream = connect_to_sock(socket, "s")?;
     stream.read_to_string(&mut titles)?;
@@ -42,7 +41,7 @@ pub fn hide_all(socket: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn cycle(socket: Option<String>, args: String) -> Result<()> {
+pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
     let request = if args.contains("special") {
         "c?1"
     } else if args.contains("normal") {
@@ -54,28 +53,28 @@ pub fn cycle(socket: Option<String>, args: String) -> Result<()> {
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn previous(socket: Option<String>) -> Result<()> {
+pub fn previous(socket: Option<&str>) -> Result<()> {
     let active_title = Client::get_active()?.unwrap().initial_title;
     let mut stream = connect_to_sock(socket, format!("p?{active_title}").as_str())?;
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn reload(socket: Option<String>, config: Option<String>) -> Result<()> {
+pub fn reload(socket: Option<&str>, config: Option<String>) -> Result<()> {
     connect_to_sock(socket, &format!("l?{}", config.unwrap_or("".to_string())))?;
     Ok(())
 }
 
-pub fn kill(socket: Option<String>) -> Result<()> {
+pub fn kill(socket: Option<&str>) -> Result<()> {
     connect_to_sock(socket, "kill")?;
     Ok(())
 }
 
-pub fn kill_all(socket: Option<String>) -> Result<()> {
+pub fn kill_all(socket: Option<&str>) -> Result<()> {
     connect_to_sock(socket, "killall")?;
     Ok(())
 }
 
-pub fn get_config(socket: Option<String>) -> Result<()> {
+pub fn get_config(socket: Option<&str>) -> Result<()> {
     let mut socket = connect_to_sock(socket, "get-config")?;
     let mut buf = String::new();
     socket.read_to_string(&mut buf)?;
@@ -215,19 +214,19 @@ mod tests {
         sleep(Duration::from_millis(500));
 
         let socket = Some("/tmp/hyprscratch_test.sock".to_string());
-        cycle(socket.clone(), "".to_string()).unwrap();
-        cycle(socket.clone(), "special".to_string()).unwrap();
-        cycle(socket.clone(), "normal".to_string()).unwrap();
-        previous(socket.clone()).unwrap();
+        cycle(socket.as_deref(), "".to_string()).unwrap();
+        cycle(socket.as_deref(), "special".to_string()).unwrap();
+        cycle(socket.as_deref(), "normal".to_string()).unwrap();
+        previous(socket.as_deref()).unwrap();
         sleep(Duration::from_millis(1000));
 
-        hide_all(socket.clone()).unwrap();
-        reload(socket.clone(), None).unwrap();
-        get_config(socket.clone()).unwrap();
+        hide_all(socket.as_deref()).unwrap();
+        reload(socket.as_deref(), None).unwrap();
+        get_config(socket.as_deref()).unwrap();
         sleep(Duration::from_millis(1000));
 
-        kill_all(socket.clone()).unwrap();
-        kill(socket.clone()).unwrap();
+        kill_all(socket.as_deref()).unwrap();
+        kill(socket.as_deref()).unwrap();
         sleep(Duration::from_millis(1000));
     }
 }

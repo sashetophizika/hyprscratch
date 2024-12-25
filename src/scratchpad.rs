@@ -1,4 +1,5 @@
 use crate::logs::LogErr;
+use crate::utils::move_to_special;
 use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -19,13 +20,7 @@ fn summon_special(
 
     if special_with_title.is_empty() {
         if !clients_with_title.is_empty() {
-            hyprland::dispatch!(
-                MoveToWorkspace,
-                WorkspaceIdentifierWithSpecial::Special(Some(title)),
-                Some(WindowIdentifier::Address(
-                    clients_with_title[0].address.clone()
-                ))
-            )?;
+            move_to_special(&clients_with_title[0])?;
 
             if clients_with_title[0].workspace.id == active_workspace.id {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
@@ -36,8 +31,8 @@ fn summon_special(
                 special_cmd.insert_str(0, "[]");
             }
 
-            let cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
-            hyprland::dispatch!(Exec, &cmd)?;
+            special_cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
+            hyprland::dispatch!(Exec, &special_cmd)?;
         }
     } else {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
@@ -100,13 +95,7 @@ fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
-        hyprland::dispatch!(
-            MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Name(
-                &("special:".to_string() + &active_client.initial_title)
-            ),
-            Some(WindowIdentifier::Address(active_client.address.clone()))
-        )?;
+        move_to_special(active_client)?;
     }
     Ok(())
 }
@@ -120,8 +109,8 @@ fn remove_temp_shiny(title: &str, options: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
-    let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
+pub fn scratchpad(title: &str, command: &str, options: &str, socket: Option<&str>) -> Result<()> {
+    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all(format!("s?{title}").as_bytes())?;
     stream.shutdown(std::net::Shutdown::Write)?;
 
@@ -157,16 +146,7 @@ pub fn scratchpad(title: &str, command: &str, options: &str) -> Result<()> {
             || active_client.initial_title == title
             || active_client.fullscreen == FullscreenMode::None
         {
-            clients_on_active.for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Name(
-                        &("special:".to_string() + &x.initial_title)
-                    ),
-                    Some(WindowIdentifier::Address(x.address))
-                )
-                .unwrap_log(file!(), line!())
-            });
+            clients_on_active.for_each(|x| move_to_special(&x).unwrap());
         } else {
             hyprland::dispatch!(
                 FocusWindow,
@@ -434,7 +414,7 @@ mod tests {
         });
         sleep(Duration::from_millis(1000));
 
-        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
+        let socket = Some("/tmp/hyprscratch_test.sock");
         let resources = TestResources {
             title: "test_poly".to_string(),
             command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
@@ -448,7 +428,7 @@ mod tests {
             false
         );
 
-        scratchpad(&resources.title, &resources.command, "poly").unwrap();
+        scratchpad(&resources.title, &resources.command, "poly", socket).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -461,7 +441,7 @@ mod tests {
             2
         );
 
-        scratchpad(&resources.title, &resources.command, "poly").unwrap();
+        scratchpad(&resources.title, &resources.command, "poly", socket).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -488,7 +468,7 @@ mod tests {
         });
         sleep(Duration::from_millis(500));
 
-        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
+        let socket = Some("/tmp/hyprscratch_test.sock");
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
             command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
@@ -502,7 +482,13 @@ mod tests {
             false
         );
 
-        scratchpad(&resources.title, &resources.command, "summon").unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "summon",
+            socket.clone(),
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -510,7 +496,13 @@ mod tests {
             resources.title
         );
 
-        scratchpad(&resources.title, &resources.command, "summon").unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "summon",
+            socket.clone(),
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         let clients_with_title: Vec<Client> = Clients::get()
@@ -525,7 +517,7 @@ mod tests {
             resources.title
         );
 
-        scratchpad(&resources.title, &resources.command, "hide").unwrap();
+        scratchpad(&resources.title, &resources.command, "hide", socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_ne!(
@@ -545,7 +537,7 @@ mod tests {
             "special:".to_owned() + &resources.title
         );
 
-        scratchpad(&resources.title, &resources.command, "hide").unwrap();
+        scratchpad(&resources.title, &resources.command, "hide", socket.clone()).unwrap();
         sleep(Duration::from_millis(1000));
 
         let clients_with_title: Vec<Client> = Clients::get()
