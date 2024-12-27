@@ -1,3 +1,4 @@
+use crate::logs::log;
 use crate::scratchpad::scratchpad;
 use crate::utils::move_floating;
 use hyprland::data::Client;
@@ -20,7 +21,7 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
     if buf == "empty" {
-        return Ok(());
+        log("No valid scratchpad found".to_string(), "WARN")?
     }
 
     let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
@@ -50,6 +51,16 @@ pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
         "c"
     };
     let mut stream = connect_to_sock(socket, request)?;
+    pass_to_scratchpad(&mut stream)
+}
+
+pub fn trigger(socket: Option<&str>, args: &[String]) -> Result<()> {
+    if args.len() <= 2 {
+        log("No scratchpad title given to 'toggle'".to_string(), "WARN")?
+    }
+
+    let title = args[2].clone();
+    let mut stream = connect_to_sock(socket, format!("t?{title}").as_str())?;
     pass_to_scratchpad(&mut stream)
 }
 

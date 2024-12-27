@@ -113,6 +113,31 @@ fn handle_cycle(
     Ok(())
 }
 
+fn handle_trigger(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
+    if request.len() <= 2 {
+        stream.write_all(b"empty")?;
+        return Ok(());
+    }
+
+    let index = config
+        .names
+        .clone()
+        .into_iter()
+        .position(|x| x == request[2..]);
+
+    if let Some(i) = index {
+        let scratchpad = format!(
+            "{}:{}:{}",
+            config.titles[i], config.commands[i], config.options[i]
+        );
+        stream.write_all(scratchpad.as_bytes())?;
+    } else {
+        stream.write_all(b"empty")?;
+    }
+
+    Ok(())
+}
+
 fn handle_previous(
     stream: &mut UnixStream,
     request: String,
@@ -273,6 +298,7 @@ pub fn initialize_daemon(
                     b if b.starts_with("c") => {
                         handle_cycle(&mut stream, buf, conf, &mut cycle_index, &mut prev_titles)?
                     }
+                    b if b.starts_with("t") => handle_trigger(&mut stream, buf, conf)?,
                     b if b.starts_with("s") => {
                         handle_scratchpad(&mut stream, buf, conf, &mut prev_titles)?
                     }

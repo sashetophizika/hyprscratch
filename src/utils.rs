@@ -178,6 +178,7 @@ mod tests {
 
         let mut config = Config {
             config_file: "".to_string(),
+            names: resources.titles.to_vec(),
             titles: resources.titles.to_vec(),
             normal_titles: Vec::new(),
             special_titles: Vec::new(),
