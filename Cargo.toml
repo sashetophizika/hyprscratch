@@ -10,4 +10,5 @@ readme = "README.md"
 
 [dependencies]
 chrono = "0.4.38"
-hyprland = "0.4.0-beta.1"
+hyprland = "0.4.0-beta.2"
+toml = "0.8.19"
