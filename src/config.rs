@@ -1,12 +1,16 @@
 use crate::logs::{log, LogErr};
 use hyprland::Result;
 use std::env::var;
+use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::vec;
+use toml::{Table, Value};
 
 #[derive(Debug)]
 pub struct Config {
     pub config_file: String,
+    pub names: Vec<String>,
     pub titles: Vec<String>,
     pub normal_titles: Vec<String>,
     pub special_titles: Vec<String>,
@@ -21,7 +25,16 @@ impl Config {
         let home = var("HOME").unwrap_log(file!(), line!());
         let config_file = config_path.unwrap_or(home + "/.config/hypr/hyprland.conf");
 
-        let [titles, commands, options] = parse_config(&config_file)?;
+        let [names, titles, commands, options] = if Path::new(&config_file)
+            .extension()
+            .unwrap_log(file!(), line!())
+            == "toml"
+        {
+            parse_toml(&config_file)?
+        } else {
+            parse_config(&config_file)?
+        };
+
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
             titles
                 .clone()
@@ -43,6 +56,7 @@ impl Config {
 
         Ok(Config {
             config_file,
+            names,
             titles,
             normal_titles,
             special_titles,
@@ -119,7 +133,7 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     lines
 }
 
-fn parse_config(config_file: &String) -> Result<[Vec<String>; 3]> {
+fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     let mut buf: String = String::new();
 
     let mut titles: Vec<String> = Vec::new();
@@ -148,6 +162,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 3]> {
             "reload",
             "previous",
             "cycle",
+            "trigger",
             "get-config",
             "kill",
             "logs",
@@ -190,7 +205,42 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 3]> {
         };
     }
 
-    Ok([titles, commands, options])
+    Ok([titles.clone(), titles, commands, options])
+}
+
+fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
+    let mut buf = String::new();
+    File::open(config_file)?.read_to_string(&mut buf)?;
+    let toml = buf.parse::<Table>().unwrap();
+
+    let get_field = |key| {
+        toml.values()
+            .map(|val| {
+                val.get(key)
+                    .unwrap_or(&Value::String("".to_string()))
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let names = toml.keys().map(|k| k.to_string()).collect::<Vec<String>>();
+    let titles = get_field("title");
+    let options = get_field("options");
+    let commands = get_field("command")
+        .into_iter()
+        .zip(get_field("rules"))
+        .map(|(c, r)| {
+            if r.is_empty() {
+                c
+            } else {
+                format!("[{r}] {c}")
+            }
+        })
+        .collect();
+
+    Ok([names, titles, commands, options])
 }
 
 #[cfg(test)]
@@ -199,7 +249,8 @@ mod tests {
     use std::fs::File;
 
     #[test]
-    fn test_parse_config() {
+    fn test_parse_toml() {
+        let expected_names = vec!["btop", "nautilus", "noname", "wierd"];
         let expected_titles = vec![
             "btop",
             "Loading…",
@@ -219,9 +270,46 @@ mod tests {
             "hide summon",
         ];
 
-        let [titles, commands, options] =
+        let [names, titles, commands, options] =
+            parse_toml(&"./test_configs/test_toml.toml".to_owned()).unwrap();
+
+        assert_eq!(names, expected_names);
+        assert_eq!(titles, expected_titles);
+        assert_eq!(commands, expected_commands);
+        assert_eq!(options, expected_options);
+    }
+
+    #[test]
+    fn test_parse_config() {
+        let expected_names = vec![
+            "btop",
+            "Loading…",
+            "\\\"",
+            " a program with ' a wierd ' name",
+        ];
+        let expected_titles = vec![
+            "btop",
+            "Loading…",
+            "\\\"",
+            " a program with ' a wierd ' name",
+        ];
+        let expected_commands = vec![
+            "[float;size 85% 85%;center] kitty --title btop -e btop",
+            "[float;size 70% 80%;center] nautilus",
+            "\\'",
+            " a \"command with\" \\'a wierd\\' format",
+        ];
+        let expected_options = vec![
+            "cover persist sticky shiny eager summon hide poly special",
+            "",
+            "cover eager special",
+            "hide summon",
+        ];
+
+        let [names, titles, commands, options] =
             parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
 
+        assert_eq!(names, expected_names);
         assert_eq!(titles, expected_titles);
         assert_eq!(commands, expected_commands);
         assert_eq!(options, expected_options);
@@ -239,6 +327,12 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         let mut config = Config::new(Some(config_file.clone())).unwrap();
         let expected_config = Config {
             config_file,
+            names: vec![
+                "firefox".to_string(),
+                "btop".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
@@ -289,6 +383,12 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
         config.reload(Some(config_file.clone())).unwrap();
         let expected_config = Config {
             config_file,
+            names: vec![
+                "firefox".to_string(),
+                "btop".to_string(),
+                "htop".to_string(),
+                "cmatrix".to_string(),
+            ],
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
