@@ -362,6 +362,10 @@ mod tests {
         test_handle("c?0", "btop:kitty --title btop -e btop:");
         test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
+        test_handle("t", "empty");
+        test_handle("t?unknown", "empty");
+        test_handle("t?btop", "btop:kitty --title btop -e btop:");
+
         test_handle("p?cmatrix", "btop:kitty --title btop -e btop:");
         test_handle("p?htop", "cmatrix:kitty --title cmatrix -e cmatrix:special");
 
