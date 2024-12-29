@@ -23,7 +23,14 @@ pub struct Config {
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
         let home = var("HOME").unwrap_log(file!(), line!());
-        let config_file = config_path.unwrap_or(home + "/.config/hypr/hyprland.conf");
+        let default_config_file =
+            if Path::new(format!("{home}/.config/hypr/hyprscratch.toml").as_str()).exists() {
+                format!("{home}/.config/hypr/hyprscratch.toml")
+            } else {
+                format!("{home}/.config/hypr/hyprland.conf")
+            };
+
+        let config_file = config_path.unwrap_or(default_config_file);
 
         let [names, titles, commands, options] = if Path::new(&config_file)
             .extension()
