@@ -1,5 +1,5 @@
 # Hyprscratch
-A small tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, configured entirely inside of `hyprland.conf`.
+A small tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, that can be configured entirely inside of `hyprland.conf`.
 
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
@@ -31,9 +31,11 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Daemon options:
 
-* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating cients.
+* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating clients.
 
 * `no-auto-reload`: does not reload the configuration when the configuration file is updated.
+
+* `config /path/to/config`: specify a path to the configuration file
 
 ### Scratchpad options:
 
@@ -59,6 +61,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
+* `call name`: calls the scratchpad with the given name
+
 * `previous`: summon the last used scratchpad that is not currently active.
 
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
@@ -72,6 +76,44 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 * `kill`: kills the hyprsctatch daemon
 
 * `logs`: show logs
+
+### Flag aliases:
+
+Some subcommands also have flag to be more convenient in the command line.
+
+```
+  -c, --config                 
+  -r, --reload                 
+  -g, --get-config             
+  -k, --kill                   
+  -l, --logs                   
+  -v, --version                
+  -h, --help
+ ```
+
+## Optional Configuration File
+If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hypr/hyprscratch.toml` and configure scratchpads in the following way:
+
+```toml
+[name]
+#Mandatory fields
+title="title"                        
+command="command"
+
+#Optional fields
+rules="rule1;rule2;rule3"            
+options = "option1 option2 option3"  
+```
+
+And in `hyprland.conf`:
+
+```
+exec-once = hyprscratch init
+
+bind = $mainMod, s, hyprscratch call name
+```
+
+The `rules` field is for Hyprland's windows rules and are separated with a `;` and the options are the scratchpad options listed above separated with an interval.
 
 ## Other Relevant Information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
