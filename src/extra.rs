@@ -54,7 +54,7 @@ pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn trigger(socket: Option<&str>, args: &[String]) -> Result<()> {
+pub fn call(socket: Option<&str>, args: &[String]) -> Result<()> {
     if args.len() <= 2 {
         log("No scratchpad title given to 'toggle'".to_string(), "WARN")?
     }
@@ -180,29 +180,40 @@ pub fn help() {
 DAEMON OPTIONS
   clean [spotless]            Hide scratchpads on workspace change [and focus change]
   no-auto-reload              Don't reload the configuration when the configuration file is updated
+  config /path/to/config      Specify a path to the configuration file             
 
 SCRATCHPAD OPTIONS
-  persist                     Prevent the scratchpad from beign replaced when a new one is summoned
+  persist                     Prevent the scratchpad from being replaced when a new one is summoned
   cover                       Prevent the scratchpad from replacing another one if one is already present
   sticky                      Prevent the scratchpad from being affected by 'clean'
   shiny                       Prevent the scratchpad from being affected by 'clean spotless'
   eager                       Spawn the scratchpads at the start of a Hyprland session
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
-  poly                        Toggles all scratchpads matching the title
+  poly                        Toggles all scratchpads matching the title simultaneously
   special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
+  call name                   Call the scratchpad with the given name
   previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
-  reload                      Reparse config file
   kill-all                    Close all scratchpads
+  reload                      Reparse config file
   get-config                  Print parsed config file
   kill                        Kill the hyprscratch daemon
   logs                        Print log file contents
   version                     Print current version
-  help                        Print this help message"
+  help                        Print this help message
+
+FLAG ALIASES
+  -c, --config                 
+  -r, --reload                 
+  -g, --get-config             
+  -k, --kill                   
+  -l, --logs                   
+  -v, --version                
+  -h, --help"
     )
 }
 
