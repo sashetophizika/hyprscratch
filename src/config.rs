@@ -169,7 +169,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
             "reload",
             "previous",
             "cycle",
-            "trigger",
+            "call",
             "get-config",
             "kill",
             "logs",

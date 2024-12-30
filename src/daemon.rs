@@ -113,7 +113,7 @@ fn handle_cycle(
     Ok(())
 }
 
-fn handle_trigger(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
+fn handle_call(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
     if request.len() <= 2 {
         stream.write_all(b"empty")?;
         return Ok(());
@@ -298,7 +298,7 @@ pub fn initialize_daemon(
                     b if b.starts_with("c") => {
                         handle_cycle(&mut stream, buf, conf, &mut cycle_index, &mut prev_titles)?
                     }
-                    b if b.starts_with("t") => handle_trigger(&mut stream, buf, conf)?,
+                    b if b.starts_with("t") => handle_call(&mut stream, buf, conf)?,
                     b if b.starts_with("s") => {
                         handle_scratchpad(&mut stream, buf, conf, &mut prev_titles)?
                     }
