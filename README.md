@@ -29,6 +29,8 @@ Example scratchpad:
 bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritty --title btop -e btop" eager
 ```
 
+## Configuration
+
 ### Daemon options:
 
 * `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating clients.
@@ -57,7 +59,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean spotless`.
 
-### Extra hyprscratch commands:
+### Extra subcommands:
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
@@ -73,13 +75,13 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `get-config`: prints out the parsed configuration.
 
-* `kill`: kills the hyprsctatch daemon
+* `kill`: kills the hyprscratch daemon
 
 * `logs`: show logs
 
 ### Flag aliases:
 
-Some subcommands also have flag to be more convenient in the command line.
+Some subcommands also have flags to be more convenient in the command line.
 
 ```
   -c, --config                 
@@ -91,18 +93,18 @@ Some subcommands also have flag to be more convenient in the command line.
   -h, --help
  ```
 
-## Optional Configuration File
+### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hypr/hyprscratch.toml` and configure scratchpads in the following way:
 
 ```toml
 [name]
 #Mandatory fields
-title="title"                        
-command="command"
+title = "title"                        
+command = "command"
 
 #Optional fields
-rules="rule1;rule2;rule3"            
-options = "option1 option2 option3"  
+options = "option1 option2 option3"
+rules = "rule1;rule2;rule3"
 ```
 
 And in `hyprland.conf`:
@@ -112,8 +114,6 @@ exec-once = hyprscratch init
 
 bind = $mainMod, s, hyprscratch call name
 ```
-
-The `rules` field is for Hyprland's windows rules and are separated with a `;` and the options are the scratchpad options listed above separated with an interval.
 
 ## Other Relevant Information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
