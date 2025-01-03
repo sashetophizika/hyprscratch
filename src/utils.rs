@@ -182,14 +182,15 @@ mod tests {
             titles: resources.titles.to_vec(),
             normal_titles: Vec::new(),
             special_titles: Vec::new(),
+            slick_titles: Vec::new(),
+            dirty_titles: Vec::new(),
+            non_persist_titles: resources.titles.to_vec(),
             commands: resources.commands.to_vec(),
             options: vec![
                 "onstart".to_string(),
                 "special onstart".to_string(),
                 "".to_string(),
             ],
-            slick_titles: Vec::new(),
-            dirty_titles: Vec::new(),
         };
 
         autospawn(&mut config).unwrap();
