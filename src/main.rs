@@ -26,14 +26,11 @@ fn flag_present(args: &[String], flag: &str) -> Option<String> {
     let long = format!("--{flag}");
     let short = flag.as_bytes()[0] as char;
 
-    if args.iter().any(|x| x == flag || *x == long) {
-        return Some(flag.to_string());
-    }
-
-    if args
-        .iter()
-        .any(|x| x.starts_with("-") && x.len() > 1 && !x[1..].starts_with("-") && x.contains(short))
-    {
+    if args.iter().any(|x| {
+        x == flag
+            || x == &long
+            || (x.len() > 1 && x.starts_with("-") && !x[1..].starts_with("-") && x.contains(short))
+    }) {
         return Some(flag.to_string());
     }
     None
@@ -83,12 +80,14 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     }
 
     match args.get(1).map_or("", |v| v.as_str()) {
-        "clean" | "no-auto-reload" | "init" => initialize_daemon(args, config, socket)?,
+        "clean" | "no-auto-reload" | "config" | "init" => initialize_daemon(args, config, socket)?,
         "hideall" | "hide-all" => hide_all(socket)?,
         "previous" => previous(socket)?,
         "kill-all" => kill_all(socket)?,
         "cycle" => cycle(socket, args.join(" "))?,
-        "call" => call(socket, args)?,
+        "toggle" => call(socket, args, "toggle")?,
+        "summon" => call(socket, args, "summon")?,
+        "hide" => call(socket, args, "hide")?,
         "" => {
             log(
                 "Initializing the daemon with no arguments is deprecated".to_string(),
@@ -97,7 +96,6 @@ fn hyprscratch(args: &[String]) -> Result<()> {
             println!("Use 'hyprscratch init'.");
             initialize_daemon(args, config, socket)?;
         }
-
         s if s.starts_with("-") => {
             log("Unknown flags".to_string(), "Error")?;
             help();
