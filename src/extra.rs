@@ -31,7 +31,7 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
 
 pub fn hide_all(socket: Option<&str>) -> Result<()> {
     let mut titles = String::new();
-    let mut stream = connect_to_sock(socket, "s")?;
+    let mut stream = connect_to_sock(socket, "scratchpad?")?;
     stream.read_to_string(&mut titles)?;
 
     move_floating(titles.split(" ").map(|x| x.to_string()).collect())?;
@@ -44,49 +44,52 @@ pub fn hide_all(socket: Option<&str>) -> Result<()> {
 
 pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
     let request = if args.contains("special") {
-        "c?1"
+        "cycle?1"
     } else if args.contains("normal") {
-        "c?0"
+        "cycle?0"
     } else {
-        "c"
+        "cycle?"
     };
     let mut stream = connect_to_sock(socket, request)?;
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn call(socket: Option<&str>, args: &[String]) -> Result<()> {
+pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
     if args.len() <= 2 {
         log("No scratchpad title given to 'toggle'".to_string(), "WARN")?
     }
 
     let title = args[2].clone();
-    let mut stream = connect_to_sock(socket, format!("t?{title}").as_str())?;
+    let mut stream = connect_to_sock(socket, format!("{mode}?{title}").as_str())?;
     pass_to_scratchpad(&mut stream)
 }
 
 pub fn previous(socket: Option<&str>) -> Result<()> {
     let active_title = Client::get_active()?.unwrap().initial_title;
-    let mut stream = connect_to_sock(socket, format!("p?{active_title}").as_str())?;
+    let mut stream = connect_to_sock(socket, format!("previous?{active_title}").as_str())?;
     pass_to_scratchpad(&mut stream)
 }
 
 pub fn reload(socket: Option<&str>, config: Option<String>) -> Result<()> {
-    connect_to_sock(socket, &format!("l?{}", config.unwrap_or("".to_string())))?;
+    connect_to_sock(
+        socket,
+        &format!("reload?{}", config.unwrap_or("".to_string())),
+    )?;
     Ok(())
 }
 
 pub fn kill(socket: Option<&str>) -> Result<()> {
-    connect_to_sock(socket, "kill")?;
+    connect_to_sock(socket, "kill?")?;
     Ok(())
 }
 
 pub fn kill_all(socket: Option<&str>) -> Result<()> {
-    connect_to_sock(socket, "killall")?;
+    connect_to_sock(socket, "killall?")?;
     Ok(())
 }
 
 pub fn get_config(socket: Option<&str>) -> Result<()> {
-    let mut socket = connect_to_sock(socket, "get-config")?;
+    let mut socket = connect_to_sock(socket, "get-config?")?;
     let mut buf = String::new();
     socket.read_to_string(&mut buf)?;
 
@@ -195,7 +198,9 @@ SCRATCHPAD OPTIONS
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
-  call name                   Call the scratchpad with the given name
+  toggle name                 Toggles the scratchpad with the given name
+  summon name                 Summons the scratchpad with the given name
+  hide name                   Hides the scratchpad with the given name
   previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
   kill-all                    Close all scratchpads
