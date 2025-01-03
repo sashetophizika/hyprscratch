@@ -79,22 +79,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `logs`: show logs
 
-### Flag aliases:
-
-Some subcommands also have flags to be more convenient in the command line.
-
-```
-  -c, --config                 
-  -r, --reload                 
-  -g, --get-config             
-  -k, --kill                   
-  -l, --logs                   
-  -v, --version                
-  -h, --help
- ```
-
 ### Optional Configuration File
-If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hypr/hyprscratch.toml` and configure scratchpads in the following way:
+If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hyprscratch/config.toml` or `~/.config/hypr/hyprscratch.toml` and configure scratchpads in the following way:
 
 ```toml
 [name]
