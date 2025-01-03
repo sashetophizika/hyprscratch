@@ -5,6 +5,7 @@ use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::prelude::*;
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
 fn summon_special(
@@ -90,8 +91,8 @@ fn summon(
 }
 
 fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()> {
-    if !options.contains(&"cover".to_string())
-        && !options.contains(&"stack".to_string())
+    if !options.contains("cover")
+        && !options.contains("stack")
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
@@ -104,15 +105,15 @@ fn remove_temp_shiny(title: &str, options: &str) -> Result<()> {
     if !options.contains("shiny") {
         let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
         stream.write_all(format!("r?{title}").as_bytes())?;
-        stream.shutdown(std::net::Shutdown::Write)?;
+        stream.shutdown(Shutdown::Write)?;
     }
     Ok(())
 }
 
 pub fn scratchpad(title: &str, command: &str, options: &str, socket: Option<&str>) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
-    stream.write_all(format!("s?{title}").as_bytes())?;
-    stream.shutdown(std::net::Shutdown::Write)?;
+    stream.write_all(format!("scratchpad?{title}").as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
 
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
