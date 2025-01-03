@@ -40,7 +40,7 @@ impl<T> LogErr<T> for LockResult<T> {
         match self {
             Ok(t) => t,
             Err(err) => {
-                let msg = format!("Error: {} at {}:{}", err, file, line);
+                let msg = format!("{} at {}:{}", err, file, line);
                 log(msg.clone(), "ERROR").unwrap();
                 panic!()
             }
