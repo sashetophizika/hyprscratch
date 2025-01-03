@@ -16,21 +16,14 @@ pub struct Config {
     pub special_titles: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
+    pub non_persist_titles: Vec<String>,
     pub commands: Vec<String>,
     pub options: Vec<String>,
 }
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let home = var("HOME").unwrap_log(file!(), line!());
-        let default_config_file =
-            if Path::new(format!("{home}/.config/hypr/hyprscratch.toml").as_str()).exists() {
-                format!("{home}/.config/hypr/hyprscratch.toml")
-            } else {
-                format!("{home}/.config/hypr/hyprland.conf")
-            };
-
-        let config_file = config_path.unwrap_or(default_config_file);
+        let config_file = config_path.unwrap_or(find_config_file());
 
         let [names, titles, commands, options] = if Path::new(&config_file)
             .extension()
@@ -51,15 +44,17 @@ impl Config {
                 .map(|(title, _)| title)
                 .collect::<Vec<_>>()
         };
+        let contains_any =
+            |opts: &String, s: &[&str]| -> bool { opts.split(" ").any(|o| s.contains(&o)) };
 
         let normal_titles = filter_titles(&|opts: &String| !opts.contains("special"));
         let special_titles = filter_titles(&|opts: &String| opts.contains("special"));
         let slick_titles = filter_titles(&|opts: &String| !opts.contains("sticky"));
-        let dirty_titles = filter_titles(&|opts: &String| {
-            !opts
-                .split(" ")
-                .any(|x| ["sticky", "special", "shiny"].contains(&x))
-        });
+
+        let non_persist_titles =
+            filter_titles(&|opts: &String| !contains_any(opts, &["persist", "special"]));
+        let dirty_titles =
+            filter_titles(&|opts: &String| !contains_any(opts, &["sticky", "shiny", "special"]));
 
         Ok(Config {
             config_file,
@@ -69,6 +64,7 @@ impl Config {
             special_titles,
             slick_titles,
             dirty_titles,
+            non_persist_titles,
             commands,
             options,
         })
@@ -81,6 +77,20 @@ impl Config {
         };
         Ok(())
     }
+}
+
+fn find_config_file() -> String {
+    let home = var("HOME").unwrap_log(file!(), line!());
+    let paths = vec![
+        format!("{home}/.config/hyprscratch/config.toml"),
+        format!("{home}/.config/hyprscratch/hyprscratch.toml"),
+        format!("{home}/.config/hypr/hyprscratch.toml"),
+    ];
+
+    paths
+        .into_iter()
+        .find(|p| Path::new(p.as_str()).exists())
+        .unwrap_or(format!("{home}/.config/hypr/hyprland.conf"))
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -328,7 +338,7 @@ mod tests {
         config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager summon hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' eager").unwrap();
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager").unwrap();
 
         let config_file = "./test_configs/test_config2.txt".to_string();
         let mut config = Config::new(Some(config_file.clone())).unwrap();
@@ -338,21 +348,21 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
-            normal_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
             special_titles: vec!["btop".to_string(), "htop".to_string()],
             commands: vec![
                 "firefox".to_string(),
                 "kitty --title btop -e btop".to_string(),
                 "kitty --title htop -e htop".to_string(),
-                "kitty --title cmatrix -e cmatrix".to_string(),
+                "kitty --title cmat -e cmat".to_string(),
             ],
             options: vec![
                 "cover".to_string(),
@@ -363,9 +373,15 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
             slick_titles: vec![
                 "firefox".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
-            dirty_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            dirty_titles: vec!["firefox".to_string(), "cmat".to_string()],
+            non_persist_titles: vec![
+                "firefox".to_string(),
+                "btop".to_string(),
+                "htop".to_string(),
+                "cmat".to_string(),
+            ],
         };
 
         assert_eq!(config.titles, expected_config.titles);
@@ -382,7 +398,7 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
-bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix' special",
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special",
             )
             .unwrap();
 
@@ -394,21 +410,21 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
             titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
             normal_titles: vec!["btop".to_string(), "htop".to_string()],
-            special_titles: vec!["firefox".to_string(), "cmatrix".to_string()],
+            special_titles: vec!["firefox".to_string(), "cmat".to_string()],
             commands: vec![
                 "firefox --private-window".to_string(),
                 "kitty --title btop -e btop".to_string(),
                 "kitty --title htop -e htop".to_string(),
-                "kitty --title cmatrix -e cmatrix".to_string(),
+                "kitty --title cmat -e cmat".to_string(),
             ],
             options: vec![
                 "special sticky".to_string(),
@@ -416,12 +432,14 @@ bind = $mainMod, d, exec, hyprscratch cmatrix 'kitty --title cmatrix -e cmatrix'
                 "cover shiny".to_string(),
                 "special".to_string(),
             ],
-            slick_titles: vec![
+            slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
+            dirty_titles: vec!["btop".to_string()],
+            non_persist_titles: vec![
+                "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
-                "cmatrix".to_string(),
+                "cmat".to_string(),
             ],
-            dirty_titles: vec!["btop".to_string()],
         };
 
         assert_eq!(config.titles, expected_config.titles);
