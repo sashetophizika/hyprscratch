@@ -16,41 +16,30 @@ use std::thread;
 
 fn handle_scratchpad(
     stream: &mut UnixStream,
-    request: String,
+    msg: &str,
     config: &mut Config,
     prev_titles: &mut [String; 2],
 ) -> Result<()> {
-    if request.len() > 2 {
-        config.dirty_titles.retain(|x| *x != request[2..]);
-        if request[2..] != prev_titles[0] {
+    if !msg.is_empty() {
+        config.dirty_titles.retain(|x| *x != msg);
+        if msg != prev_titles[0] {
             prev_titles[1] = prev_titles[0].clone();
-            prev_titles[0] = request[2..].to_string();
+            prev_titles[0] = msg.to_string();
         }
     }
 
-    let non_persist_titles = config
-        .normal_titles
-        .clone()
-        .into_iter()
-        .zip(config.options.clone())
-        .filter(|(_, option)| !option.contains("persist"))
-        .map(|(title, _)| title)
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    stream.write_all(non_persist_titles.as_bytes())?;
+    stream.write_all(config.non_persist_titles.join(" ").as_bytes())?;
     Ok(())
 }
 
-fn handle_return(request: String, config: &mut Config) -> Result<()> {
-    config.dirty_titles.push(request[2..].to_string());
+fn handle_return(msg: &str, config: &mut Config) -> Result<()> {
+    config.dirty_titles.push(msg.to_string());
     Ok(())
 }
 
-fn handle_reload(request: String, config: &mut Config) -> Result<()> {
-    println!("{request}");
-    let config_path = if request.len() > 2 && Path::new(&request[2..]).exists() {
-        Some(request[2..].to_string())
+fn handle_reload(msg: &str, config: &mut Config) -> Result<()> {
+    let config_path = if !msg.is_empty() && Path::new(msg).exists() {
+        Some(msg.to_string())
     } else {
         None
     };
@@ -72,7 +61,7 @@ fn handle_killall(config: &Config) -> Result<()> {
 
 fn handle_cycle(
     stream: &mut UnixStream,
-    request: String,
+    msg: &str,
     config: &Config,
     cycle_index: &mut usize,
     prev_titles: &mut [String; 2],
@@ -82,10 +71,10 @@ fn handle_cycle(
     }
 
     let mut current_index = *cycle_index % config.titles.len();
-    let mode = if request.len() <= 2 {
+    let mode = if msg.is_empty() {
         None
     } else {
-        Some((request.as_bytes()[2] - 48) != 0)
+        Some(msg.as_bytes()[0] != 48)
     };
 
     if let Some(m) = mode {
@@ -113,23 +102,19 @@ fn handle_cycle(
     Ok(())
 }
 
-fn handle_call(stream: &mut UnixStream, request: String, config: &Config) -> Result<()> {
-    if request.len() <= 2 {
+fn handle_call(stream: &mut UnixStream, msg: &str, config: &Config, req: &str) -> Result<()> {
+    if msg.is_empty() {
         stream.write_all(b"empty")?;
         return Ok(());
     }
 
-    let index = config
-        .names
-        .clone()
-        .into_iter()
-        .position(|x| x == request[2..]);
+    let index = config.names.clone().into_iter().position(|x| x == msg);
 
     if let Some(i) = index {
-        let scratchpad = format!(
-            "{}:{}:{}",
-            config.titles[i], config.commands[i], config.options[i]
-        );
+        let mut options = config.options[i].clone();
+        options.push_str(req);
+
+        let scratchpad = format!("{}:{}:{}", config.titles[i], config.commands[i], options);
         stream.write_all(scratchpad.as_bytes())?;
     } else {
         stream.write_all(b"empty")?;
@@ -140,17 +125,17 @@ fn handle_call(stream: &mut UnixStream, request: String, config: &Config) -> Res
 
 fn handle_previous(
     stream: &mut UnixStream,
-    request: String,
+    msg: &str,
     config: &Config,
     prev_titles: &mut [String; 2],
 ) -> Result<()> {
-    if request.len() <= 2 {
+    if msg.is_empty() {
         stream.write_all(b"empty")?;
         return Ok(());
     }
 
-    let previous_active = (request[2..] == prev_titles[0]) as usize;
-    if prev_titles[previous_active].is_empty() {
+    let prev_active = (msg == prev_titles[0]) as usize;
+    if prev_titles[prev_active].is_empty() {
         stream.write_all(b"empty")?;
         return Ok(());
     }
@@ -159,7 +144,7 @@ fn handle_previous(
         .titles
         .clone()
         .into_iter()
-        .position(|x| x == prev_titles[previous_active]);
+        .position(|x| x == prev_titles[prev_active]);
 
     if let Some(prev_index) = index {
         let prev_scratchpad = format!(
@@ -286,24 +271,22 @@ pub fn initialize_daemon(
                 stream.read_to_string(&mut buf)?;
 
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
-                match buf.as_str() {
-                    "kill" => break,
+                let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
+
+                match req {
+                    "toggle" | "summon" | "hide" => handle_call(&mut stream, msg, conf, req)?,
                     "get-config" => handle_get_config(&mut stream, conf)?,
+                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, &mut prev_titles)?,
+                    "previous" => handle_previous(&mut stream, msg, conf, &mut prev_titles)?,
                     "killall" => handle_killall(conf)?,
-                    b if b.starts_with("l") => handle_reload(buf, conf)?,
-                    b if b.starts_with("p") => {
-                        handle_previous(&mut stream, buf, conf, &mut prev_titles)?
+                    "return" => handle_return(msg, conf)?,
+                    "reload" => handle_reload(msg, conf)?,
+                    "cycle" => {
+                        handle_cycle(&mut stream, msg, conf, &mut cycle_index, &mut prev_titles)?
                     }
-                    b if b.starts_with("r") => handle_return(buf, conf)?,
-                    b if b.starts_with("c") => {
-                        handle_cycle(&mut stream, buf, conf, &mut cycle_index, &mut prev_titles)?
-                    }
-                    b if b.starts_with("t") => handle_call(&mut stream, buf, conf)?,
-                    b if b.starts_with("s") => {
-                        handle_scratchpad(&mut stream, buf, conf, &mut prev_titles)?
-                    }
-                    e => {
-                        let error_message = format!("Daemon: unknown request - {e}");
+                    "kill" => break,
+                    _ => {
+                        let error_message = format!("Daemon: unknown request - {buf}");
                         stream.write_all(error_message.as_bytes()).unwrap();
                         log(error_message, "ERROR")?;
                     }
@@ -358,25 +341,28 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        test_handle("c", "firefox:firefox --private-window:special sticky");
-        test_handle("c?0", "btop:kitty --title btop -e btop:");
-        test_handle("c?1", "cmatrix:kitty --title cmatrix -e cmatrix:special");
+        test_handle("cycle?", "firefox:firefox --private-window:special sticky");
+        test_handle("cycle?0", "btop:kitty --title btop -e btop:");
+        test_handle("cycle?1", "cmat:kitty --title cmat -e cmat:special");
 
-        test_handle("t", "empty");
-        test_handle("t?unknown", "empty");
-        test_handle("t?btop", "btop:kitty --title btop -e btop:");
+        test_handle("toggle?", "empty");
+        test_handle("toggle?unknown", "empty");
+        test_handle("toggle?btop", "btop:kitty --title btop -e btop:toggle");
 
-        test_handle("p?cmatrix", "btop:kitty --title btop -e btop:");
-        test_handle("p?htop", "cmatrix:kitty --title cmatrix -e cmatrix:special");
+        test_handle("previous?cmat", "btop:kitty --title btop -e btop:");
+        test_handle("previous?htop", "cmat:kitty --title cmat -e cmat:special");
 
-        test_handle("s?btop", "btop htop");
-        test_handle("r?btop", "");
+        test_handle("summon?btop", "btop:kitty --title btop -e btop:summon");
+        test_handle("hide?btop", "btop:kitty --title btop -e btop:hide");
 
-        test_handle("reload", "");
-        test_handle("killall", "");
+        test_handle("scratchpad?btop", "btop htop");
+        test_handle("return?btop", "");
 
-        test_handle("unknown", "Daemon: unknown request - unknown");
-        test_handle("kill", "");
+        test_handle("reload?", "");
+        test_handle("killall?", "");
+
+        test_handle("?unknown", "Daemon: unknown request - ?unknown");
+        test_handle("kill?", "");
     }
 
     struct TestResources {
