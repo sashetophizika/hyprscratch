@@ -181,7 +181,8 @@ pub fn help() {
     hyprscratch title command [options...]
 
 DAEMON OPTIONS
-  clean [spotless]            Hide scratchpads on workspace change [and focus change]
+  clean                       Hide scratchpads on workspace change
+  spotless                    Hide scratchpads on focus change
   no-auto-reload              Don't reload the configuration when the configuration file is updated
   config /path/to/config      Specify a path to the configuration file             
 
