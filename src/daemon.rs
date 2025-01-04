@@ -133,12 +133,13 @@ fn handle_call(stream: &mut UnixStream, msg: &str, config: &Config, req: &str) -
         return Ok(());
     }
 
-    let index = config.names.clone().into_iter().position(|x| x == msg);
+    let i = config.names.clone().into_iter().position(|x| x == msg);
 
-    if let Some(i) = index {
+    if let Some(i) = i {
         let mut options = config.options[i].clone();
         options.push_str(req);
-        write_scratchpad(i, config, stream)?;
+        let scratchpad = format!("{}:{}:{}", config.titles[i], config.commands[i], options);
+        stream.write_all(scratchpad.as_bytes())?;
     } else {
         stream.write_all(b"empty")?;
     }
