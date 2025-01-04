@@ -122,11 +122,7 @@ fn handle_cycle(
         state.prev_titles[0] = config.titles[current_index].clone();
     }
 
-    let next_scratchpad = format!(
-        "{}:{}:{}",
-        config.titles[current_index], config.commands[current_index], config.options[current_index]
-    );
-    stream.write_all(next_scratchpad.as_bytes())?;
+    write_scratchpad(current_index, config, stream)?;
     state.cycle_index = current_index + 1;
     Ok(())
 }
@@ -142,9 +138,7 @@ fn handle_call(stream: &mut UnixStream, msg: &str, config: &Config, req: &str) -
     if let Some(i) = index {
         let mut options = config.options[i].clone();
         options.push_str(req);
-
-        let scratchpad = format!("{}:{}:{}", config.titles[i], config.commands[i], options);
-        stream.write_all(scratchpad.as_bytes())?;
+        write_scratchpad(i, config, stream)?;
     } else {
         stream.write_all(b"empty")?;
     }
@@ -175,16 +169,21 @@ fn handle_previous(
         .into_iter()
         .position(|x| x == state.prev_titles[prev_active]);
 
-    if let Some(prev_index) = index {
-        let prev_scratchpad = format!(
-            "{}:{}:{}",
-            config.titles[prev_index], config.commands[prev_index], config.options[prev_index]
-        );
-        stream.write_all(prev_scratchpad.as_bytes())?;
+    if let Some(i) = index {
+        write_scratchpad(i, config, stream)?;
     } else {
         stream.write_all(b"empty")?;
     }
 
+    Ok(())
+}
+
+fn write_scratchpad(index: usize, config: &Config, stream: &mut UnixStream) -> Result<()> {
+    let scratchpad = format!(
+        "{}:{}:{}",
+        config.titles[index], config.commands[index], config.options[index]
+    );
+    stream.write_all(scratchpad.as_bytes())?;
     Ok(())
 }
 
