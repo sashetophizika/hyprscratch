@@ -8,6 +8,30 @@ use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
+struct Options {
+    summon: bool,
+    hide: bool,
+    poly: bool,
+    cover: bool,
+    stack: bool,
+    shiny: bool,
+    special: bool,
+}
+
+impl Options {
+    fn new(options: &str) -> Options {
+        Options {
+            summon: options.contains("summon"),
+            hide: options.contains("hide"),
+            poly: options.contains("poly"),
+            cover: options.contains("cover"),
+            stack: options.contains("stack"),
+            shiny: options.contains("shiny"),
+            special: options.contains("special"),
+        }
+    }
+}
+
 fn summon_special(
     title: &str,
     command: &str,
@@ -43,7 +67,7 @@ fn summon_special(
 
 fn summon_normal(
     command: &str,
-    options: &str,
+    options: &Options,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
@@ -62,7 +86,7 @@ fn summon_normal(
                 Some(WindowIdentifier::Address(client.address.clone()))
             )
             .unwrap_log(file!(), line!());
-            if !options.contains("poly") {
+            if !options.poly {
                 break;
             }
         }
@@ -78,21 +102,21 @@ fn summon_normal(
 fn summon(
     title: &str,
     command: &str,
-    options: &str,
+    options: &Options,
     active_workspace: &Workspace,
     clients_with_title: &[Client],
 ) -> Result<()> {
-    if options.contains("special") {
+    if options.special {
         summon_special(title, command, active_workspace, clients_with_title)?;
-    } else if !options.contains("hide") {
+    } else if !options.hide {
         summon_normal(command, options, active_workspace, clients_with_title)?;
     }
     Ok(())
 }
 
-fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()> {
-    if !options.contains("cover")
-        && !options.contains("stack")
+fn hide_active(options: &Options, titles: &str, active_client: &Client) -> Result<()> {
+    if !options.cover
+        && !options.stack
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
@@ -101,20 +125,21 @@ fn hide_active(options: &str, titles: &str, active_client: &Client) -> Result<()
     Ok(())
 }
 
-fn remove_temp_shiny(title: &str, options: &str) -> Result<()> {
-    if !options.contains("shiny") {
+fn remove_temp_shiny(title: &str, options: &Options) -> Result<()> {
+    if !options.shiny {
         let mut stream = UnixStream::connect("/tmp/hyprscratch/hyprscratch.sock")?;
-        stream.write_all(format!("r?{title}").as_bytes())?;
+        stream.write_all(format!("return?{title}").as_bytes())?;
         stream.shutdown(Shutdown::Write)?;
     }
     Ok(())
 }
 
-pub fn scratchpad(title: &str, command: &str, options: &str, socket: Option<&str>) -> Result<()> {
+pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all(format!("scratchpad?{title}").as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
 
+    let options = Options::new(opts);
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
 
@@ -131,21 +156,19 @@ pub fn scratchpad(title: &str, command: &str, options: &str, socket: Option<&str
             .filter(|x| x.workspace.id == active_workspace.id)
             .peekable();
 
-        if options.contains("special")
-            || options.contains("summon")
-            || clients_on_active.peek().is_none()
-        {
-            hide_active(options, &titles, &active_client)?;
+        if options.special || clients_on_active.peek().is_none() {
+            hide_active(&options, &titles, &active_client)?;
             summon(
                 title,
                 command,
-                options,
+                &options,
                 &active_workspace,
                 &clients_with_title,
             )?;
-        } else if !active_client.floating
+        } else if (!active_client.floating
             || active_client.initial_title == title
-            || active_client.fullscreen == FullscreenMode::None
+            || active_client.fullscreen == FullscreenMode::None)
+            && !options.summon
         {
             clients_on_active.for_each(|x| move_to_special(&x).unwrap());
         } else {
@@ -158,14 +181,14 @@ pub fn scratchpad(title: &str, command: &str, options: &str, socket: Option<&str
         summon(
             title,
             command,
-            options,
+            &options,
             &active_workspace,
             &clients_with_title,
         )?;
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
-    remove_temp_shiny(title, options)?;
+    remove_temp_shiny(title, &options)?;
     Ok(())
 }
 
@@ -210,7 +233,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
-            "",
+            &Options::new(""),
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
@@ -220,7 +243,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("", &resources.title, &active_client).unwrap();
+        hide_active(&Options::new(""), &resources.title, &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -244,7 +267,7 @@ mod tests {
         let active_workspace = Workspace::get_active().unwrap();
         summon_normal(
             &resources.command,
-            "",
+            &Options::new(""),
             &active_workspace,
             &clients_with_title,
         )
@@ -349,7 +372,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
-            "",
+            &Options::new(""),
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
@@ -359,7 +382,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("cover", &resources.title, &active_client).unwrap();
+        hide_active(&Options::new("cover"), &resources.title, &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         let active_client = Client::get_active().unwrap().unwrap();
@@ -384,7 +407,7 @@ mod tests {
         let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
-            "",
+            &Options::new(""),
             &Workspace::get_active().unwrap(),
             &clients_with_title,
         )
@@ -394,7 +417,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active("", "", &active_client).unwrap();
+        hide_active(&Options::new(""), "", &active_client).unwrap();
         sleep(Duration::from_millis(1000));
 
         assert!(Clients::get()
@@ -408,7 +431,7 @@ mod tests {
     fn test_poly() {
         std::thread::spawn(|| {
             initialize_daemon(
-                &["".to_string()],
+                "".to_string(),
                 Some("test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
@@ -462,7 +485,7 @@ mod tests {
     fn test_summon_hide() {
         std::thread::spawn(|| {
             initialize_daemon(
-                &["".to_string()],
+                "".to_string(),
                 Some("test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )

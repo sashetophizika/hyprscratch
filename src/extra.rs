@@ -56,7 +56,7 @@ pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
 
 pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
     if args.len() <= 2 {
-        log("No scratchpad title given to 'toggle'".to_string(), "WARN")?
+        log(format!("No scratchpad title given to '{mode}'"), "WARN")?
     }
 
     let title = args[2].clone();
@@ -233,7 +233,7 @@ mod tests {
     fn test_extra_commands() {
         std::thread::spawn(|| {
             initialize_daemon(
-                &["".to_string()],
+                "".to_string(),
                 Some("test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )

@@ -14,17 +14,47 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+struct DaemonState {
+    cycle_index: usize,
+    prev_titles: [String; 2],
+}
+
+impl DaemonState {
+    fn new() -> DaemonState {
+        DaemonState {
+            cycle_index: 0,
+            prev_titles: [String::new(), String::new()],
+        }
+    }
+}
+
+struct DaemonOptions {
+    clean: bool,
+    spotless: bool,
+    auto_reload: bool,
+}
+
+impl DaemonOptions {
+    fn new(opts: &str) -> DaemonOptions {
+        DaemonOptions {
+            clean: opts.contains("clean"),
+            spotless: opts.contains("spotless"),
+            auto_reload: !opts.contains("no-auto-reload"),
+        }
+    }
+}
+
 fn handle_scratchpad(
     stream: &mut UnixStream,
     msg: &str,
     config: &mut Config,
-    prev_titles: &mut [String; 2],
+    state: &mut DaemonState,
 ) -> Result<()> {
     if !msg.is_empty() {
         config.dirty_titles.retain(|x| *x != msg);
-        if msg != prev_titles[0] {
-            prev_titles[1] = prev_titles[0].clone();
-            prev_titles[0] = msg.to_string();
+        if msg != state.prev_titles[0] {
+            state.prev_titles[1] = state.prev_titles[0].clone();
+            state.prev_titles[0] = msg.to_string();
         }
     }
 
@@ -63,14 +93,13 @@ fn handle_cycle(
     stream: &mut UnixStream,
     msg: &str,
     config: &Config,
-    cycle_index: &mut usize,
-    prev_titles: &mut [String; 2],
+    state: &mut DaemonState,
 ) -> Result<()> {
     if config.titles.is_empty() {
         return Ok(());
     }
 
-    let mut current_index = *cycle_index % config.titles.len();
+    let mut current_index = state.cycle_index % config.titles.len();
     let mode = if msg.is_empty() {
         None
     } else {
@@ -88,9 +117,9 @@ fn handle_cycle(
         }
     }
 
-    if config.titles[current_index] != prev_titles[0] {
-        prev_titles[1] = prev_titles[0].clone();
-        prev_titles[0] = config.titles[current_index].clone();
+    if config.titles[current_index] != state.prev_titles[0] {
+        state.prev_titles[1] = state.prev_titles[0].clone();
+        state.prev_titles[0] = config.titles[current_index].clone();
     }
 
     let next_scratchpad = format!(
@@ -98,7 +127,7 @@ fn handle_cycle(
         config.titles[current_index], config.commands[current_index], config.options[current_index]
     );
     stream.write_all(next_scratchpad.as_bytes())?;
-    *cycle_index = current_index + 1;
+    state.cycle_index = current_index + 1;
     Ok(())
 }
 
@@ -127,15 +156,15 @@ fn handle_previous(
     stream: &mut UnixStream,
     msg: &str,
     config: &Config,
-    prev_titles: &mut [String; 2],
+    state: &mut DaemonState,
 ) -> Result<()> {
     if msg.is_empty() {
         stream.write_all(b"empty")?;
         return Ok(());
     }
 
-    let prev_active = (msg == prev_titles[0]) as usize;
-    if prev_titles[prev_active].is_empty() {
+    let prev_active = (msg == state.prev_titles[0]) as usize;
+    if state.prev_titles[prev_active].is_empty() {
         stream.write_all(b"empty")?;
         return Ok(());
     }
@@ -144,7 +173,7 @@ fn handle_previous(
         .titles
         .clone()
         .into_iter()
-        .position(|x| x == prev_titles[prev_active]);
+        .position(|x| x == state.prev_titles[prev_active]);
 
     if let Some(prev_index) = index {
         let prev_scratchpad = format!(
@@ -159,13 +188,11 @@ fn handle_previous(
     Ok(())
 }
 
-fn clean(spotless: bool, config: Arc<Mutex<Config>>) -> Result<()> {
+fn clean(config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
-
-    let config1 = Arc::clone(&config);
     ev.add_workspace_changed_handler(move |_| {
         move_floating(
-            config1
+            config
                 .lock()
                 .unwrap_log(file!(), line!())
                 .slick_titles
@@ -180,24 +207,26 @@ fn clean(spotless: bool, config: Arc<Mutex<Config>>) -> Result<()> {
             }
         }
     });
+    ev.start_listener()?;
+    Ok(())
+}
 
-    let config2 = Arc::clone(&config);
-    if spotless {
-        ev.add_active_window_changed_handler(move |_| {
-            if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
-                if !cl.floating {
-                    move_floating(
-                        config2
-                            .lock()
-                            .unwrap_log(file!(), line!())
-                            .dirty_titles
-                            .clone(),
-                    )
-                    .unwrap_log(file!(), line!());
-                }
+fn spotless(config: Arc<Mutex<Config>>) -> Result<()> {
+    let mut ev = EventListener::new();
+    ev.add_active_window_changed_handler(move |_| {
+        if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
+            if !cl.floating {
+                move_floating(
+                    config
+                        .lock()
+                        .unwrap_log(file!(), line!())
+                        .dirty_titles
+                        .clone(),
+                )
+                .unwrap_log(file!(), line!());
             }
-        });
-    }
+        }
+    });
 
     ev.start_listener()?;
     Ok(())
@@ -217,29 +246,35 @@ fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
     Ok(())
 }
 
-pub fn initialize_daemon(
-    args: &[String],
-    config_path: Option<String>,
-    socket_path: Option<&str>,
-) -> Result<()> {
-    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
-    let mut cycle_index: usize = 0;
-    let mut prev_titles: [String; 2] = [String::new(), String::new()];
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
-
-    if !args.contains(&"no-auto-reload".to_string()) {
+fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) {
+    if options.auto_reload {
         let config_clone = Arc::clone(&config);
         thread::spawn(move || auto_reload(config_clone));
     }
 
-    if args.contains(&"clean".to_string()) {
+    if options.clean {
         let config_clone = Arc::clone(&config);
-        if args[1..].contains(&"spotless".to_string()) {
-            thread::spawn(move || clean(true, config_clone));
-        } else {
-            thread::spawn(move || clean(false, config_clone));
-        }
+        thread::spawn(move || clean(config_clone));
     }
+
+    if options.spotless {
+        let config_clone = Arc::clone(&config);
+        thread::spawn(move || spotless(config_clone));
+    }
+}
+
+pub fn initialize_daemon(
+    args: String,
+    config_path: Option<String>,
+    socket_path: Option<&str>,
+) -> Result<()> {
+    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
+    let mut state = DaemonState::new();
+
+    let options = DaemonOptions::new(&args);
+    start_event_listeners(options, config.clone());
+
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
 
     let path_to_sock = match socket_path {
         Some(sp) => Path::new(sp),
@@ -264,6 +299,7 @@ pub fn initialize_daemon(
         ),
         "INFO",
     )?;
+
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
@@ -276,14 +312,12 @@ pub fn initialize_daemon(
                 match req {
                     "toggle" | "summon" | "hide" => handle_call(&mut stream, msg, conf, req)?,
                     "get-config" => handle_get_config(&mut stream, conf)?,
-                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, &mut prev_titles)?,
-                    "previous" => handle_previous(&mut stream, msg, conf, &mut prev_titles)?,
+                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, &mut state)?,
+                    "previous" => handle_previous(&mut stream, msg, conf, &mut state)?,
                     "killall" => handle_killall(conf)?,
                     "return" => handle_return(msg, conf)?,
                     "reload" => handle_reload(msg, conf)?,
-                    "cycle" => {
-                        handle_cycle(&mut stream, msg, conf, &mut cycle_index, &mut prev_titles)?
-                    }
+                    "cycle" => handle_cycle(&mut stream, msg, conf, &mut state)?,
                     "kill" => break,
                     _ => {
                         let error_message = format!("Daemon: unknown request - {buf}");
@@ -331,9 +365,9 @@ mod tests {
     #[test]
     fn test_handlers() {
         std::thread::spawn(|| {
-            let args = vec!["".to_string()];
+            let args = "".to_string();
             initialize_daemon(
-                &args,
+                args,
                 Some("./test_configs/test_config2.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
@@ -415,9 +449,9 @@ mod tests {
     #[test]
     fn test_clean() {
         std::thread::spawn(|| {
-            let args = vec!["clean".to_string()];
+            let args = "clean".to_string();
             initialize_daemon(
-                &args,
+                args,
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
@@ -458,11 +492,11 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_spotless() {
+    fn test_spotless() {
         std::thread::spawn(|| {
-            let args = vec!["clean".to_string(), "spotless".to_string()];
+            let args = "spotless".to_string();
             initialize_daemon(
-                &args,
+                args,
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
