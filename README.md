@@ -33,7 +33,9 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 ### Daemon options:
 
-* `clean [spotless]`: automatically hides all scratchpads on workspace change. The `spotless` option also hides them on losing focus to non-floating clients.
+* `clean`: automatically hides all scratchpads on workspace change.
+
+* `spotless`: automatically hides all scratchpads on focus change.
 
 * `no-auto-reload`: does not reload the configuration when the configuration file is updated.
 
@@ -98,7 +100,9 @@ And in `hyprland.conf`:
 ```
 exec-once = hyprscratch init
 
-bind = $mainMod, s, hyprscratch call name
+bind = $mainMod, t, hyprscratch toggle name
+bind = $mainMod, s, hyprscratch summon name
+bind = $mainMod, h, hyprscratch hide name
 ```
 
 ## Other Relevant Information
