@@ -65,7 +65,11 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
-* `call name`: calls the scratchpad with the given name
+* `toggle name`: toggles the scratchpad with the given name
+
+* `summon name`: summons the scratchpad with the given name
+
+* `hide name`: hides the scratchpad with the given name
 
 * `previous`: summon the last used scratchpad that is not currently active.
 
