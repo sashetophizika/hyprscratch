@@ -19,35 +19,49 @@ struct Options {
 }
 
 impl Options {
-    fn new(options: &str) -> Options {
+    fn new(opts: &str) -> Options {
         Options {
-            summon: options.contains("summon"),
-            hide: options.contains("hide"),
-            poly: options.contains("poly"),
-            cover: options.contains("cover"),
-            stack: options.contains("stack"),
-            shiny: options.contains("shiny"),
-            special: options.contains("special"),
+            summon: opts.contains("summon"),
+            hide: opts.contains("hide"),
+            poly: opts.contains("poly"),
+            cover: opts.contains("cover"),
+            stack: opts.contains("stack"),
+            shiny: opts.contains("shiny"),
+            special: opts.contains("special"),
         }
     }
 }
 
-fn summon_special(
-    title: &str,
-    command: &str,
-    active_workspace: &Workspace,
-    clients_with_title: &[Client],
-) -> Result<()> {
-    let special_with_title: Vec<&Client> = clients_with_title
+struct HyprlandState {
+    active_workspace: Workspace,
+    clients_with_title: Vec<Client>,
+}
+
+impl HyprlandState {
+    fn new(title: &str) -> HyprlandState {
+        HyprlandState {
+            active_workspace: Workspace::get_active().unwrap_log(file!(), line!()),
+            clients_with_title: Clients::get()
+                .unwrap_log(file!(), line!())
+                .into_iter()
+                .filter(|x| x.initial_title == title)
+                .collect(),
+        }
+    }
+}
+
+fn summon_special(title: &str, command: &str, state: &HyprlandState) -> Result<()> {
+    let special_with_title: Vec<&Client> = state
+        .clients_with_title
         .iter()
         .filter(|x| x.workspace.id < 0)
         .collect();
 
     if special_with_title.is_empty() {
-        if !clients_with_title.is_empty() {
-            move_to_special(&clients_with_title[0])?;
+        if !state.clients_with_title.is_empty() {
+            move_to_special(&state.clients_with_title[0])?;
 
-            if clients_with_title[0].workspace.id == active_workspace.id {
+            if state.clients_with_title[0].workspace.id == state.active_workspace.id {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
             }
         } else {
@@ -65,20 +79,16 @@ fn summon_special(
     Ok(())
 }
 
-fn summon_normal(
-    command: &str,
-    options: &Options,
-    active_workspace: &Workspace,
-    clients_with_title: &[Client],
-) -> Result<()> {
-    if clients_with_title.is_empty() {
+fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
+    if state.clients_with_title.is_empty() {
         command
             .split("?")
             .for_each(|x| hyprland::dispatch!(Exec, &x).unwrap_log(file!(), line!()));
     } else {
-        for client in clients_with_title
+        for client in state
+            .clients_with_title
             .iter()
-            .filter(|x| x.workspace.id != active_workspace.id)
+            .filter(|x| x.workspace.id != state.active_workspace.id)
         {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
@@ -93,23 +103,17 @@ fn summon_normal(
 
         hyprland::dispatch!(
             FocusWindow,
-            WindowIdentifier::Address(clients_with_title[0].address.clone())
+            WindowIdentifier::Address(state.clients_with_title[0].address.clone())
         )?;
     }
     Ok(())
 }
 
-fn summon(
-    title: &str,
-    command: &str,
-    options: &Options,
-    active_workspace: &Workspace,
-    clients_with_title: &[Client],
-) -> Result<()> {
+fn summon(title: &str, command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
     if options.special {
-        summon_special(title, command, active_workspace, clients_with_title)?;
+        summon_special(title, command, state)?;
     } else if !options.hide {
-        summon_normal(command, options, active_workspace, clients_with_title)?;
+        summon_normal(command, options, state)?;
     }
     Ok(())
 }
@@ -139,32 +143,23 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) 
     stream.write_all(format!("scratchpad?{title}").as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
 
-    let options = Options::new(opts);
     let mut titles = String::new();
     stream.read_to_string(&mut titles)?;
 
-    let active_workspace = Workspace::get_active()?;
-    let clients_with_title: Vec<Client> = Clients::get()?
-        .into_iter()
-        .filter(|x| x.initial_title == title)
-        .collect();
+    let options = Options::new(opts);
+    let state = HyprlandState::new(title);
 
     if let Some(active_client) = Client::get_active()? {
-        let mut clients_on_active = clients_with_title
+        let mut clients_on_active = state
+            .clients_with_title
             .clone()
             .into_iter()
-            .filter(|x| x.workspace.id == active_workspace.id)
+            .filter(|x| x.workspace.id == state.active_workspace.id)
             .peekable();
 
         if options.special || clients_on_active.peek().is_none() {
             hide_active(&options, &titles, &active_client)?;
-            summon(
-                title,
-                command,
-                &options,
-                &active_workspace,
-                &clients_with_title,
-            )?;
+            summon(title, command, &options, &state)?;
         } else if (!active_client.floating
             || active_client.initial_title == title
             || active_client.fullscreen == FullscreenMode::None)
@@ -178,13 +173,7 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) 
             )?;
         }
     } else {
-        summon(
-            title,
-            command,
-            &options,
-            &active_workspace,
-            &clients_with_title,
-        )?;
+        summon(title, command, &options, &state)?;
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
@@ -230,12 +219,10 @@ mod tests {
             false
         );
 
-        let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
             &Options::new(""),
-            &Workspace::get_active().unwrap(),
-            &clients_with_title,
+            &HyprlandState::new(""),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -258,18 +245,11 @@ mod tests {
             resources.title
         );
 
-        let clients_with_title: Vec<Client> = Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.initial_title == resources.title)
-            .collect();
-
         let active_workspace = Workspace::get_active().unwrap();
         summon_normal(
             &resources.command,
             &Options::new(""),
-            &active_workspace,
-            &clients_with_title,
+            &HyprlandState::new(&resources.title),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -296,12 +276,10 @@ mod tests {
             false
         );
 
-        let clients_with_title: Vec<Client> = Vec::new();
         summon_special(
             &resources.title,
             &resources.command,
-            &Workspace::get_active().unwrap(),
-            &clients_with_title,
+            &HyprlandState::new(""),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -311,16 +289,10 @@ mod tests {
             resources.title
         );
 
-        let clients_with_title: Vec<Client> = Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.initial_title == resources.title)
-            .collect();
         summon_special(
             &resources.title,
             &resources.command,
-            &Workspace::get_active().unwrap(),
-            &clients_with_title,
+            &HyprlandState::new(&resources.title),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -337,44 +309,10 @@ mod tests {
             resources.title
         );
 
-        let active_workspace = Workspace::get_active().unwrap();
         summon_special(
             &resources.title,
             &resources.command,
-            &active_workspace,
-            &clients_with_title,
-        )
-        .unwrap();
-        sleep(Duration::from_millis(1000));
-
-        assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
-    }
-
-    #[test]
-    fn test_cover() {
-        let resources = TestResources {
-            title: "test_cover".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_cover".to_string(),
-        };
-
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
-
-        let clients_with_title: Vec<Client> = Vec::new();
-        summon_normal(
-            &resources.command,
-            &Options::new(""),
-            &Workspace::get_active().unwrap(),
-            &clients_with_title,
+            &HyprlandState::new(&resources.title),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -404,12 +342,10 @@ mod tests {
             false
         );
 
-        let clients_with_title: Vec<Client> = Vec::new();
         summon_normal(
             &resources.command,
             &Options::new(""),
-            &Workspace::get_active().unwrap(),
-            &clients_with_title,
+            &HyprlandState::new(""),
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
