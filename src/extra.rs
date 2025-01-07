@@ -21,7 +21,7 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
     if buf == "empty" {
-        log("No valid scratchpad found".to_string(), "WARN")?
+        log("No valid scratchpad found".to_string(), "ERROR")?
     }
 
     let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
@@ -70,10 +70,10 @@ pub fn previous(socket: Option<&str>) -> Result<()> {
     pass_to_scratchpad(&mut stream)
 }
 
-pub fn reload(socket: Option<&str>, config: Option<String>) -> Result<()> {
+pub fn reload(socket: Option<&str>, config_file: Option<String>) -> Result<()> {
     connect_to_sock(
         socket,
-        &format!("reload?{}", config.unwrap_or("".to_string())),
+        &format!("reload?{}", config_file.unwrap_or("".to_string())),
     )?;
     Ok(())
 }

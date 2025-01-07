@@ -78,6 +78,18 @@ fn handle_reload(msg: &str, config: &mut Config) -> Result<()> {
     Ok(())
 }
 
+fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
+    let config = format!(
+        "{}?{}?{}",
+        conf.titles.join("^"),
+        conf.commands.join("^"),
+        conf.options.join("^")
+    );
+
+    stream.write_all(config.as_bytes())?;
+    Ok(())
+}
+
 fn handle_killall(config: &Config) -> Result<()> {
     Clients::get()?
         .into_iter()
@@ -134,10 +146,10 @@ fn handle_call(stream: &mut UnixStream, msg: &str, config: &Config, req: &str) -
     }
 
     let i = config.names.clone().into_iter().position(|x| x == msg);
-
     if let Some(i) = i {
         let mut options = config.options[i].clone();
         options.push_str(req);
+
         let scratchpad = format!("{}:{}:{}", config.titles[i], config.commands[i], options);
         stream.write_all(scratchpad.as_bytes())?;
     } else {
@@ -334,17 +346,6 @@ pub fn initialize_daemon(
     Ok(())
 }
 
-fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
-    let config = format!(
-        "{}?{}?{}",
-        conf.titles.join("^"),
-        conf.commands.join("^"),
-        conf.options.join("^")
-    );
-
-    stream.write_all(config.as_bytes())?;
-    Ok(())
-}
 #[cfg(test)]
 mod tests {
     use super::*;
