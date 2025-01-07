@@ -7,20 +7,19 @@ use hyprland::prelude::*;
 use hyprland::Result;
 
 pub fn move_to_special(client: &Client) -> Result<()> {
-    let to_special = hyprland::dispatch!(
+    hyprland::dispatch!(
         MoveToWorkspaceSilent,
         WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title)),
         Some(WindowIdentifier::Address(client.address.clone()))
-    );
-
-    if to_special.is_err() {
+    )
+    .unwrap_or(
         hyprland::dispatch!(
             MoveToWorkspaceSilent,
             WorkspaceIdentifierWithSpecial::Name(&format!("special:{}", client.initial_title)),
             Some(WindowIdentifier::Address(client.address.clone()))
         )
-        .unwrap_log(file!(), line!());
-    }
+        .unwrap_log(file!(), line!()),
+    );
     Ok(())
 }
 
