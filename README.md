@@ -49,7 +49,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `sticky`: makes it so that the scratchpad isn't hidden by `clean`.
 
-* `shiny`: makes it so that the scratchpad isn't hidden only by `clean spotless`.
+* `shiny`: makes it so that the scratchpad isn't hidden by `spotless`.
 
 * `eager`: spawns the scratchpad hidden when the daemon is started.
 
@@ -59,7 +59,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `poly`: toggle all scratchpads with the same title
 
-* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean spotless`.
+* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean` and `spotless`.
 
 ### Extra subcommands:
 
