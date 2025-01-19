@@ -156,43 +156,45 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
-    std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
 
+    let known_options = [
+        "cover", "persist", "sticky", "shiny", "eager", "summon", "hide", "poly", "special",
+    ];
+
+    let known_commands = [
+        "clean",
+        "init",
+        "spotless",
+        "no-auto-reload",
+        "hideall",
+        "hide-all",
+        "reload",
+        "previous",
+        "cycle",
+        "call",
+        "get-config",
+        "kill",
+        "logs",
+        "version",
+        "help",
+    ];
+
+    let dequote = |s: &str| -> String {
+        match &s.trim()[..1] {
+            "\"" | "'" => s[1..s.len() - 1].to_string(),
+            _ => s.to_string(),
+        }
+    };
+
+    std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
     let lines: Vec<String> = get_hyprscratch_lines(buf);
+
     for line in lines {
         let parsed_args = split_args(line);
 
         if parsed_args.len() <= 1 {
             continue;
         }
-
-        let known_options = [
-            "cover", "persist", "sticky", "shiny", "eager", "summon", "hide", "poly", "special",
-        ];
-        let known_commands = [
-            "clean",
-            "init",
-            "spotless",
-            "no-auto-reload",
-            "hideall",
-            "hide-all",
-            "reload",
-            "previous",
-            "cycle",
-            "call",
-            "get-config",
-            "kill",
-            "logs",
-            "version",
-            "help",
-        ];
-
-        let dequote = |s: &String| -> String {
-            match &s[..1] {
-                "\"" | "'" => s[1..s.len() - 1].to_string(),
-                _ => s.to_string(),
-            }
-        };
 
         match parsed_args[1].as_str() {
             cmd if known_commands.contains(&cmd) => (),
@@ -216,7 +218,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
                         });
                     options.push(parsed_args[3..].join(" "));
                 } else {
-                    options.push(String::from(""));
+                    options.push("".into());
                 }
             }
         };
@@ -234,7 +236,7 @@ fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
         toml.values()
             .map(|val| {
                 val.get(key)
-                    .unwrap_or(&Value::String("".to_string()))
+                    .unwrap_or(&Value::String("".into()))
                     .as_str()
                     .unwrap_or("")
                     .to_string()
@@ -242,7 +244,7 @@ fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
             .collect::<Vec<_>>()
     };
 
-    let names = toml.keys().map(|k| k.to_string()).collect::<Vec<String>>();
+    let names = toml.keys().map(|k| k.into()).collect::<Vec<_>>();
     let titles = get_field("title");
     let options = get_field("options");
     let commands = get_field("command")
@@ -255,7 +257,7 @@ fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
                 format!("[{r}] {c}")
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     Ok([names, titles, commands, options])
 }
