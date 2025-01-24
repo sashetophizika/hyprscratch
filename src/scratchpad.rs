@@ -158,8 +158,8 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) 
             .peekable();
 
         if options.special || clients_on_active.peek().is_none() {
-            hide_active(&options, &titles, &active_client)?;
             summon(title, command, &options, &state)?;
+            hide_active(&options, &titles, &active_client)?;
         } else if (!active_client.floating
             || active_client.initial_title == title
             || active_client.fullscreen == FullscreenMode::None)
