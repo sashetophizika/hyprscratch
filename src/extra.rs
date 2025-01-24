@@ -107,10 +107,13 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
             .unwrap_or(0)
             .max(def)
     };
+
     let color_pad = |x: usize, y: &str| {
         y.to_string()
+            .replace(";", "?")
             .replace("[", "[\x1b[0;34m")
             .replace("]", "\x1b[0;0m]")
+            .replace("?", "\x1b[0;0m;\x1b[0;34m")
             + &" ".repeat(x - y.chars().count())
     };
 
@@ -150,7 +153,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub fn logs() -> Result<()> {
+pub fn print_logs() -> Result<()> {
     let path = Path::new("/tmp/hyprscratch/hyprscratch.log");
     if path.exists() {
         let mut file = std::fs::File::open(path)?;

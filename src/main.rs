@@ -71,7 +71,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 "reload" => reload(socket, config)?,
                 "kill" => kill(socket)?,
                 "help" => help(),
-                "logs" => logs()?,
+                "logs" => print_logs()?,
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
                 _ => (),
             }
