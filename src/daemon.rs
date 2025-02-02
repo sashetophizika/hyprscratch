@@ -273,7 +273,7 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
     Ok(())
 }
 
-fn start_listener(
+fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
     config: Arc<Mutex<Config>>,
@@ -343,14 +343,14 @@ pub fn initialize_daemon(
     socket_path: Option<&str>,
 ) -> Result<()> {
     let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
-    let mut state = DaemonState::new();
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
 
     let options = DaemonOptions::new(&args);
     let config_clone = Arc::clone(&config);
     thread::spawn(move || start_event_listeners(options, config_clone));
 
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
-    start_listener(socket_path, &mut state, config)?;
+    let mut state = DaemonState::new();
+    start_unix_listener(socket_path, &mut state, config)?;
     Ok(())
 }
 

@@ -57,22 +57,20 @@ fn summon_special(title: &str, command: &str, state: &HyprlandState) -> Result<(
         .filter(|x| x.workspace.id < 0)
         .collect();
 
-    if special_with_title.is_empty() {
-        if !state.clients_with_title.is_empty() {
-            move_to_special(&state.clients_with_title[0])?;
+    if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
+        move_to_special(&state.clients_with_title[0])?;
 
-            if state.clients_with_title[0].workspace.id == state.active_workspace.id {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
-            }
-        } else {
-            let mut special_cmd = command.to_string();
-            if command.find('[').is_none() {
-                special_cmd.insert_str(0, "[]");
-            }
-
-            special_cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
-            hyprland::dispatch!(Exec, &special_cmd)?;
+        if state.clients_with_title[0].workspace.id == state.active_workspace.id {
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
         }
+    } else if state.clients_with_title.is_empty() {
+        let mut special_cmd = command.to_string();
+        if special_cmd.find('[').is_none() {
+            special_cmd.insert_str(0, "[]");
+        }
+
+        special_cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
+        hyprland::dispatch!(Exec, &special_cmd)?;
     } else {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
     }
