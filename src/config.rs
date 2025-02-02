@@ -25,14 +25,19 @@ impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
         let config_file = config_path.unwrap_or(find_config_file());
 
-        let [names, titles, commands, options] = if Path::new(&config_file)
+        let ext = Path::new(&config_file)
             .extension()
-            .unwrap_log(file!(), line!())
-            == "toml"
-        {
+            .unwrap_log(file!(), line!());
+
+        let [names, titles, commands, options] = if config_file == "hyprland.conf" {
+            parse_config(&config_file)?
+        } else if ext == "conf" {
+            parse_hyprlang(&config_file)?
+        } else if ext == "toml" {
             parse_toml(&config_file)?
         } else {
-            parse_config(&config_file)?
+            log("No configuration file found".to_string(), "WARN")?;
+            [vec![], vec![], vec![], vec![]]
         };
 
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
@@ -82,9 +87,12 @@ impl Config {
 fn find_config_file() -> String {
     let home = var("HOME").unwrap_log(file!(), line!());
     let paths = vec![
-        format!("{home}/.config/hyprscratch/config.toml"),
-        format!("{home}/.config/hyprscratch/hyprscratch.toml"),
+        format!("{home}/.config/hypr/hyprscratch.conf"),
         format!("{home}/.config/hypr/hyprscratch.toml"),
+        format!("{home}/.config/hyprscratch/config.conf"),
+        format!("{home}/.config/hyprscratch/config.toml"),
+        format!("{home}/.config/hyprscratch/hyprscratch.conf"),
+        format!("{home}/.config/hyprscratch/hyprscratch.toml"),
     ];
 
     paths
@@ -109,6 +117,9 @@ fn split_args(line: String) -> Vec<String> {
         if word_bytes.len() == 1 && quote_types.contains(&word_bytes[0]) {
             if !quotes.is_empty() && quotes[quotes.len() - 1] == word_bytes[0] {
                 quotes.pop();
+                if quotes.is_empty() {
+                    inquote_word += word;
+                }
             } else {
                 quotes.push(word_bytes[0]);
             }
@@ -150,6 +161,14 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     lines
 }
 
+fn dequote(s: &str) -> String {
+    let tr = s.trim();
+    match &tr[..1] {
+        "\"" | "'" => tr[1..tr.len() - 1].to_string(),
+        _ => s.to_string(),
+    }
+}
+
 fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     let mut buf: String = String::new();
 
@@ -178,13 +197,6 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
         "version",
         "help",
     ];
-
-    let dequote = |s: &str| -> String {
-        match &s.trim()[..1] {
-            "\"" | "'" => s[1..s.len() - 1].to_string(),
-            _ => s.to_string(),
-        }
-    };
 
     std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
     let lines: Vec<String> = get_hyprscratch_lines(buf);
@@ -225,6 +237,67 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     }
 
     Ok([titles.clone(), titles, commands, options])
+}
+
+fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
+    let mut buf = String::new();
+    File::open(config_file)?.read_to_string(&mut buf)?;
+
+    let mut names: Vec<String> = Vec::new();
+    let mut titles: Vec<String> = Vec::new();
+    let mut commands: Vec<String> = Vec::new();
+    let mut rules: Vec<String> = Vec::new();
+    let mut options: Vec<String> = Vec::new();
+    let mut in_scope = false;
+
+    let escape = |s: &str| -> String {
+        dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
+    };
+
+    for line in buf.lines() {
+        if let Some(split) = line.split_once("=") {
+            if !in_scope {
+                if split.1.trim() == "{" {
+                    names.push(split.0.trim().into());
+                    in_scope = true;
+                }
+            } else {
+                match split.0.trim() {
+                    "title" => titles.push(escape(split.1)),
+                    "command" => commands.push(escape(split.1)),
+                    "rules" => rules.push(escape(split.1)),
+                    "options" => options.push(escape(split.1)),
+                    s => log(
+                        format!("Unknown field given in configuration file: {s}"),
+                        "WARN",
+                    )?,
+                }
+            }
+        } else if line.trim() == "}" {
+            in_scope = false;
+
+            if rules.len() != names.len() {
+                rules.push("".into());
+            }
+            if options.len() != names.len() {
+                options.push("".into());
+            }
+        }
+    }
+
+    commands = commands
+        .into_iter()
+        .zip(rules)
+        .map(|(c, r)| {
+            if r.is_empty() {
+                c
+            } else {
+                format!("[{r}] {c}")
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok([names, titles, commands, options])
 }
 
 fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
@@ -268,6 +341,37 @@ mod tests {
     use std::fs::File;
 
     #[test]
+    fn test_parse_hyprlang() {
+        let expected_names = vec!["btop", "nautilus", "noname", "wierd"];
+        let expected_titles = vec![
+            "btop",
+            "Loading…",
+            "\\\"",
+            " a program with ' a wierd ' name",
+        ];
+        let expected_commands = vec![
+            "[float;size 85% 85%;center] kitty --title btop -e btop",
+            "[float;size 70% 80%;center] nautilus",
+            "\\'",
+            " a \"command with\" \\'a wierd\\' format",
+        ];
+        let expected_options = vec![
+            "cover persist sticky shiny eager summon hide poly special",
+            "",
+            "cover eager special",
+            "hide summon",
+        ];
+
+        let [names, titles, commands, options] =
+            parse_hyprlang(&"./test_configs/test_hyprlang.conf".to_owned()).unwrap();
+
+        assert_eq!(names, expected_names);
+        assert_eq!(titles, expected_titles);
+        assert_eq!(commands, expected_commands);
+        assert_eq!(options, expected_options);
+    }
+
+    #[test]
     fn test_parse_toml() {
         let expected_names = vec!["btop", "nautilus", "noname", "wierd"];
         let expected_titles = vec![
@@ -304,13 +408,13 @@ mod tests {
             "btop",
             "Loading…",
             "\\\"",
-            " a program with ' a wierd ' name",
+            " a program with ' a wierd ' name ",
         ];
         let expected_titles = vec![
             "btop",
             "Loading…",
             "\\\"",
-            " a program with ' a wierd ' name",
+            " a program with ' a wierd ' name ",
         ];
         let expected_commands = vec![
             "[float;size 85% 85%;center] kitty --title btop -e btop",
