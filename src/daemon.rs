@@ -200,8 +200,7 @@ fn write_scratchpad(index: usize, config: &Config, stream: &mut UnixStream) -> R
     Ok(())
 }
 
-fn clean(config: Arc<Mutex<Config>>) -> Result<()> {
-    let mut ev = EventListener::new();
+fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_workspace_changed_handler(move |_| {
         move_floating(
             config
@@ -219,12 +218,11 @@ fn clean(config: Arc<Mutex<Config>>) -> Result<()> {
             }
         }
     });
-    ev.start_listener()?;
+
     Ok(())
 }
 
-fn spotless(config: Arc<Mutex<Config>>) -> Result<()> {
-    let mut ev = EventListener::new();
+fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_active_window_changed_handler(move |_| {
         if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
             if !cl.floating {
@@ -239,13 +237,10 @@ fn spotless(config: Arc<Mutex<Config>>) -> Result<()> {
             }
         }
     });
-
-    ev.start_listener()?;
     Ok(())
 }
 
-fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
-    let mut ev = EventListener::new();
+fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_config_reloaded_handler(move || {
         config
             .lock()
@@ -253,41 +248,36 @@ fn auto_reload(config: Arc<Mutex<Config>>) -> Result<()> {
             .reload(None)
             .unwrap_log(file!(), line!())
     });
+    Ok(())
+}
+
+fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> Result<()> {
+    let mut ev = EventListener::new();
+
+    if options.auto_reload {
+        let config_clone = config.clone();
+        auto_reload(&mut ev, config_clone)?;
+    }
+
+    if options.clean {
+        let config_clone = config.clone();
+        clean(&mut ev, config_clone)?;
+    }
+
+    if options.spotless {
+        let config_clone = config.clone();
+        spotless(&mut ev, config_clone)?;
+    }
 
     ev.start_listener()?;
     Ok(())
 }
 
-fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) {
-    if options.auto_reload {
-        let config_clone = Arc::clone(&config);
-        thread::spawn(move || auto_reload(config_clone));
-    }
-
-    if options.clean {
-        let config_clone = Arc::clone(&config);
-        thread::spawn(move || clean(config_clone));
-    }
-
-    if options.spotless {
-        let config_clone = Arc::clone(&config);
-        thread::spawn(move || spotless(config_clone));
-    }
-}
-
-pub fn initialize_daemon(
-    args: String,
-    config_path: Option<String>,
+fn start_listener(
     socket_path: Option<&str>,
+    state: &mut DaemonState,
+    config: Arc<Mutex<Config>>,
 ) -> Result<()> {
-    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
-    let mut state = DaemonState::new();
-
-    let options = DaemonOptions::new(&args);
-    start_event_listeners(options, config.clone());
-
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
-
     let path_to_sock = match socket_path {
         Some(sp) => Path::new(sp),
         None => {
@@ -324,12 +314,12 @@ pub fn initialize_daemon(
                 match req {
                     "toggle" | "summon" | "hide" => handle_call(&mut stream, msg, conf, req)?,
                     "get-config" => handle_get_config(&mut stream, conf)?,
-                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, &mut state)?,
-                    "previous" => handle_previous(&mut stream, msg, conf, &mut state)?,
+                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, state)?,
+                    "previous" => handle_previous(&mut stream, msg, conf, state)?,
                     "killall" => handle_killall(conf)?,
                     "return" => handle_return(msg, conf)?,
                     "reload" => handle_reload(msg, conf)?,
-                    "cycle" => handle_cycle(&mut stream, msg, conf, &mut state)?,
+                    "cycle" => handle_cycle(&mut stream, msg, conf, state)?,
                     "kill" => break,
                     _ => {
                         let error_message = format!("Daemon: unknown request - {buf}");
@@ -343,6 +333,24 @@ pub fn initialize_daemon(
             }
         };
     }
+
+    Ok(())
+}
+
+pub fn initialize_daemon(
+    args: String,
+    config_path: Option<String>,
+    socket_path: Option<&str>,
+) -> Result<()> {
+    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
+    let mut state = DaemonState::new();
+
+    let options = DaemonOptions::new(&args);
+    let config_clone = Arc::clone(&config);
+    thread::spawn(move || start_event_listeners(options, config_clone));
+
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
+    start_listener(socket_path, &mut state, config)?;
     Ok(())
 }
 
