@@ -1,4 +1,4 @@
-bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager summon hide special sticky
-bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager
+bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special
