@@ -29,7 +29,7 @@ impl Config {
             .extension()
             .unwrap_log(file!(), line!());
 
-        let [names, titles, commands, options] = if config_file == "hyprland.conf" {
+        let [names, titles, commands, options] = if config_file == "hyprland.conf" || ext == "txt" {
             parse_config(&config_file)?
         } else if ext == "conf" {
             parse_hyprlang(&config_file)?
@@ -75,7 +75,7 @@ impl Config {
         })
     }
 
-    pub fn reload(self: &mut Config, config_path: Option<String>) -> Result<()> {
+    pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
         *self = match config_path {
             Some(_) => Config::new(config_path)?,
             None => Config::new(Some(self.config_file.clone()))?,
@@ -97,7 +97,7 @@ fn find_config_file() -> String {
 
     paths
         .into_iter()
-        .find(|p| Path::new(p.as_str()).exists())
+        .find(|p| Path::new(&p).exists())
         .unwrap_or(format!("{home}/.config/hypr/hyprland.conf"))
 }
 
@@ -170,8 +170,6 @@ fn dequote(s: &str) -> String {
 }
 
 fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
-    let mut buf: String = String::new();
-
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
@@ -198,6 +196,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
         "help",
     ];
 
+    let mut buf: String = String::new();
     std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
     let lines: Vec<String> = get_hyprscratch_lines(buf);
 
@@ -256,12 +255,18 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
 
     for line in buf.lines() {
         if let Some(split) = line.split_once("=") {
-            if !in_scope {
-                if split.1.trim() == "{" {
-                    names.push(split.0.trim().into());
-                    in_scope = true;
+            if split.1.trim() == "{" {
+                if in_scope {
+                    log("Syntax error in configuration file".into(), "WARN")?;
                 }
+
+                in_scope = true;
+                names.push(split.0.trim().into());
             } else {
+                if !in_scope {
+                    log("Syntax error in configuration file".into(), "WARN")?;
+                }
+
                 match split.0.trim() {
                     "title" => titles.push(escape(split.1)),
                     "command" => commands.push(escape(split.1)),
