@@ -165,7 +165,7 @@ fn dequote(s: &str) -> String {
     let tr = s.trim();
     match &tr[..1] {
         "\"" | "'" => tr[1..tr.len() - 1].to_string(),
-        _ => s.to_string(),
+        _ => tr.to_string(),
     }
 }
 
@@ -257,14 +257,14 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
         if let Some(split) = line.split_once("=") {
             if split.1.trim() == "{" {
                 if in_scope {
-                    log("Syntax error in configuration file".into(), "WARN")?;
+                    log("Syntax error in configuration: unclosed '{'".into(), "WARN")?;
                 }
 
                 in_scope = true;
                 names.push(split.0.trim().into());
             } else {
                 if !in_scope {
-                    log("Syntax error in configuration file".into(), "WARN")?;
+                    log("Syntax error in configuration: not in scope".into(), "WARN")?;
                 }
 
                 match split.0.trim() {
@@ -279,8 +279,11 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
                 }
             }
         } else if line.trim() == "}" {
-            in_scope = false;
+            if !in_scope {
+                log("Syntax error in configuration: unopened '}'".into(), "WARN")?;
+            }
 
+            in_scope = false;
             if rules.len() != names.len() {
                 rules.push("".into());
             }
