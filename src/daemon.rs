@@ -26,6 +26,13 @@ impl DaemonState {
             prev_titles: [String::new(), String::new()],
         }
     }
+
+    fn update_prev_titles(&mut self, new_title: &str) {
+        if new_title != self.prev_titles[0] {
+            self.prev_titles[1] = self.prev_titles[0].clone();
+            self.prev_titles[0] = new_title.to_string();
+        }
+    }
 }
 
 struct DaemonOptions {
@@ -52,10 +59,7 @@ fn handle_scratchpad(
 ) -> Result<()> {
     if !msg.is_empty() {
         config.dirty_titles.retain(|x| *x != msg);
-        if msg != state.prev_titles[0] {
-            state.prev_titles[1] = state.prev_titles[0].clone();
-            state.prev_titles[0] = msg.to_string();
-        }
+        state.update_prev_titles(msg);
     }
 
     stream.write_all(config.non_persist_titles.join(" ").as_bytes())?;
@@ -129,11 +133,7 @@ fn handle_cycle(
         }
     }
 
-    if config.titles[current_index] != state.prev_titles[0] {
-        state.prev_titles[1] = state.prev_titles[0].clone();
-        state.prev_titles[0] = config.titles[current_index].clone();
-    }
-
+    state.update_prev_titles(&config.titles[current_index]);
     write_scratchpad(current_index, config, stream)?;
     state.cycle_index = current_index + 1;
     Ok(())
