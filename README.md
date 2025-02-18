@@ -86,17 +86,18 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 * `logs`: show logs
 
 ### Optional Configuration File
-If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hyprscratch/config.toml` or `~/.config/hypr/hyprscratch.toml` and configure scratchpads in the following way:
+If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hyprscratch/config.conf` or `~/.config/hypr/hyprscratch.conf` and configure scratchpads in the following way:
 
-```toml
-[name]
+```py
+name = {
 #Mandatory fields
-title = "title"                        
-command = "command"
+title = title                        
+command = command
 
 #Optional fields
-options = "option1 option2 option3"
-rules = "rule1;rule2;rule3"
+options = option1 option2 option3
+rules = rule1;rule2;rule3
+}
 ```
 
 And in `hyprland.conf`:
