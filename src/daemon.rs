@@ -322,7 +322,7 @@ fn start_unix_listener(
                     "cycle" => handle_cycle(&mut stream, msg, conf, state)?,
                     "kill" => break,
                     _ => {
-                        let error_message = format!("Daemon: unknown request - {buf}");
+                        let error_message = format!("Unknown request - {buf}");
                         stream.write_all(error_message.as_bytes()).unwrap();
                         log(error_message, "ERROR")?;
                     }
@@ -404,7 +404,7 @@ mod tests {
         test_handle("reload?", "");
         test_handle("killall?", "");
 
-        test_handle("?unknown", "Daemon: unknown request - ?unknown");
+        test_handle("?unknown", "Unknown request - ?unknown");
         test_handle("kill?", "");
     }
 
