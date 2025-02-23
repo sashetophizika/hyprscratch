@@ -29,7 +29,7 @@ impl Config {
             .extension()
             .unwrap_log(file!(), line!());
 
-        let [names, titles, commands, options] = if config_file == "hyprland.conf" || ext == "txt" {
+        let [names, titles, commands, options] = if config_file.contains("hyprland.conf") || ext == "txt" {
             parse_config(&config_file)?
         } else if ext == "conf" {
             parse_hyprlang(&config_file)?
@@ -188,7 +188,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
         "reload",
         "previous",
         "cycle",
-        "call",
+        "toggle",
         "get-config",
         "kill",
         "logs",
