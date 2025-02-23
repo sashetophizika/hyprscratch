@@ -86,7 +86,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 * `logs`: show logs
 
 ### Optional Configuration File
-If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hyprscratch/config.conf` or `~/.config/hypr/hyprscratch.conf` and configure scratchpads in the following way:
+If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
 ```py
 name = {
