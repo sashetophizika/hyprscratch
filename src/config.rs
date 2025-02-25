@@ -29,16 +29,17 @@ impl Config {
             .extension()
             .unwrap_log(file!(), line!());
 
-        let [names, titles, commands, options] = if config_file.contains("hyprland.conf") || ext == "txt" {
-            parse_config(&config_file)?
-        } else if ext == "conf" {
-            parse_hyprlang(&config_file)?
-        } else if ext == "toml" {
-            parse_toml(&config_file)?
-        } else {
-            log("No configuration file found".to_string(), "WARN")?;
-            [vec![], vec![], vec![], vec![]]
-        };
+        let [names, titles, commands, options] =
+            if config_file.contains("hyprland.conf") || ext == "txt" {
+                parse_config(&config_file)?
+            } else if ext == "conf" {
+                parse_hyprlang(&config_file)?
+            } else if ext == "toml" {
+                parse_toml(&config_file)?
+            } else {
+                log("No configuration file found".to_string(), "ERROR")?;
+                [vec![], vec![], vec![], vec![]]
+            };
 
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
             titles
