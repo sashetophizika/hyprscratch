@@ -8,50 +8,10 @@ mod utils;
 use crate::daemon::initialize_daemon;
 use crate::extra::*;
 use crate::scratchpad::scratchpad;
+use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
 use logs::log;
-
-fn warn_deprecated(feature: &str) -> Result<()> {
-    log(format!("The '{feature}' feature is deprecated."), "WARN")?;
-    println!("Try 'hyprscratch help' and change your configuration before it is removed.");
-    Ok(())
-}
-
-fn flag_present(args: &[String], flag: &str) -> Option<String> {
-    if flag.is_empty() {
-        return None;
-    }
-
-    let long = format!("--{flag}");
-    let short = flag.as_bytes()[0] as char;
-
-    if args.iter().any(|x| {
-        x == flag
-            || x == &long
-            || (x.len() > 1 && x.starts_with("-") && !x[1..].starts_with("-") && x.contains(short))
-    }) {
-        return Some(flag.to_string());
-    }
-    None
-}
-
-fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
-    if flag.is_empty() {
-        return None;
-    }
-
-    let long = format!("--{flag}");
-    let short = format!("-{}", flag.as_bytes()[0] as char);
-
-    if let Some(ci) = args
-        .iter()
-        .position(|x| x == flag || *x == long || *x == short)
-    {
-        return args.get(ci + 1).cloned();
-    }
-    None
-}
 
 fn hyprscratch(args: &[String]) -> Result<()> {
     for feature in ["hideall", "onstart", "stack"] {

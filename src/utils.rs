@@ -1,10 +1,51 @@
 use crate::config::Config;
-use crate::logs::LogErr;
+use crate::logs::{log, LogErr};
 use hyprland::data::Client;
 use hyprland::data::Clients;
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
+
+pub fn warn_deprecated(feature: &str) -> Result<()> {
+    log(format!("The '{feature}' feature is deprecated."), "WARN")?;
+    println!("Try 'hyprscratch help' and change your configuration before it is removed.");
+    Ok(())
+}
+
+pub fn flag_present(args: &[String], flag: &str) -> Option<String> {
+    if flag.is_empty() {
+        return None;
+    }
+
+    let long = format!("--{flag}");
+    let short = flag.as_bytes()[0] as char;
+
+    if args.iter().any(|x| {
+        x == flag
+            || x == &long
+            || (x.len() > 1 && x.starts_with("-") && !x[1..].starts_with("-") && x.contains(short))
+    }) {
+        return Some(flag.to_string());
+    }
+    None
+}
+
+pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
+    if flag.is_empty() {
+        return None;
+    }
+
+    let long = format!("--{flag}");
+    let short = format!("-{}", flag.as_bytes()[0] as char);
+
+    if let Some(ci) = args
+        .iter()
+        .position(|x| x == flag || *x == long || *x == short)
+    {
+        return args.get(ci + 1).cloned();
+    }
+    None
+}
 
 pub fn move_to_special(client: &Client) -> Result<()> {
     hyprland::dispatch!(
