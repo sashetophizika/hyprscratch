@@ -14,7 +14,7 @@ use hyprland::Result;
 use logs::log;
 
 fn hyprscratch(args: &[String]) -> Result<()> {
-    for feature in ["hideall", "onstart", "stack"] {
+    for feature in ["hideall", "onstart", "stack", "eager"] {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }

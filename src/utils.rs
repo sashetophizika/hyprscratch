@@ -72,21 +72,36 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn autospawn(config: &mut Config) -> Result<()> {
+pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
     let client_titles = Clients::get()?
         .into_iter()
         .map(|x| x.initial_title)
         .collect::<Vec<_>>();
 
-    config
-        .commands
-        .iter()
-        .zip(&config.titles)
-        .zip(&config.options)
-        .filter(|((_, title), option)| {
-            (option.contains("onstart") || option.contains("eager"))
-                && !client_titles.contains(title)
-        })
+    let auto_spawn_commands: Vec<((&String, &String), &String)> = if eager {
+        config
+            .commands
+            .iter()
+            .zip(&config.titles)
+            .zip(&config.options)
+            .filter(|((_, title), option)| {
+                !option.contains("lazy") && !client_titles.contains(title)
+            })
+            .collect()
+    } else {
+        config
+            .commands
+            .iter()
+            .zip(&config.titles)
+            .zip(&config.options)
+            .filter(|((_, title), option)| {
+                option.contains("eager") && !client_titles.contains(title)
+            })
+            .collect()
+    };
+
+    auto_spawn_commands
+        .into_iter()
         .for_each(|((command, title), _)| {
             let mut cmd = command.clone();
             if command.find('[').is_none() {
@@ -235,13 +250,13 @@ mod tests {
             non_persist_titles: resources.titles.to_vec(),
             commands: resources.commands.to_vec(),
             options: vec![
-                "onstart".to_string(),
-                "special onstart".to_string(),
                 "".to_string(),
+                "special eager".to_string(),
+                "lazy".to_string(),
             ],
         };
 
-        autospawn(&mut config).unwrap();
+        autospawn(&mut config, true).unwrap();
         sleep(Duration::from_millis(2000));
 
         clients = Clients::get().unwrap().into_iter();

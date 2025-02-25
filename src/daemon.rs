@@ -71,14 +71,14 @@ fn handle_return(msg: &str, config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_reload(msg: &str, config: &mut Config) -> Result<()> {
+fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
     let config_path = if !msg.is_empty() && Path::new(msg).exists() {
         Some(msg.to_string())
     } else {
         None
     };
     config.reload(config_path)?;
-    autospawn(config)?;
+    autospawn(config, eager)?;
     Ok(())
 }
 
@@ -277,6 +277,7 @@ fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
     config: Arc<Mutex<Config>>,
+    eager: bool,
 ) -> Result<()> {
     let path_to_sock = match socket_path {
         Some(sp) => Path::new(sp),
@@ -318,7 +319,7 @@ fn start_unix_listener(
                     "previous" => handle_previous(&mut stream, msg, conf, state)?,
                     "killall" => handle_killall(conf)?,
                     "return" => handle_return(msg, conf)?,
-                    "reload" => handle_reload(msg, conf)?,
+                    "reload" => handle_reload(msg, conf, eager)?,
                     "cycle" => handle_cycle(&mut stream, msg, conf, state)?,
                     "kill" => break,
                     _ => {
@@ -343,14 +344,15 @@ pub fn initialize_daemon(
     socket_path: Option<&str>,
 ) -> Result<()> {
     let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()))?;
+    let eager = args.contains("eager");
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()), eager)?;
 
     let options = DaemonOptions::new(&args);
     let config_clone = Arc::clone(&config);
     thread::spawn(move || start_event_listeners(options, config_clone));
 
     let mut state = DaemonState::new();
-    start_unix_listener(socket_path, &mut state, config)?;
+    start_unix_listener(socket_path, &mut state, config, eager)?;
     Ok(())
 }
 
