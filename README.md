@@ -39,7 +39,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `no-auto-reload`: does not reload the configuration when the configuration file is updated.
 
-* `config /path/to/config`: specify a path to the configuration file
+* `config </path/to/config>`: specify a path to the configuration file
 
 ### Scratchpad options:
 
@@ -65,11 +65,11 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
-* `toggle name`: toggles the scratchpad with the given name
+* `toggle <name>`: toggles the scratchpad with the given name
 
-* `summon name`: summons the scratchpad with the given name
+* `summon <name>`: summons the scratchpad with the given name
 
-* `hide name`: hides the scratchpad with the given name
+* `hide <name>`: hides the scratchpad with the given name
 
 * `previous`: summon the last used scratchpad that is not currently active.
 

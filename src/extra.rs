@@ -187,7 +187,7 @@ DAEMON OPTIONS
   clean                       Hide scratchpads on workspace change
   spotless                    Hide scratchpads on focus change
   no-auto-reload              Don't reload the configuration when the configuration file is updated
-  config /path/to/config      Specify a path to the configuration file             
+  config </path/to/config>      Specify a path to the configuration file             
 
 SCRATCHPAD OPTIONS
   persist                     Prevent the scratchpad from being replaced when a new one is summoned
@@ -202,9 +202,9 @@ SCRATCHPAD OPTIONS
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
-  toggle name                 Toggles the scratchpad with the given name
-  summon name                 Summons the scratchpad with the given name
-  hide name                   Hides the scratchpad with the given name
+  toggle <name>               Toggles the scratchpad with the given name
+  summon <name>               Summons the scratchpad with the given name
+  hide <name>                 Hides the scratchpad with the given name
   previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
   kill-all                    Close all scratchpads
@@ -222,8 +222,7 @@ FLAG ALIASES
   -k, --kill                   
   -l, --logs                   
   -v, --version                
-  -h, --help"
-    )
+  -h, --help")
 }
 
 #[cfg(test)]
