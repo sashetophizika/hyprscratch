@@ -79,6 +79,8 @@ fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
     };
     config.reload(config_path)?;
     autospawn(config, eager)?;
+
+    log("Configuration reloaded".to_string(), "INFO")?;
     Ok(())
 }
 
