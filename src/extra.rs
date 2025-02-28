@@ -17,7 +17,7 @@ fn connect_to_sock(socket: Option<&str>, request: &str) -> Result<UnixStream> {
     Ok(stream)
 }
 
-fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
+fn pass_to_scratchpad(socket: Option<&str>, stream: &mut UnixStream) -> Result<()> {
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
     if buf == "empty" {
@@ -25,7 +25,7 @@ fn pass_to_scratchpad(stream: &mut UnixStream) -> Result<()> {
     }
 
     let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
-    scratchpad(&args[0], &args[1], &args[2], None)?;
+    scratchpad(&args[0], &args[1], &args[2], socket)?;
     Ok(())
 }
 
@@ -51,7 +51,7 @@ pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
         "cycle?"
     };
     let mut stream = connect_to_sock(socket, request)?;
-    pass_to_scratchpad(&mut stream)
+    pass_to_scratchpad(socket, &mut stream)
 }
 
 pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
@@ -61,13 +61,13 @@ pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
 
     let title = args[2].clone();
     let mut stream = connect_to_sock(socket, format!("{mode}?{title}").as_str())?;
-    pass_to_scratchpad(&mut stream)
+    pass_to_scratchpad(socket, &mut stream)
 }
 
 pub fn previous(socket: Option<&str>) -> Result<()> {
     let active_title = Client::get_active()?.unwrap().initial_title;
     let mut stream = connect_to_sock(socket, format!("previous?{active_title}").as_str())?;
-    pass_to_scratchpad(&mut stream)
+    pass_to_scratchpad(socket, &mut stream)
 }
 
 pub fn reload(socket: Option<&str>, config_file: Option<String>) -> Result<()> {
@@ -241,22 +241,22 @@ mod tests {
                 Some("/tmp/hyprscratch_test.sock"),
             )
         });
-        sleep(Duration::from_millis(500));
-
-        let socket = Some("/tmp/hyprscratch_test.sock".to_string());
-        cycle(socket.as_deref(), "".to_string()).unwrap();
-        cycle(socket.as_deref(), "special".to_string()).unwrap();
-        cycle(socket.as_deref(), "normal".to_string()).unwrap();
-        previous(socket.as_deref()).unwrap();
         sleep(Duration::from_millis(1000));
 
-        hide_all(socket.as_deref()).unwrap();
-        reload(socket.as_deref(), None).unwrap();
-        get_config(socket.as_deref()).unwrap();
+        let socket = Some("/tmp/hyprscratch_test.sock");
+        cycle(socket, "".to_string()).unwrap();
+        cycle(socket, "special".to_string()).unwrap();
+        cycle(socket, "normal".to_string()).unwrap();
+        previous(socket).unwrap();
         sleep(Duration::from_millis(1000));
 
-        kill_all(socket.as_deref()).unwrap();
-        kill(socket.as_deref()).unwrap();
+        hide_all(socket).unwrap();
+        reload(socket, None).unwrap();
+        get_config(socket).unwrap();
+        sleep(Duration::from_millis(1000));
+
+        kill_all(socket).unwrap();
+        kill(socket).unwrap();
         sleep(Duration::from_millis(1000));
     }
 }
