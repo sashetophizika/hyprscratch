@@ -38,7 +38,7 @@ impl Config {
                 parse_toml(&config_file)?
             } else {
                 log("No configuration file found".to_string(), "ERROR")?;
-                [vec![], vec![], vec![], vec![]]
+                std::process::exit(0);
             };
 
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
@@ -310,6 +310,11 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
 }
 
 fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
+    log(
+        "Toml configuration is deprecated. Convert to hyprlang.".into(),
+        "WARN",
+    )?;
+
     let mut buf = String::new();
     File::open(config_file)?.read_to_string(&mut buf)?;
     let toml = buf.parse::<Table>().unwrap();
