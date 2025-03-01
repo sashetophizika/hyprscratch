@@ -73,7 +73,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 )?;
                 println!("Try 'hyprscratch help'.");
             } else {
-                scratchpad(&args[1], &args[2], &args[3..].join(" "), None)?
+                scratchpad(&args[1], &args[2], &args[3..].join(" "), socket)?
             }
         }
     }
