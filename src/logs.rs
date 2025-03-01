@@ -1,8 +1,9 @@
 use chrono::Local;
 use core::panic;
 use std::env::VarError;
-use std::fs::File;
+use std::fs::{create_dir, File};
 use std::io::Write;
+use std::path::Path;
 use std::sync::LockResult;
 
 pub trait LogErr<T> {
@@ -62,6 +63,11 @@ impl<T> LogErr<T> for Option<T> {
 }
 
 pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
+    let temp_dir = Path::new("/tmp/hyprscratch/");
+    if !temp_dir.exists() {
+        create_dir(temp_dir)?;
+    }
+
     let mut file = File::options()
         .create(true)
         .read(true)
