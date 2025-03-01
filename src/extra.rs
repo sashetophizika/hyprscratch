@@ -186,15 +186,16 @@ pub fn help() {
 DAEMON OPTIONS
   clean                       Hide scratchpads on workspace change
   spotless                    Hide scratchpads on focus change
+  eager                       Spawn scratchpads hidden on start
   no-auto-reload              Don't reload the configuration when the configuration file is updated
   config </path/to/config>      Specify a path to the configuration file             
 
 SCRATCHPAD OPTIONS
   persist                     Prevent the scratchpad from being replaced when a new one is summoned
   cover                       Prevent the scratchpad from replacing another one if one is already present
-  sticky                      Prevent the scratchpad from being affected by 'clean'
-  shiny                       Prevent the scratchpad from being affected by 'clean spotless'
-  eager                       Spawn the scratchpads at the start of a Hyprland session
+  sticky                      Prevent the scratchpad from being hidden by 'clean'
+  shiny                       Prevent the scratchpad from being hidden by 'spotless'
+  lazy                        Prevent the scratchpad from being spawned by 'eager'
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   poly                        Toggles all scratchpads matching the title simultaneously

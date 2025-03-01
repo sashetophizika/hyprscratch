@@ -37,27 +37,29 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 
 * `spotless`: automatically hides all scratchpads on focus change.
 
+* `eager`: spawns all scratchpads hidden on start.
+
 * `no-auto-reload`: does not reload the configuration when the configuration file is updated.
 
 * `config </path/to/config>`: specify a path to the configuration file
 
 ### Scratchpad options:
 
-* `persist`: makes it so that the scratchpad doesn't get replaced when a new one is summoned.
+* `persist`: prevents the scratchpad from getting replaced when a new one is summoned.
 
-* `cover`: makes it so that the scratchpad doesn't replace another one if one is already present.
+* `cover`: prevents the scratchpad from replacing another one if one is already present.
 
-* `sticky`: makes it so that the scratchpad isn't hidden by `clean`.
+* `sticky`: prevents the scratchpad from being hidden by `clean`.
 
-* `shiny`: makes it so that the scratchpad isn't hidden by `spotless`.
+* `shiny`: prevents the scratchpad from being hidden by `spotless`.
 
-* `eager`: spawns the scratchpad hidden when the daemon is started.
+* `lazy`: prevents the scratchpad from being spawned by `eager`.
 
 * `summon`: only creates or brings up the scratchpad.
 
 * `hide`: only hides the scratchpad.
 
-* `poly`: toggle all scratchpads with the same title
+* `poly`: toggle all scratchpads with the same title simultaneously
 
 * `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean` and `spotless`.
 
