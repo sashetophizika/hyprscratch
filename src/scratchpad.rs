@@ -4,9 +4,6 @@ use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
-use std::io::prelude::*;
-use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
 
 struct Options {
     summon: bool,
@@ -14,7 +11,6 @@ struct Options {
     poly: bool,
     cover: bool,
     stack: bool,
-    shiny: bool,
     special: bool,
 }
 
@@ -26,7 +22,6 @@ impl Options {
             poly: opts.contains("poly"),
             cover: opts.contains("cover"),
             stack: opts.contains("stack"),
-            shiny: opts.contains("shiny"),
             special: opts.contains("special"),
         }
     }
@@ -127,24 +122,7 @@ fn hide_active(options: &Options, titles: &str, active_client: &Client) -> Resul
     Ok(())
 }
 
-fn remove_temp_shiny(title: &str, options: &Options, socket: Option<&str>) -> Result<()> {
-    if !options.shiny {
-        let mut stream =
-            UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
-        stream.write_all(format!("return?{title}").as_bytes())?;
-        stream.shutdown(Shutdown::Write)?;
-    }
-    Ok(())
-}
-
-pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) -> Result<()> {
-    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
-    stream.write_all(format!("scratchpad?{title}").as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
-
-    let mut titles = String::new();
-    stream.read_to_string(&mut titles)?;
-
+pub fn scratchpad(title: &str, command: &str, opts: &str, titles: &str) -> Result<()> {
     let options = Options::new(opts);
     let state = HyprlandState::new(title);
 
@@ -156,14 +134,14 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) 
             .filter(|x| x.workspace.id == state.active_workspace.id)
             .peekable();
 
+        let hide_all = !active_client.floating
+            || active_client.initial_title == title
+            || active_client.fullscreen == FullscreenMode::None;
+
         if options.special || clients_on_active.peek().is_none() {
             summon(title, command, &options, &state)?;
-            hide_active(&options, &titles, &active_client)?;
-        } else if (!active_client.floating
-            || active_client.initial_title == title
-            || active_client.fullscreen == FullscreenMode::None)
-            && !options.summon
-        {
+            hide_active(&options, titles, &active_client)?;
+        } else if hide_all && !options.summon {
             clients_on_active.for_each(|x| move_to_special(&x).unwrap());
         } else {
             hyprland::dispatch!(
@@ -176,7 +154,6 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, socket: Option<&str>) 
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
-    remove_temp_shiny(title, &options, socket)?;
     Ok(())
 }
 
@@ -387,7 +364,13 @@ mod tests {
             false
         );
 
-        scratchpad(&resources.title, &resources.command, "poly", socket).unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "poly",
+            &resources.title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -400,7 +383,13 @@ mod tests {
             2
         );
 
-        scratchpad(&resources.title, &resources.command, "poly", socket).unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "poly",
+            &resources.title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -445,7 +434,7 @@ mod tests {
             &resources.title,
             &resources.command,
             "summon",
-            socket.clone(),
+            &resources.title,
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -459,7 +448,7 @@ mod tests {
             &resources.title,
             &resources.command,
             "summon",
-            socket.clone(),
+            &resources.title,
         )
         .unwrap();
         sleep(Duration::from_millis(1000));
@@ -476,7 +465,13 @@ mod tests {
             resources.title
         );
 
-        scratchpad(&resources.title, &resources.command, "hide", socket.clone()).unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "hide",
+            &resources.title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_ne!(
@@ -496,7 +491,13 @@ mod tests {
             "special:".to_owned() + &resources.title
         );
 
-        scratchpad(&resources.title, &resources.command, "hide", socket.clone()).unwrap();
+        scratchpad(
+            &resources.title,
+            &resources.command,
+            "hide",
+            &resources.title,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         let clients_with_title: Vec<Client> = Clients::get()

@@ -7,7 +7,6 @@ mod utils;
 
 use crate::daemon::initialize_daemon;
 use crate::extra::*;
-use crate::scratchpad::scratchpad;
 use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
@@ -47,9 +46,9 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         "previous" => previous(socket)?,
         "kill-all" => kill_all(socket)?,
         "cycle" => cycle(socket, args.join(" "))?,
-        "toggle" => call(socket, args, "toggle")?,
-        "summon" => call(socket, args, "summon")?,
-        "hide" => call(socket, args, "hide")?,
+        "toggle" => call(socket, &args[1..], "toggle")?,
+        "summon" => call(socket, &args[1..], "summon")?,
+        "hide" => call(socket, &args[1..], "hide")?,
         "" => {
             log(
                 "Initializing the daemon with no arguments is deprecated".to_string(),
@@ -73,7 +72,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 )?;
                 println!("Try 'hyprscratch help'.");
             } else {
-                scratchpad(&args[1], &args[2], &args[3..].join(" "), socket)?
+                call(socket, args, "toggle")?
             }
         }
     }
