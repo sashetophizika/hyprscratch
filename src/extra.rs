@@ -1,5 +1,4 @@
 use crate::logs::log;
-use crate::scratchpad::scratchpad;
 use crate::utils::move_floating;
 use hyprland::data::Client;
 use hyprland::dispatch::*;
@@ -15,18 +14,6 @@ fn connect_to_sock(socket: Option<&str>, request: &str) -> Result<UnixStream> {
     stream.write_all(request.as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
     Ok(stream)
-}
-
-fn pass_to_scratchpad(socket: Option<&str>, stream: &mut UnixStream) -> Result<()> {
-    let mut buf = String::new();
-    stream.read_to_string(&mut buf)?;
-    if buf == "empty" {
-        log("No valid scratchpad found".to_string(), "ERROR")?
-    }
-
-    let args: Vec<String> = buf.split(':').map(|x| x.to_owned()).collect();
-    scratchpad(&args[0], &args[1], &args[2], socket)?;
-    Ok(())
 }
 
 pub fn hide_all(socket: Option<&str>) -> Result<()> {
@@ -50,24 +37,25 @@ pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
     } else {
         "cycle?"
     };
-    let mut stream = connect_to_sock(socket, request)?;
-    pass_to_scratchpad(socket, &mut stream)
+
+    connect_to_sock(socket, request)?;
+    Ok(())
 }
 
 pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
-    if args.len() <= 2 {
+    if args.len() <= 1 {
         log(format!("No scratchpad title given to '{mode}'"), "WARN")?
     }
 
-    let title = args[2].clone();
-    let mut stream = connect_to_sock(socket, format!("{mode}?{title}").as_str())?;
-    pass_to_scratchpad(socket, &mut stream)
+    let title = args[1].clone();
+    connect_to_sock(socket, format!("{mode}?{title}").as_str())?;
+    Ok(())
 }
 
 pub fn previous(socket: Option<&str>) -> Result<()> {
     let active_title = Client::get_active()?.unwrap().initial_title;
-    let mut stream = connect_to_sock(socket, format!("previous?{active_title}").as_str())?;
-    pass_to_scratchpad(socket, &mut stream)
+    connect_to_sock(socket, format!("previous?{active_title}").as_str())?;
+    Ok(())
 }
 
 pub fn reload(socket: Option<&str>, config_file: Option<String>) -> Result<()> {

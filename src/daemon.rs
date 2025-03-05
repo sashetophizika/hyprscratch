@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::logs::*;
+use crate::scratchpad::scratchpad;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::data::Clients;
@@ -51,23 +52,25 @@ impl DaemonOptions {
     }
 }
 
-fn handle_scratchpad(
-    stream: &mut UnixStream,
-    msg: &str,
-    config: &mut Config,
-    state: &mut DaemonState,
-) -> Result<()> {
-    if !msg.is_empty() {
-        config.dirty_titles.retain(|x| *x != msg);
-        state.update_prev_titles(msg);
+fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize) -> Result<()> {
+    if config.titles.len() <= index {
+        return Ok(());
     }
 
-    stream.write_all(config.non_persist_titles.join(" ").as_bytes())?;
-    Ok(())
-}
+    let title = &config.titles[index];
+    config.dirty_titles.retain(|x| x != title);
+    state.update_prev_titles(title);
 
-fn handle_return(msg: &str, config: &mut Config) -> Result<()> {
-    config.dirty_titles.push(msg.to_string());
+    scratchpad(
+        title,
+        &config.commands[index],
+        &config.options[index],
+        &config.non_persist_titles.join(" "),
+    )?;
+
+    if !config.options[index].contains("shiny") {
+        config.dirty_titles.push(title.to_string());
+    }
     Ok(())
 }
 
@@ -107,12 +110,7 @@ fn handle_killall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_cycle(
-    stream: &mut UnixStream,
-    msg: &str,
-    config: &Config,
-    state: &mut DaemonState,
-) -> Result<()> {
+fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if config.titles.is_empty() {
         return Ok(());
     }
@@ -126,7 +124,6 @@ fn handle_cycle(
 
     if let Some(m) = mode {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            stream.write_all(b"empty")?;
             return Ok(());
         }
 
@@ -136,45 +133,33 @@ fn handle_cycle(
     }
 
     state.update_prev_titles(&config.titles[current_index]);
-    write_scratchpad(current_index, config, stream)?;
     state.cycle_index = current_index + 1;
+
+    handle_scratchpad(config, state, current_index)?;
     Ok(())
 }
 
-fn handle_call(stream: &mut UnixStream, msg: &str, config: &Config, req: &str) -> Result<()> {
+fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if msg.is_empty() {
-        stream.write_all(b"empty")?;
         return Ok(());
     }
 
     let i = config.names.clone().into_iter().position(|x| x == msg);
     if let Some(i) = i {
-        let mut options = config.options[i].clone();
-        options.push_str(req);
-
-        let scratchpad = format!("{}:{}:{}", config.titles[i], config.commands[i], options);
-        stream.write_all(scratchpad.as_bytes())?;
-    } else {
-        stream.write_all(b"empty")?;
+        config.options[i].push_str(req);
+        handle_scratchpad(config, state, i)?;
+        config.options[i] = config.options[i].replace(req, "");
     }
-
     Ok(())
 }
 
-fn handle_previous(
-    stream: &mut UnixStream,
-    msg: &str,
-    config: &Config,
-    state: &mut DaemonState,
-) -> Result<()> {
+fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if msg.is_empty() {
-        stream.write_all(b"empty")?;
         return Ok(());
     }
 
     let prev_active = (msg == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
-        stream.write_all(b"empty")?;
         return Ok(());
     }
 
@@ -185,20 +170,8 @@ fn handle_previous(
         .position(|x| x == state.prev_titles[prev_active]);
 
     if let Some(i) = index {
-        write_scratchpad(i, config, stream)?;
-    } else {
-        stream.write_all(b"empty")?;
+        handle_scratchpad(config, state, i)?;
     }
-
-    Ok(())
-}
-
-fn write_scratchpad(index: usize, config: &Config, stream: &mut UnixStream) -> Result<()> {
-    let scratchpad = format!(
-        "{}:{}:{}",
-        config.titles[index], config.commands[index], config.options[index]
-    );
-    stream.write_all(scratchpad.as_bytes())?;
     Ok(())
 }
 
@@ -220,7 +193,6 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
             }
         }
     });
-
     Ok(())
 }
 
@@ -315,14 +287,12 @@ fn start_unix_listener(
                 let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
 
                 match req {
-                    "toggle" | "summon" | "hide" => handle_call(&mut stream, msg, conf, req)?,
+                    "toggle" | "summon" | "hide" => handle_call(msg, req, conf, state)?,
                     "get-config" => handle_get_config(&mut stream, conf)?,
-                    "scratchpad" => handle_scratchpad(&mut stream, msg, conf, state)?,
-                    "previous" => handle_previous(&mut stream, msg, conf, state)?,
+                    "previous" => handle_previous(msg, conf, state)?,
                     "killall" => handle_killall(conf)?,
-                    "return" => handle_return(msg, conf)?,
                     "reload" => handle_reload(msg, conf, eager)?,
-                    "cycle" => handle_cycle(&mut stream, msg, conf, state)?,
+                    "cycle" => handle_cycle(msg, conf, state)?,
                     "kill" => break,
                     _ => {
                         let error_message = format!("Unknown request - {buf}");
