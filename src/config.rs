@@ -23,23 +23,34 @@ pub struct Config {
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let config_file = config_path.unwrap_or(find_config_file());
+        let mut config_files = if let Some(conf) = config_path {
+            vec![conf]
+        } else {
+            vec![]
+        };
+        config_files.extend(find_config_files());
 
-        let ext = Path::new(&config_file)
-            .extension()
-            .unwrap_log(file!(), line!());
+        let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
+        for config in &config_files {
+            let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
 
-        let [names, titles, commands, options] =
-            if config_file.contains("hyprland.conf") || ext == "txt" {
-                parse_config(&config_file)?
+            let config_data = if config.contains("hyprland.conf") || ext == "txt" {
+                parse_config(&config)?
             } else if ext == "conf" {
-                parse_hyprlang(&config_file)?
+                parse_hyprlang(&config)?
             } else if ext == "toml" {
-                parse_toml(&config_file)?
+                parse_toml(&config)?
             } else {
                 log("No configuration file found".to_string(), "ERROR")?;
                 std::process::exit(0);
             };
+
+            total_config_data
+                .iter_mut()
+                .zip(config_data)
+                .for_each(|(t, c)| t.extend(c));
+        }
+        let [names, titles, commands, options] = total_config_data;
 
         let filter_titles = |cond: &dyn Fn(&String) -> bool| {
             titles
@@ -62,8 +73,16 @@ impl Config {
         let dirty_titles =
             filter_titles(&|opts: &String| !contains_any(opts, &["sticky", "shiny", "special"]));
 
+        log(
+            format!(
+                "Configuration parsed successfully, main config is {:?}",
+                config_files[0].clone()
+            ),
+            "INFO",
+        )?;
+
         Ok(Config {
-            config_file,
+            config_file: config_files[0].clone(),
             names,
             titles,
             normal_titles,
@@ -85,7 +104,7 @@ impl Config {
     }
 }
 
-fn find_config_file() -> String {
+fn find_config_files() -> Vec<String> {
     let home = var("HOME").unwrap_log(file!(), line!());
     let paths = vec![
         format!("{home}/.config/hypr/hyprscratch.conf"),
@@ -94,12 +113,13 @@ fn find_config_file() -> String {
         format!("{home}/.config/hyprscratch/config.toml"),
         format!("{home}/.config/hyprscratch/hyprscratch.conf"),
         format!("{home}/.config/hyprscratch/hyprscratch.toml"),
+        format!("{home}/.config/hypr/hyprland.conf"),
     ];
 
     paths
         .into_iter()
-        .find(|p| Path::new(&p).exists())
-        .unwrap_or(format!("{home}/.config/hypr/hyprland.conf"))
+        .filter(|p| Path::new(&p).exists())
+        .collect()
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -184,7 +204,6 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
         "init",
         "spotless",
         "no-auto-reload",
-        "hideall",
         "hide-all",
         "reload",
         "previous",
