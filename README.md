@@ -26,7 +26,7 @@ bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCR
 Example scratchpad:
 
 ```bash
-bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritty --title btop -e btop" eager
+bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" eager
 ```
 
 ## Configuration
@@ -60,6 +60,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[float;size 70% 80%;center] alacritt
 * `hide`: only hides the scratchpad.
 
 * `poly`: toggle all scratchpads with the same title simultaneously
+
+* `tiled`: spawns the scratchpad tiled instead of floating
 
 * `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean` and `spotless`.
 
@@ -119,6 +121,4 @@ To group multiple scratchpads together, bind them to the same key and use `stack
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-If there are multiple scratchpads with the same initial title, this program just grabs the first one it finds.
-
-Scratchpads don't have to be floating. This can also be used to just spawn a specific client, where the binding also hides it or grabs it from another workspace. Non-floating scratchpads are ignored by `clean`.
+If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
