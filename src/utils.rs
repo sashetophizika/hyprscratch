@@ -72,6 +72,31 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+pub fn prepend_rules(
+    command: &str,
+    special_title: Option<&str>,
+    silent: bool,
+    float: bool,
+) -> String {
+    let mut rules = String::from("[");
+    if let Some(title) = special_title {
+        let silent = if silent { "silent" } else { "" };
+        rules += &format!("workspace special:{title} {silent};");
+    }
+
+    if float {
+        rules += "float;";
+    }
+
+    if command.find('[').is_none() {
+        println!("{rules}] {command}");
+        return format!("[{rules}] {command}");
+    } else {
+        println!("{}", command.replacen('[', &rules, 1));
+        return command.replacen('[', &rules, 1);
+    }
+}
+
 pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
     let client_titles = Clients::get()?
         .into_iter()
@@ -84,8 +109,8 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
             .iter()
             .zip(&config.titles)
             .zip(&config.options)
-            .filter(|((_, title), option)| {
-                !option.contains("lazy") && !client_titles.contains(title)
+            .filter(|((_, title), options)| {
+                !options.contains("lazy") && !client_titles.contains(title)
             })
             .collect()
     } else {
@@ -94,25 +119,17 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
             .iter()
             .zip(&config.titles)
             .zip(&config.options)
-            .filter(|((_, title), option)| {
-                option.contains("eager") && !client_titles.contains(title)
+            .filter(|((_, title), options)| {
+                options.contains("eager") && !client_titles.contains(title)
             })
             .collect()
     };
 
     auto_spawn_commands
         .into_iter()
-        .for_each(|((command, title), _)| {
-            let mut cmd = command.clone();
-            if command.find('[').is_none() {
-                cmd.insert_str(0, "[]");
-            }
-
-            hyprland::dispatch!(
-                Exec,
-                &cmd.replacen('[', &format!("[workspace special:{} silent;", title), 1)
-            )
-            .unwrap_log(file!(), line!())
+        .for_each(|((command, title), options)| {
+            let cmd = prepend_rules(command, Some(title), true, !options.contains("tiled"));
+            hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
         });
 
     Ok(())

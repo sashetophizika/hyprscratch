@@ -1,5 +1,5 @@
 use crate::logs::LogErr;
-use crate::utils::move_to_special;
+use crate::utils::{move_to_special, prepend_rules};
 use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -11,6 +11,7 @@ struct Options {
     poly: bool,
     cover: bool,
     stack: bool,
+    tiled: bool,
     special: bool,
 }
 
@@ -22,6 +23,7 @@ impl Options {
             poly: opts.contains("poly"),
             cover: opts.contains("cover"),
             stack: opts.contains("stack"),
+            tiled: opts.contains("tiled"),
             special: opts.contains("special"),
         }
     }
@@ -45,7 +47,12 @@ impl HyprlandState {
     }
 }
 
-fn summon_special(title: &str, command: &str, state: &HyprlandState) -> Result<()> {
+fn summon_special(
+    title: &str,
+    command: &str,
+    options: &Options,
+    state: &HyprlandState,
+) -> Result<()> {
     let special_with_title: Vec<&Client> = state
         .clients_with_title
         .iter()
@@ -59,12 +66,7 @@ fn summon_special(title: &str, command: &str, state: &HyprlandState) -> Result<(
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
         }
     } else if state.clients_with_title.is_empty() {
-        let mut special_cmd = command.to_string();
-        if special_cmd.find('[').is_none() {
-            special_cmd.insert_str(0, "[]");
-        }
-
-        special_cmd = special_cmd.replacen('[', &format!("[workspace special:{title}; "), 1);
+        let special_cmd = prepend_rules(command, Some(title), false, !options.tiled);
         hyprland::dispatch!(Exec, &special_cmd)?;
     } else {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
@@ -74,9 +76,10 @@ fn summon_special(title: &str, command: &str, state: &HyprlandState) -> Result<(
 
 fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
     if state.clients_with_title.is_empty() {
-        command
-            .split("?")
-            .for_each(|x| hyprland::dispatch!(Exec, &x).unwrap_log(file!(), line!()));
+        command.split("?").for_each(|x| {
+            let cmd = prepend_rules(x, None, false, !options.tiled);
+            hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
+        });
     } else {
         for client in state
             .clients_with_title
@@ -104,7 +107,7 @@ fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Res
 
 fn summon(title: &str, command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
     if options.special {
-        summon_special(title, command, state)?;
+        summon_special(title, command, options, state)?;
     } else if !options.hide {
         summon_normal(command, options, state)?;
     }
@@ -255,6 +258,7 @@ mod tests {
         summon_special(
             &resources.title,
             &resources.command,
+            &Options::new(""),
             &HyprlandState::new(""),
         )
         .unwrap();
@@ -268,6 +272,7 @@ mod tests {
         summon_special(
             &resources.title,
             &resources.command,
+            &Options::new(""),
             &HyprlandState::new(&resources.title),
         )
         .unwrap();
@@ -288,6 +293,7 @@ mod tests {
         summon_special(
             &resources.title,
             &resources.command,
+            &Options::new(""),
             &HyprlandState::new(&resources.title),
         )
         .unwrap();
