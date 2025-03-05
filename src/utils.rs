@@ -89,10 +89,8 @@ pub fn prepend_rules(
     }
 
     if command.find('[').is_none() {
-        println!("{rules}] {command}");
-        return format!("[{rules}] {command}");
+        return format!("{rules}] {command}");
     } else {
-        println!("{}", command.replacen('[', &rules, 1));
         return command.replacen('[', &rules, 1);
     }
 }

@@ -394,7 +394,6 @@ mod tests {
                 .count(),
             0
         );
-        sleep(Duration::from_millis(1000));
     }
 
     #[test]
@@ -542,6 +541,5 @@ mod tests {
             clients_with_title[0].workspace.name,
             "special:".to_owned() + &resources.title
         );
-        sleep(Duration::from_millis(1000));
     }
 }
