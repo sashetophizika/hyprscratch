@@ -162,9 +162,6 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, titles: &str) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use crate::daemon::initialize_daemon;
-    use crate::kill;
-
     use super::*;
     use std::thread::sleep;
     use std::time::Duration;
@@ -347,16 +344,6 @@ mod tests {
 
     #[test]
     fn test_poly() {
-        std::thread::spawn(|| {
-            initialize_daemon(
-                "".to_string(),
-                Some("test_configs/test_config3.txt".to_string()),
-                Some("/tmp/hyprscratch_test.sock"),
-            )
-        });
-        sleep(Duration::from_millis(1000));
-
-        let socket = Some("/tmp/hyprscratch_test.sock");
         let resources = TestResources {
             title: "test_poly".to_string(),
             command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
@@ -407,22 +394,60 @@ mod tests {
                 .count(),
             0
         );
-        kill(socket).unwrap();
         sleep(Duration::from_millis(1000));
     }
 
     #[test]
-    fn test_summon_hide() {
-        std::thread::spawn(|| {
-            initialize_daemon(
-                "".to_string(),
-                Some("test_configs/test_config3.txt".to_string()),
-                Some("/tmp/hyprscratch_test.sock"),
-            )
-        });
-        sleep(Duration::from_millis(500));
+    fn test_tiled() {
+        let resources = [
+            TestResources {
+                title: "test_tiled".to_string(),
+                command: "kitty --title test_tiled".to_string(),
+            },
+            TestResources {
+                title: "test_floating".to_string(),
+                command: "kitty --title test_floating".to_string(),
+            },
+        ];
 
-        let socket = Some("/tmp/hyprscratch_test.sock");
+        assert_eq!(
+            Clients::get().unwrap().iter().any(|x| resources
+                .iter()
+                .filter(|y| y.title == x.initial_title)
+                .next()
+                .is_none()),
+            true
+        );
+
+        scratchpad(
+            &resources[0].title,
+            &resources[0].command,
+            "tiled",
+            &resources[0].title,
+        )
+        .unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        assert_eq!(active_client.initial_title, resources[0].title);
+        assert_eq!(active_client.floating, false);
+
+        scratchpad(
+            &resources[1].title,
+            &resources[1].command,
+            "",
+            &resources[1].title,
+        )
+        .unwrap();
+        sleep(Duration::from_millis(1000));
+
+        let active_client = Client::get_active().unwrap().unwrap();
+        assert_eq!(active_client.initial_title, resources[1].title);
+        assert_eq!(active_client.floating, true);
+    }
+
+    #[test]
+    fn test_summon_hide() {
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
             command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
@@ -517,7 +542,6 @@ mod tests {
             clients_with_title[0].workspace.name,
             "special:".to_owned() + &resources.title
         );
-        kill(socket).unwrap();
         sleep(Duration::from_millis(1000));
     }
 }
