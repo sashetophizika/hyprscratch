@@ -13,7 +13,7 @@ use hyprland::Result;
 use logs::log;
 
 fn hyprscratch(args: &[String]) -> Result<()> {
-    for feature in ["hideall", "onstart", "stack", "eager"] {
+    for feature in ["stack"] {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }
@@ -42,7 +42,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         "clean" | "no-auto-reload" | "config" | "init" => {
             initialize_daemon(args.join(" "), config, socket)?
         }
-        "hideall" | "hide-all" => hide_all(socket)?,
+        "hide-all" => hide_all(socket)?,
         "previous" => previous(socket)?,
         "kill-all" => kill_all(socket)?,
         "cycle" => cycle(socket, args.join(" "))?,
