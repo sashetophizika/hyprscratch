@@ -23,12 +23,12 @@ pub struct Config {
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let mut config_files = if let Some(conf) = config_path {
-            vec![conf]
-        } else {
-            vec![]
-        };
-        config_files.extend(find_config_files());
+        let mut config_files = find_config_files();
+        if let Some(conf) = config_path {
+            if !config_files.contains(&conf) {
+                config_files.insert(0, conf);
+            }
+        }
 
         let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
         for config in &config_files {
