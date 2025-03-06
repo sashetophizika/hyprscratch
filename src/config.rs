@@ -23,12 +23,16 @@ pub struct Config {
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let mut config_files = find_config_files();
-        if let Some(conf) = config_path {
-            if !config_files.contains(&conf) {
-                config_files.insert(0, conf);
+        let default_configs = find_config_files();
+        let config_files = if let Some(conf) = config_path {
+            if !default_configs.contains(&conf) {
+                vec![conf]
+            } else {
+                default_configs
             }
-        }
+        } else {
+            default_configs
+        };
 
         let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
         for config in &config_files {
@@ -75,8 +79,8 @@ impl Config {
 
         log(
             format!(
-                "Configuration parsed successfully, main config is {:?}",
-                config_files[0].clone()
+                "Configuration parsed successfully, config is {:?}",
+                config_files[0]
             ),
             "INFO",
         )?;
@@ -123,7 +127,7 @@ fn find_config_files() -> Vec<String> {
 }
 
 fn split_args(line: String) -> Vec<String> {
-    let quote_types = [b'\"', b'\''];
+    let is_quote = |b: u8| b == b'\"' || b == b'\'';
 
     let mut args = vec![];
     let mut quotes = vec![];
@@ -135,7 +139,7 @@ fn split_args(line: String) -> Vec<String> {
         }
 
         let word_bytes = word.as_bytes();
-        if word_bytes.len() == 1 && quote_types.contains(&word_bytes[0]) {
+        if word_bytes.len() == 1 && is_quote(word_bytes[0]) {
             if !quotes.is_empty() && quotes[quotes.len() - 1] == word_bytes[0] {
                 quotes.pop();
                 if quotes.is_empty() {
@@ -145,13 +149,13 @@ fn split_args(line: String) -> Vec<String> {
                 quotes.push(word_bytes[0]);
             }
         } else {
-            if quote_types.contains(&word_bytes[0]) {
+            if is_quote(word_bytes[0]) {
                 quotes.push(word_bytes[0]);
-            } else if word_bytes[0] == b'\\' && quote_types.contains(&word_bytes[1]) {
+            } else if word_bytes[0] == b'\\' && is_quote(word_bytes[1]) {
                 quotes.push(word_bytes[1]);
             }
 
-            if quote_types.contains(&word_bytes[word_bytes.len() - 1]) {
+            if is_quote(word_bytes[word_bytes.len() - 1]) {
                 quotes.pop();
                 if quotes.is_empty() {
                     inquote_word += word;
@@ -190,14 +194,19 @@ fn dequote(s: &str) -> String {
     }
 }
 
+fn warn_unknown_option(opt: &str) {
+    let known_options = [
+        "cover", "persist", "sticky", "shiny", "lazy", "summon", "hide", "poly", "tiled", "special",
+    ];
+    if !known_options.contains(&opt) {
+        log("Unknown scratchpad option: ".to_string() + opt, "WARN").unwrap();
+    }
+}
+
 fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     let mut titles: Vec<String> = Vec::new();
     let mut commands: Vec<String> = Vec::new();
     let mut options: Vec<String> = Vec::new();
-
-    let known_options = [
-        "cover", "persist", "sticky", "shiny", "eager", "summon", "hide", "poly", "special",
-    ];
 
     let known_commands = [
         "clean",
@@ -241,12 +250,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
                 }
 
                 if parsed_args.len() > 3 {
-                    parsed_args[3..]
-                        .iter()
-                        .filter(|x| !known_options.contains(&x.as_str()))
-                        .for_each(|x| {
-                            log("Unknown scratchpad option: ".to_string() + x, "WARN").unwrap();
-                        });
+                    parsed_args[3..].iter().for_each(|x| warn_unknown_option(x));
                     options.push(parsed_args[3..].join(" "));
                 } else {
                     options.push("".into());
@@ -312,6 +316,10 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
             }
         }
     }
+
+    options
+        .iter()
+        .for_each(|opts| opts.split(" ").for_each(|opt| warn_unknown_option(opt)));
 
     commands = commands
         .into_iter()

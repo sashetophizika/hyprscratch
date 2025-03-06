@@ -74,42 +74,6 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
-fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
-    let config_path = if !msg.is_empty() && Path::new(msg).exists() {
-        Some(msg.to_string())
-    } else {
-        None
-    };
-    config.reload(config_path)?;
-    autospawn(config, eager)?;
-
-    log("Configuration reloaded".to_string(), "INFO")?;
-    Ok(())
-}
-
-fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
-    let config = format!(
-        "{}?{}?{}",
-        conf.titles.join("^"),
-        conf.commands.join("^"),
-        conf.options.join("^")
-    );
-
-    stream.write_all(config.as_bytes())?;
-    Ok(())
-}
-
-fn handle_killall(config: &Config) -> Result<()> {
-    Clients::get()?
-        .into_iter()
-        .filter(|x| config.titles.contains(&x.initial_title))
-        .for_each(|x| {
-            hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address))
-                .unwrap_log(file!(), line!())
-        });
-    Ok(())
-}
-
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if config.titles.is_empty() {
         return Ok(());
@@ -173,6 +137,42 @@ fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> R
     if let Some(i) = index {
         handle_scratchpad(config, state, i)?;
     }
+    Ok(())
+}
+
+fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
+    let config_path = if !msg.is_empty() && Path::new(msg).exists() {
+        Some(msg.to_string())
+    } else {
+        None
+    };
+    config.reload(config_path)?;
+    autospawn(config, eager)?;
+
+    log("Configuration reloaded".to_string(), "INFO")?;
+    Ok(())
+}
+
+fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
+    let config = format!(
+        "{}?{}?{}",
+        conf.titles.join("^"),
+        conf.commands.join("^"),
+        conf.options.join("^")
+    );
+
+    stream.write_all(config.as_bytes())?;
+    Ok(())
+}
+
+fn handle_killall(config: &Config) -> Result<()> {
+    Clients::get()?
+        .into_iter()
+        .filter(|x| config.titles.contains(&x.initial_title))
+        .for_each(|x| {
+            hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address))
+                .unwrap_log(file!(), line!())
+        });
     Ok(())
 }
 
@@ -294,11 +294,15 @@ fn start_unix_listener(
                     "killall" => handle_killall(conf)?,
                     "reload" => handle_reload(msg, conf, eager)?,
                     "cycle" => handle_cycle(msg, conf, state)?,
-                    "kill" => break,
+                    "kill" => {
+                        log(
+                            "Recieved 'kill' request, terminating listener".into(),
+                            "INFO",
+                        )?;
+                        break;
+                    }
                     _ => {
-                        let error_message = format!("Unknown request - {buf}");
-                        stream.write_all(error_message.as_bytes()).unwrap();
-                        log(error_message, "ERROR")?;
+                        log(format!("Unknown request: {buf}"), "WARN")?;
                     }
                 }
             }
