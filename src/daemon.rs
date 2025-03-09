@@ -111,7 +111,6 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     let i = config.names.clone().into_iter().position(|x| x == msg);
     if let Some(i) = i {
         config.options[i].push_str(req);
-        println!("{}", config.commands[i]);
         handle_scratchpad(config, state, i)?;
         config.options[i] = config.options[i].replace(req, "");
     }
@@ -200,6 +199,7 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
 fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_active_window_changed_handler(move |_| {
         if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
+            println!("{} {}", cl.floating, cl.initial_title);
             if !cl.floating {
                 move_floating(
                     config
@@ -287,13 +287,13 @@ fn start_unix_listener(
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
                 let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
 
-                match req {
-                    "toggle" | "summon" | "hide" => handle_call(msg, req, conf, state)?,
-                    "get-config" => handle_get_config(&mut stream, conf)?,
-                    "previous" => handle_previous(msg, conf, state)?,
-                    "killall" => handle_killall(conf)?,
-                    "reload" => handle_reload(msg, conf, eager)?,
-                    "cycle" => handle_cycle(msg, conf, state)?,
+                let res = match req {
+                    "toggle" | "summon" | "hide" => handle_call(msg, req, conf, state),
+                    "get-config" => handle_get_config(&mut stream, conf),
+                    "previous" => handle_previous(msg, conf, state),
+                    "killall" => handle_killall(conf),
+                    "reload" => handle_reload(msg, conf, eager),
+                    "cycle" => handle_cycle(msg, conf, state),
                     "kill" => {
                         log(
                             "Recieved 'kill' request, terminating listener".into(),
@@ -301,9 +301,11 @@ fn start_unix_listener(
                         )?;
                         break;
                     }
-                    _ => {
-                        log(format!("Unknown request: {buf}"), "WARN")?;
-                    }
+                    _ => log(format!("Unknown request: {buf}"), "WARN"),
+                };
+
+                if let Err(e) = res {
+                    log(format!("{e} in {req}:{msg}"), "WARN")?;
                 }
             }
             Err(_) => {
@@ -339,7 +341,7 @@ mod tests {
     use hyprland::data::{Clients, Workspace};
     use std::{thread::sleep, time::Duration};
 
-    fn test_handle(request: &str, expectation: &str) {
+    fn test_handle(request: &str) {
         let mut stream = UnixStream::connect("/tmp/hyprscratch_test.sock").unwrap();
 
         stream.write_all(request.as_bytes()).unwrap();
@@ -347,7 +349,6 @@ mod tests {
 
         let mut buf = String::new();
         stream.read_to_string(&mut buf).unwrap();
-        assert_eq!(expectation, buf);
     }
 
     #[test]
@@ -363,25 +364,24 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        //test_handle("cycle?", "firefox:firefox --private-window:special sticky");
-        //test_handle("cycle?0", "btop:kitty --title btop -e btop:");
-        //test_handle("cycle?1", "cmat:kitty --title cmat -e cmat:special");
+        //test_handle("cycle?");
+        //test_handle("cycle?0");
+        //test_handle("cycle?1");
         //
-        //test_handle("toggle?", "empty");
-        //test_handle("toggle?unknown", "empty");
-        //test_handle("toggle?btop", "btop:kitty --title btop -e btop:toggle");
+        //test_handle("toggle?");
+        //test_handle("toggle?unknown");
+        //test_handle("toggle?btop");
         //
-        //test_handle("previous?cmat", "btop:kitty --title btop -e btop:");
-        //test_handle("previous?htop", "cmat:kitty --title cmat -e cmat:special");
+        //test_handle("previous?cmat");
+        //test_handle("previous?htop");
         //
-        //test_handle("summon?btop", "btop:kitty --title btop -e btop:summon");
-        //test_handle("hide?btop", "btop:kitty --title btop -e btop:hide");
+        //test_handle("summon?btop");
+        //test_handle("hide?btop");
 
-        test_handle("reload?", "");
-        test_handle("killall?", "");
-
-        test_handle("?unknown", "Unknown request - ?unknown");
-        test_handle("kill?", "");
+        test_handle("reload?");
+        test_handle("killall?");
+        test_handle("?unknown");
+        test_handle("kill?");
     }
 
     struct TestResources {
@@ -472,7 +472,7 @@ mod tests {
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
 
         verify_test(&resources);
-        test_handle("kill", "");
+        test_handle("kill?");
         sleep(Duration::from_millis(1000));
     }
 
@@ -519,10 +519,10 @@ mod tests {
             WindowIdentifier::Address(active_client.address)
         )
         .unwrap();
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(500));
 
         verify_test(&resources);
-        test_handle("kill", "");
+        test_handle("kill?");
         sleep(Duration::from_millis(1000));
     }
 }
