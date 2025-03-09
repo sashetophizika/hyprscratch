@@ -88,12 +88,13 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         .try_into()
         .unwrap();
 
-    let max_len = |xs: &Vec<&str>, def: usize| {
+    let max_len = |xs: &Vec<&str>, min: usize, max: usize| {
         xs.iter()
             .map(|x| x.chars().count())
             .max()
             .unwrap_or(0)
-            .max(def)
+            .max(min)
+            .min(max)
     };
 
     let color_pad = |x: usize, y: &str| {
@@ -105,9 +106,10 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
             + &" ".repeat(x - y.chars().count())
     };
 
-    let max_titles = max_len(&titles, 6);
-    let max_commands = max_len(&commands, 8);
-    let max_options = max_len(&options, 7);
+    let max_chars = 100;
+    let max_titles = max_len(&titles, 6, max_chars);
+    let max_commands = max_len(&commands, 8, max_chars);
+    let max_options = max_len(&options, 7, max_chars);
 
     let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
         println!(
@@ -117,6 +119,14 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
             "─".repeat(max_commands + 2) + sep_c,
             "─".repeat(max_options + 2) + sep_r,
         );
+    };
+
+    let truncate = |str: &str| -> String {
+        if str.len() < max_chars {
+            str.into()
+        } else {
+            str[..max_chars - 3].to_string() + "..."
+        }
     };
 
     print_border("┌", "┬", "┐");
@@ -132,7 +142,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         println!(
             "│ {} │ {} │ {} │",
             color_pad(max_titles, titles[i]),
-            color_pad(max_commands, commands[i]),
+            color_pad(max_commands, &truncate(commands[i])),
             color_pad(max_options, options[i])
         )
     }
@@ -146,9 +156,9 @@ pub fn print_logs() -> Result<()> {
     if path.exists() {
         let mut file = std::fs::File::open(path)?;
         let mut buf = String::new();
-
         file.read_to_string(&mut buf)?;
-        let b = buf
+
+        let log_str = buf
             .replacen("[", "[\x1b[0;34m", 1)
             .replace("\n[", "\n[\x1b[0;34m")
             .replace("] [", "\x1b[0;0m] [")
@@ -156,7 +166,7 @@ pub fn print_logs() -> Result<()> {
             .replace("DEBUG", "\x1b[0;32mDEBUG\x1b[0;0m")
             .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
             .replace("INFO", "\x1b[0;36mINFO\x1b[0;0m");
-        println!("{}", b.trim());
+        println!("{}", log_str.trim());
     } else {
         println!("Logs are empty");
     }
@@ -187,6 +197,7 @@ SCRATCHPAD OPTIONS
   summon                      Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   poly                        Toggles all scratchpads matching the title simultaneously
+  tiled                       Makes a tiled scratchpad instead of a floating one
   special                     Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS

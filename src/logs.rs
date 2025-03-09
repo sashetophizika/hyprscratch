@@ -74,7 +74,6 @@ pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
         .append(true)
         .open("/tmp/hyprscratch/hyprscratch.log")?;
 
-    println!("{msg}");
     file.write_all(
         format!(
             "[{}] [{level}] {msg}\n",
@@ -82,5 +81,12 @@ pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
         )
         .as_bytes(),
     )?;
+
+    if level == "ERROR" {
+        panic!("{msg}");
+    } else {
+        println!("{msg}");
+    }
+
     Ok(())
 }

@@ -26,6 +26,10 @@ impl Config {
         let default_configs = find_config_files();
         let config_files = if let Some(conf) = config_path {
             if !default_configs.contains(&conf) {
+                if !Path::new(&conf).exists() {
+                    log(format!("Config file not found: {conf}"), "ERROR")?;
+                }
+
                 vec![conf]
             } else {
                 default_configs
@@ -36,6 +40,7 @@ impl Config {
 
         let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
         for config in &config_files {
+            println!("{config}");
             let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
 
             let config_data = if config.contains("hyprland.conf") || ext == "txt" {
@@ -46,7 +51,7 @@ impl Config {
                 parse_toml(&config)?
             } else {
                 log("No configuration file found".to_string(), "ERROR")?;
-                std::process::exit(0);
+                panic!()
             };
 
             total_config_data
@@ -110,20 +115,21 @@ impl Config {
 
 fn find_config_files() -> Vec<String> {
     let home = var("HOME").unwrap_log(file!(), line!());
-    let paths = vec![
-        format!("{home}/.config/hypr/hyprscratch.conf"),
-        format!("{home}/.config/hypr/hyprscratch.toml"),
-        format!("{home}/.config/hyprscratch/config.conf"),
-        format!("{home}/.config/hyprscratch/config.toml"),
-        format!("{home}/.config/hyprscratch/hyprscratch.conf"),
-        format!("{home}/.config/hyprscratch/hyprscratch.toml"),
-        format!("{home}/.config/hypr/hyprland.conf"),
-    ];
+    let prepend_home = |str| format!("{home}/.config/{str}");
 
-    paths
-        .into_iter()
-        .filter(|p| Path::new(&p).exists())
-        .collect()
+    return vec![
+        "hypr/hyprscratch.conf",
+        "hypr/hyprscratch.toml",
+        "hyprscratch/config.conf",
+        "hyprscratch/config.toml",
+        "hyprscratch/hyprscratch.conf",
+        "hyprscratch/hyprscratch.toml",
+        "hypr/hyprland.conf",
+    ]
+    .iter()
+    .map(|x| prepend_home(x))
+    .filter(|x| Path::new(&x).exists())
+    .collect();
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -179,6 +185,10 @@ fn split_args(line: String) -> Vec<String> {
 fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     let mut lines = vec![];
     for line in config_file.lines() {
+        if line.trim().starts_with("#") {
+            continue;
+        }
+
         if let Some(l) = line.find("hyprscratch") {
             lines.push(line.split_at(l).1.to_string());
         }
@@ -196,7 +206,8 @@ fn dequote(s: &str) -> String {
 
 fn warn_unknown_option(opt: &str) {
     let known_options = [
-        "cover", "persist", "sticky", "shiny", "lazy", "summon", "hide", "poly", "tiled", "special",
+        "", "cover", "persist", "sticky", "shiny", "lazy", "summon", "hide", "poly", "tiled",
+        "special",
     ];
     if !known_options.contains(&opt) {
         log("Unknown scratchpad option: ".to_string() + opt, "WARN").unwrap();

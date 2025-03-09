@@ -70,7 +70,6 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                     ),
                     "ERROR",
                 )?;
-                println!("Try 'hyprscratch help'.");
             } else {
                 call(socket, args, "toggle")?
             }
@@ -82,11 +81,10 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let log_err = |err: HyprError| {
-        log(
+        let _ = log(
             format!("{}, command: '{}'.", err, args[1..].join(" ")),
             "ERROR",
-        )
-        .unwrap();
+        );
     };
 
     hyprscratch(&args).unwrap_or_else(log_err);
