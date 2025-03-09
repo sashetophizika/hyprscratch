@@ -40,7 +40,6 @@ impl Config {
 
         let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
         for config in &config_files {
-            println!("{config}");
             let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
 
             let config_data = if config.contains("hyprland.conf") || ext == "txt" {
@@ -496,7 +495,7 @@ mod tests {
         config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager summon hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager").unwrap();
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n").unwrap();
 
         let config_file = "./test_configs/test_config2.txt".to_string();
         let mut config = Config::new(Some(config_file.clone())).unwrap();
@@ -556,7 +555,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager").
                 b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special",
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
             )
             .unwrap();
 

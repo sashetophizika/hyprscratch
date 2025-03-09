@@ -241,7 +241,7 @@ mod tests {
     fn test_summon_special() {
         let resources = TestResources {
             title: "test_special_scratchpad".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_special_scratchpad".to_string(),
+            command: "[size 30% 30%] kitty --title test_special_scratchpad".to_string(),
         };
 
         assert_eq!(
@@ -310,7 +310,7 @@ mod tests {
     fn test_persist() {
         let resources = TestResources {
             title: "test_persist".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_persist".to_string(),
+            command: "[size 30% 30%] kitty --title test_persist".to_string(),
         };
 
         assert_eq!(
@@ -346,7 +346,7 @@ mod tests {
     fn test_poly() {
         let resources = TestResources {
             title: "test_poly".to_string(),
-            command: "[float;size 30% 30%; move 0 0] kitty --title test_poly ? [float;size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
+            command: "[size 30% 30%; move 0 0] kitty --title test_poly ? [size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
         };
 
         assert_eq!(
@@ -449,7 +449,7 @@ mod tests {
     fn test_summon_hide() {
         let resources = TestResources {
             title: "test_summon_hide".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_summon_hide".to_string(),
+            command: "[size 30% 30%] kitty --title test_summon_hide".to_string(),
         };
 
         assert_eq!(

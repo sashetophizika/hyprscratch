@@ -199,7 +199,6 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
 fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_active_window_changed_handler(move |_| {
         if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
-            println!("{} {}", cl.floating, cl.initial_title);
             if !cl.floating {
                 move_floating(
                     config
