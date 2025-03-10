@@ -1,33 +1,10 @@
+use crate::config::Scratchpad;
 use crate::logs::LogErr;
 use crate::utils::{move_to_special, prepend_rules};
 use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
-
-struct Options {
-    summon: bool,
-    hide: bool,
-    poly: bool,
-    cover: bool,
-    stack: bool,
-    tiled: bool,
-    special: bool,
-}
-
-impl Options {
-    fn new(opts: &str) -> Options {
-        Options {
-            summon: opts.contains("summon"),
-            hide: opts.contains("hide"),
-            poly: opts.contains("poly"),
-            cover: opts.contains("cover"),
-            stack: opts.contains("stack"),
-            tiled: opts.contains("tiled"),
-            special: opts.contains("special"),
-        }
-    }
-}
 
 struct HyprlandState {
     active_workspace: Workspace,
@@ -47,37 +24,36 @@ impl HyprlandState {
     }
 }
 
-fn summon_special(
-    title: &str,
-    command: &str,
-    options: &Options,
-    state: &HyprlandState,
-) -> Result<()> {
+fn summon_special(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<()> {
     let special_with_title: Vec<&Client> = state
         .clients_with_title
         .iter()
-        .filter(|x| x.workspace.id < 0)
+        .filter(|x| x.workspace.id < 0 && x.workspace.id > -1000)
         .collect();
 
     if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-        move_to_special(&state.clients_with_title[0])?;
-
+        move_to_special(&state.clients_with_title[0], Some(&scratchpad.title))?;
         if state.clients_with_title[0].workspace.id == state.active_workspace.id {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(scratchpad.workspace.clone()))?;
         }
     } else if state.clients_with_title.is_empty() {
-        let special_cmd = prepend_rules(command, Some(title), false, !options.tiled);
+        let special_cmd = prepend_rules(
+            &scratchpad.command,
+            Some(&scratchpad.workspace),
+            false,
+            !scratchpad.options.tiled,
+        );
         hyprland::dispatch!(Exec, &special_cmd)?;
     } else {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(title.to_string()))?;
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(scratchpad.workspace.clone()))?;
     }
     Ok(())
 }
 
-fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
+fn summon_normal(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<()> {
     if state.clients_with_title.is_empty() {
-        command.split("?").for_each(|x| {
-            let cmd = prepend_rules(x, None, false, !options.tiled);
+        scratchpad.command.split("?").for_each(|x| {
+            let cmd = prepend_rules(x, None, false, !scratchpad.options.tiled);
             hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
         });
     } else {
@@ -92,7 +68,7 @@ fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Res
                 Some(WindowIdentifier::Address(client.address.clone()))
             )
             .unwrap_log(file!(), line!());
-            if !options.poly {
+            if !scratchpad.options.poly {
                 break;
             }
         }
@@ -105,29 +81,28 @@ fn summon_normal(command: &str, options: &Options, state: &HyprlandState) -> Res
     Ok(())
 }
 
-fn summon(title: &str, command: &str, options: &Options, state: &HyprlandState) -> Result<()> {
-    if options.special {
-        summon_special(title, command, options, state)?;
-    } else if !options.hide {
-        summon_normal(command, options, state)?;
+fn summon(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<()> {
+    if scratchpad.options.special {
+        summon_special(scratchpad, state)?;
+    } else if !scratchpad.options.hide {
+        summon_normal(scratchpad, state)?;
     }
     Ok(())
 }
 
-fn hide_active(options: &Options, titles: &str, active_client: &Client) -> Result<()> {
-    if !options.cover
-        && !options.stack
+fn hide_active(scratchpad: &mut Scratchpad, titles: &str, active_client: &Client) -> Result<()> {
+    if !scratchpad.options.cover
+        && !scratchpad.options.stack
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
-        move_to_special(active_client)?;
+        move_to_special(active_client, Some(&scratchpad.title))?;
     }
     Ok(())
 }
 
-pub fn scratchpad(title: &str, command: &str, opts: &str, titles: &str) -> Result<()> {
-    let options = Options::new(opts);
-    let state = HyprlandState::new(title);
+pub fn do_the_scratchpad(scratchpad: &mut Scratchpad, titles: &str) -> Result<()> {
+    let state = HyprlandState::new(&scratchpad.title);
 
     if let Some(active_client) = Client::get_active()? {
         let mut clients_on_active = state
@@ -138,14 +113,14 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, titles: &str) -> Resul
             .peekable();
 
         let hide_all = !active_client.floating
-            || active_client.initial_title == title
+            || active_client.initial_title == scratchpad.title
             || active_client.fullscreen == FullscreenMode::None;
 
-        if options.special || clients_on_active.peek().is_none() {
-            summon(title, command, &options, &state)?;
-            hide_active(&options, titles, &active_client)?;
-        } else if hide_all && !options.summon {
-            clients_on_active.for_each(|x| move_to_special(&x).unwrap());
+        if scratchpad.options.special || clients_on_active.peek().is_none() {
+            summon(scratchpad, &state)?;
+            hide_active(scratchpad, titles, &active_client)?;
+        } else if hide_all && !scratchpad.options.summon {
+            clients_on_active.for_each(|x| move_to_special(&x, Some(&scratchpad.title)).unwrap());
         } else {
             hyprland::dispatch!(
                 FocusWindow,
@@ -153,7 +128,7 @@ pub fn scratchpad(title: &str, command: &str, opts: &str, titles: &str) -> Resul
             )?;
         }
     } else {
-        summon(title, command, &options, &state)?;
+        summon(scratchpad, &state)?;
     }
 
     Dispatch::call(DispatchType::BringActiveToTop)?;
@@ -196,8 +171,7 @@ mod tests {
         );
 
         summon_normal(
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(""),
         )
         .unwrap();
@@ -206,7 +180,12 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active(&Options::new(""), &resources.title, &active_client).unwrap();
+        hide_active(
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
+            &resources.title,
+            &active_client,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert_eq!(
@@ -223,8 +202,7 @@ mod tests {
 
         let active_workspace = Workspace::get_active().unwrap();
         summon_normal(
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(&resources.title),
         )
         .unwrap();
@@ -253,9 +231,7 @@ mod tests {
         );
 
         summon_special(
-            &resources.title,
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(""),
         )
         .unwrap();
@@ -267,9 +243,7 @@ mod tests {
         );
 
         summon_special(
-            &resources.title,
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(&resources.title),
         )
         .unwrap();
@@ -288,9 +262,7 @@ mod tests {
         );
 
         summon_special(
-            &resources.title,
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(&resources.title),
         )
         .unwrap();
@@ -299,7 +271,17 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active(&Options::new("cover"), &resources.title, &active_client).unwrap();
+        hide_active(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "cover",
+            ),
+            &resources.title,
+            &active_client,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         let active_client = Client::get_active().unwrap().unwrap();
@@ -322,8 +304,7 @@ mod tests {
         );
 
         summon_normal(
-            &resources.command,
-            &Options::new(""),
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
             &HyprlandState::new(""),
         )
         .unwrap();
@@ -332,7 +313,12 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        hide_active(&Options::new(""), "", &active_client).unwrap();
+        hide_active(
+            &mut Scratchpad::new(&resources.title, &resources.title, &resources.command, ""),
+            "",
+            &active_client,
+        )
+        .unwrap();
         sleep(Duration::from_millis(1000));
 
         assert!(Clients::get()
@@ -357,10 +343,13 @@ mod tests {
             false
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "poly",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "poly",
+            ),
             &resources.title,
         )
         .unwrap();
@@ -376,10 +365,13 @@ mod tests {
             2
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "poly",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "poly",
+            ),
             &resources.title,
         )
         .unwrap();
@@ -418,10 +410,13 @@ mod tests {
             true
         );
 
-        scratchpad(
-            &resources[0].title,
-            &resources[0].command,
-            "tiled",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources[0].title,
+                &resources[0].title,
+                &resources[0].command,
+                "tiled",
+            ),
             &resources[0].title,
         )
         .unwrap();
@@ -431,10 +426,13 @@ mod tests {
         assert_eq!(active_client.initial_title, resources[0].title);
         assert_eq!(active_client.floating, false);
 
-        scratchpad(
-            &resources[1].title,
-            &resources[1].command,
-            "",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources[1].title,
+                &resources[1].title,
+                &resources[1].command,
+                "",
+            ),
             &resources[1].title,
         )
         .unwrap();
@@ -460,10 +458,13 @@ mod tests {
             false
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "summon",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "summon",
+            ),
             &resources.title,
         )
         .unwrap();
@@ -474,10 +475,13 @@ mod tests {
             resources.title
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "summon",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "summon",
+            ),
             &resources.title,
         )
         .unwrap();
@@ -495,10 +499,13 @@ mod tests {
             resources.title
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "hide",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "hide",
+            ),
             &resources.title,
         )
         .unwrap();
@@ -521,10 +528,13 @@ mod tests {
             "special:".to_owned() + &resources.title
         );
 
-        scratchpad(
-            &resources.title,
-            &resources.command,
-            "hide",
+        do_the_scratchpad(
+            &mut Scratchpad::new(
+                &resources.title,
+                &resources.title,
+                &resources.command,
+                "hide",
+            ),
             &resources.title,
         )
         .unwrap();

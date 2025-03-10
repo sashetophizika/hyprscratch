@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::logs::*;
-use crate::scratchpad::scratchpad;
+use crate::scratchpad::do_the_scratchpad;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::data::Clients;
@@ -53,33 +53,31 @@ impl DaemonOptions {
 }
 
 fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize) -> Result<()> {
-    if config.titles.len() <= index {
+    if config.scratchpads.len() <= index {
         return Ok(());
     }
 
-    let title = &config.titles[index];
-    config.dirty_titles.retain(|x| x != title);
-    state.update_prev_titles(title);
+    let title = config.scratchpads[index].title.clone();
+    config.dirty_titles.retain(|x| *x != title);
+    state.update_prev_titles(&title);
 
-    scratchpad(
-        title,
-        &config.commands[index],
-        &config.options[index],
+    do_the_scratchpad(
+        &mut config.scratchpads[index],
         &config.non_persist_titles.join(" "),
     )?;
 
-    if !config.options[index].contains("shiny") {
+    if !config.scratchpads[index].options.shiny {
         config.dirty_titles.push(title.to_string());
     }
     Ok(())
 }
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if config.titles.is_empty() {
+    if config.scratchpads.is_empty() {
         return Ok(());
     }
 
-    let mut current_index = state.cycle_index % config.titles.len();
+    let mut current_index = state.cycle_index % config.scratchpads.len();
     let mode = if msg.is_empty() {
         None
     } else {
@@ -91,12 +89,12 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
             return Ok(());
         }
 
-        while m != config.options[current_index].contains("special") {
-            current_index = (current_index + 1) % config.titles.len();
+        while m != config.scratchpads[current_index].options.special {
+            current_index = (current_index + 1) % config.scratchpads.len();
         }
     }
 
-    state.update_prev_titles(&config.titles[current_index]);
+    state.update_prev_titles(&config.scratchpads[current_index].title);
     state.cycle_index = current_index + 1;
 
     handle_scratchpad(config, state, current_index)?;
@@ -108,11 +106,15 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         return Ok(());
     }
 
-    let i = config.names.clone().into_iter().position(|x| x == msg);
+    let i = config
+        .scratchpads
+        .clone()
+        .into_iter()
+        .position(|x| x.name == msg);
     if let Some(i) = i {
-        config.options[i].push_str(req);
+        config.scratchpads[i].options.toggle(req);
         handle_scratchpad(config, state, i)?;
-        config.options[i] = config.options[i].replace(req, "");
+        config.scratchpads[i].options.toggle(req);
     }
     Ok(())
 }
@@ -128,10 +130,10 @@ fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> R
     }
 
     let index = config
-        .titles
+        .scratchpads
         .clone()
         .into_iter()
-        .position(|x| x == state.prev_titles[prev_active]);
+        .position(|x| x.title == state.prev_titles[prev_active]);
 
     if let Some(i) = index {
         handle_scratchpad(config, state, i)?;
@@ -155,9 +157,21 @@ fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
 fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
     let config = format!(
         "{}?{}?{}",
-        conf.titles.join("^"),
-        conf.commands.join("^"),
-        conf.options.join("^")
+        conf.scratchpads
+            .iter()
+            .map(|x| x.title.clone())
+            .collect::<Vec<_>>()
+            .join("^"),
+        conf.scratchpads
+            .iter()
+            .map(|x| x.command.clone())
+            .collect::<Vec<_>>()
+            .join("^"),
+        conf.scratchpads
+            .iter()
+            .map(|x| x.options.clone().get_string())
+            .collect::<Vec<_>>()
+            .join("^"),
     );
 
     stream.write_all(config.as_bytes())?;
@@ -167,7 +181,12 @@ fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
 fn handle_killall(config: &Config) -> Result<()> {
     Clients::get()?
         .into_iter()
-        .filter(|x| config.titles.contains(&x.initial_title))
+        .filter(|x| {
+            config
+                .scratchpads
+                .iter()
+                .any(|scratchpad| scratchpad.title == x.initial_title)
+        })
         .for_each(|x| {
             hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address))
                 .unwrap_log(file!(), line!())

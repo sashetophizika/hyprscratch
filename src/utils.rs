@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Scratchpad};
 use crate::logs::{log, LogErr};
 use hyprland::data::Client;
 use hyprland::data::Clients;
@@ -47,20 +47,19 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
     None
 }
 
-pub fn move_to_special(client: &Client) -> Result<()> {
+pub fn move_to_special(client: &Client, workspace_name: Option<&String>) -> Result<()> {
+    let workspace = if let Some(work) = workspace_name {
+        work
+    } else {
+        &client.initial_title.clone()
+    };
+
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title)),
+        WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
         Some(WindowIdentifier::Address(client.address.clone()))
     )
-    .unwrap_or(
-        hyprland::dispatch!(
-            MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Name(&format!("special:{}", client.initial_title)),
-            Some(WindowIdentifier::Address(client.address.clone()))
-        )
-        .unwrap_log(file!(), line!()),
-    );
+    .unwrap_log(file!(), line!());
     Ok(())
 }
 
@@ -68,20 +67,20 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Clients::get()?
         .into_iter()
         .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
-        .for_each(|x| move_to_special(&x).unwrap());
+        .for_each(|x| move_to_special(&x, None).unwrap());
     Ok(())
 }
 
 pub fn prepend_rules(
     command: &str,
-    special_title: Option<&str>,
+    workspace_name: Option<&String>,
     silent: bool,
     float: bool,
 ) -> String {
     let mut rules = String::from("[");
-    if let Some(title) = special_title {
+    if let Some(workspace) = workspace_name {
         let silent = if silent { "silent" } else { "" };
-        rules += &format!("workspace special:{title} {silent};");
+        rules += &format!("workspace special:{workspace} {silent};");
     }
 
     if float {
@@ -89,9 +88,9 @@ pub fn prepend_rules(
     }
 
     if command.find('[').is_none() {
-        return format!("{rules}] {command}");
+        format!("{rules}] {command}")
     } else {
-        return command.replacen('[', &rules, 1);
+        command.replacen('[', &rules, 1)
     }
 }
 
@@ -101,34 +100,36 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
         .map(|x| x.initial_title)
         .collect::<Vec<_>>();
 
-    let auto_spawn_commands: Vec<((&String, &String), &String)> = if eager {
+    let auto_spawn_commands: Vec<Scratchpad> = if eager {
         config
-            .commands
-            .iter()
-            .zip(&config.titles)
-            .zip(&config.options)
-            .filter(|((_, title), options)| {
-                !options.contains("lazy") && !client_titles.contains(title)
+            .scratchpads
+            .clone()
+            .into_iter()
+            .filter(|scratchpad| {
+                !scratchpad.options.lazy && !client_titles.contains(&scratchpad.title)
             })
             .collect()
     } else {
         config
-            .commands
-            .iter()
-            .zip(&config.titles)
-            .zip(&config.options)
-            .filter(|((_, title), options)| {
-                options.contains("eager") && !client_titles.contains(title)
+            .scratchpads
+            .clone()
+            .into_iter()
+            .filter(|scratchpad| {
+                scratchpad.options.get_string().contains("eager")
+                    && !client_titles.contains(&scratchpad.title)
             })
             .collect()
     };
 
-    auto_spawn_commands
-        .into_iter()
-        .for_each(|((command, title), options)| {
-            let cmd = prepend_rules(command, Some(title), true, !options.contains("tiled"));
-            hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
-        });
+    auto_spawn_commands.into_iter().for_each(|scratchpad| {
+        let cmd = prepend_rules(
+            &scratchpad.command,
+            Some(&scratchpad.workspace),
+            true,
+            !scratchpad.options.tiled,
+        );
+        hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
+    });
 
     Ok(())
 }
@@ -136,6 +137,7 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Scratchpad;
     use hyprland::data::{Client, Workspace};
     use std::thread::sleep;
     use std::time::Duration;
@@ -254,21 +256,28 @@ mod tests {
             .clone()
             .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
 
+        let options = vec![
+            "".to_string(),
+            "special eager".to_string(),
+            "lazy".to_string(),
+        ];
+
+        let scratchpads: Vec<Scratchpad> = resources
+            .titles
+            .iter()
+            .zip(resources.commands.clone())
+            .zip(options)
+            .map(|((t, c), o)| Scratchpad::new(&t, &t, &c, &o))
+            .collect();
+
         let mut config = Config {
+            scratchpads,
             config_file: "".to_string(),
-            names: resources.titles.to_vec(),
-            titles: resources.titles.to_vec(),
             normal_titles: Vec::new(),
             special_titles: Vec::new(),
             slick_titles: Vec::new(),
             dirty_titles: Vec::new(),
             non_persist_titles: resources.titles.to_vec(),
-            commands: resources.commands.to_vec(),
-            options: vec![
-                "".to_string(),
-                "special eager".to_string(),
-                "lazy".to_string(),
-            ],
         };
 
         autospawn(&mut config, true).unwrap();

@@ -7,18 +7,89 @@ use std::path::Path;
 use std::vec;
 use toml::{Table, Value};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScratchpadOptions {
+    options_string: String,
+    pub summon: bool,
+    pub hide: bool,
+    pub shiny: bool,
+    pub sticky: bool,
+    pub poly: bool,
+    pub cover: bool,
+    pub stack: bool,
+    pub tiled: bool,
+    pub lazy: bool,
+    pub special: bool,
+}
+
+impl ScratchpadOptions {
+    pub fn new(opts: &str) -> ScratchpadOptions {
+        ScratchpadOptions {
+            options_string: opts.to_string(),
+            summon: opts.contains("summon"),
+            hide: opts.contains("hide"),
+            shiny: opts.contains("shiny"),
+            sticky: opts.contains("sticky"),
+            poly: opts.contains("poly"),
+            cover: opts.contains("cover"),
+            stack: opts.contains("stack"),
+            tiled: opts.contains("tiled"),
+            lazy: opts.contains("lazy"),
+            special: opts.contains("special"),
+        }
+    }
+
+    pub fn toggle(&mut self, opt: &str) {
+        match opt {
+            "summon" => self.summon ^= true,
+            "hide" => self.hide ^= true,
+            "shiny" => self.shiny ^= true,
+            "sticky" => self.sticky ^= true,
+            "poly" => self.poly ^= true,
+            "cover" => self.cover ^= true,
+            "stack" => self.stack ^= true,
+            "tiled" => self.tiled ^= true,
+            "lazy" => self.lazy ^= true,
+            "special" => self.special ^= true,
+            _ => (),
+        };
+    }
+
+    pub fn get_string(&self) -> String {
+        self.options_string.clone()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scratchpad {
+    pub name: String,
+    pub title: String,
+    pub command: String,
+    pub workspace: String,
+    pub options: ScratchpadOptions,
+}
+
+impl Scratchpad {
+    pub fn new(name: &str, title: &str, command: &str, options: &str) -> Scratchpad {
+        Scratchpad {
+            name: name.into(),
+            title: title.into(),
+            command: command.into(),
+            workspace: title.into(),
+            options: ScratchpadOptions::new(options),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Config {
     pub config_file: String,
-    pub names: Vec<String>,
-    pub titles: Vec<String>,
+    pub scratchpads: Vec<Scratchpad>,
     pub normal_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
     pub non_persist_titles: Vec<String>,
-    pub commands: Vec<String>,
-    pub options: Vec<String>,
 }
 
 impl Config {
@@ -38,48 +109,45 @@ impl Config {
             default_configs
         };
 
-        let mut total_config_data: [Vec<String>; 4] = [vec![], vec![], vec![], vec![]];
+        let mut scratchpads: Vec<Scratchpad> = vec![];
         for config in &config_files {
             let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
 
-            let config_data = if config.contains("hyprland.conf") || ext == "txt" {
-                parse_config(&config)?
+            let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
+                parse_config(config)?
             } else if ext == "conf" {
-                parse_hyprlang(&config)?
+                parse_hyprlang(config)?
             } else if ext == "toml" {
-                parse_toml(&config)?
+                parse_toml(config)?
             } else {
                 log("No configuration file found".to_string(), "ERROR")?;
                 panic!()
             };
 
-            total_config_data
-                .iter_mut()
-                .zip(config_data)
-                .for_each(|(t, c)| t.extend(c));
+            scratchpads.append(&mut config_data);
         }
-        let [names, titles, commands, options] = total_config_data;
 
-        let filter_titles = |cond: &dyn Fn(&String) -> bool| {
-            titles
+        let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
+            scratchpads
                 .clone()
                 .into_iter()
-                .zip(options.clone())
-                .filter(|(_, opts)| cond(opts))
-                .map(|(title, _)| title)
+                .filter(|scratchpad| cond(&scratchpad.options))
+                .map(|scratchpad| scratchpad.title)
                 .collect::<Vec<_>>()
         };
         let contains_any =
             |opts: &String, s: &[&str]| -> bool { opts.split(" ").any(|o| s.contains(&o)) };
 
-        let normal_titles = filter_titles(&|opts: &String| !opts.contains("special"));
-        let special_titles = filter_titles(&|opts: &String| opts.contains("special"));
-        let slick_titles = filter_titles(&|opts: &String| !opts.contains("sticky"));
+        let normal_titles = filter_titles(&|opts: &ScratchpadOptions| !opts.special);
+        let special_titles = filter_titles(&|opts: &ScratchpadOptions| opts.special);
+        let slick_titles = filter_titles(&|opts: &ScratchpadOptions| !opts.sticky);
 
-        let non_persist_titles =
-            filter_titles(&|opts: &String| !contains_any(opts, &["persist", "special"]));
-        let dirty_titles =
-            filter_titles(&|opts: &String| !contains_any(opts, &["sticky", "shiny", "special"]));
+        let non_persist_titles = filter_titles(&|opts: &ScratchpadOptions| {
+            !contains_any(&opts.get_string(), &["persist", "special"])
+        });
+        let dirty_titles = filter_titles(&|opts: &ScratchpadOptions| {
+            !contains_any(&opts.get_string(), &["sticky", "shiny", "special"])
+        });
 
         log(
             format!(
@@ -91,15 +159,12 @@ impl Config {
 
         Ok(Config {
             config_file: config_files[0].clone(),
-            names,
-            titles,
+            scratchpads,
             normal_titles,
             special_titles,
             slick_titles,
             dirty_titles,
             non_persist_titles,
-            commands,
-            options,
         })
     }
 
@@ -116,7 +181,7 @@ fn find_config_files() -> Vec<String> {
     let home = var("HOME").unwrap_log(file!(), line!());
     let prepend_home = |str| format!("{home}/.config/{str}");
 
-    return vec![
+    [
         "hypr/hyprscratch.conf",
         "hypr/hyprscratch.toml",
         "hyprscratch/config.conf",
@@ -126,9 +191,9 @@ fn find_config_files() -> Vec<String> {
         "hypr/hyprland.conf",
     ]
     .iter()
-    .map(|x| prepend_home(x))
+    .map(prepend_home)
     .filter(|x| Path::new(&x).exists())
-    .collect();
+    .collect()
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -213,11 +278,7 @@ fn warn_unknown_option(opt: &str) {
     }
 }
 
-fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
-    let mut titles: Vec<String> = Vec::new();
-    let mut commands: Vec<String> = Vec::new();
-    let mut options: Vec<String> = Vec::new();
-
+fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
     let known_commands = [
         "clean",
         "init",
@@ -239,6 +300,7 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
     std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
     let lines: Vec<String> = get_hyprscratch_lines(buf);
 
+    let mut scratchpads: Vec<Scratchpad> = vec![];
     for line in lines {
         let parsed_args = split_args(line);
 
@@ -247,40 +309,46 @@ fn parse_config(config_file: &String) -> Result<[Vec<String>; 4]> {
         }
 
         match parsed_args[1].as_str() {
-            cmd if known_commands.contains(&cmd) => (),
+            cmd if known_commands.contains(&cmd) => continue,
             _ => {
+                let [title, command, opts];
                 if parsed_args.len() > 2 {
-                    titles.push(dequote(&parsed_args[1]));
-                    commands.push(dequote(&parsed_args[2]));
+                    title = dequote(&parsed_args[1]);
+                    command = dequote(&parsed_args[2]);
                 } else {
                     log(
                         "Unknown command or no command after title: ".to_string() + &parsed_args[1],
                         "WARN",
                     )?;
+                    continue;
                 }
 
                 if parsed_args.len() > 3 {
                     parsed_args[3..].iter().for_each(|x| warn_unknown_option(x));
-                    options.push(parsed_args[3..].join(" "));
+                    opts = parsed_args[3..].join(" ");
                 } else {
-                    options.push("".into());
+                    opts = "".into();
                 }
+
+                scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
             }
         };
     }
 
-    Ok([titles.clone(), titles, commands, options])
+    Ok(scratchpads)
 }
 
-fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
+fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
     let mut buf = String::new();
     File::open(config_file)?.read_to_string(&mut buf)?;
 
-    let mut names: Vec<String> = Vec::new();
-    let mut titles: Vec<String> = Vec::new();
-    let mut commands: Vec<String> = Vec::new();
-    let mut rules: Vec<String> = Vec::new();
-    let mut options: Vec<String> = Vec::new();
+    let mut name: String = String::new();
+    let mut title: String = String::new();
+    let mut command: String = String::new();
+    let mut rules: String = String::new();
+    let mut options: String = String::new();
+
+    let mut scratchpads = vec![];
     let mut in_scope = false;
 
     let escape = |s: &str| -> String {
@@ -295,17 +363,21 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
                 }
 
                 in_scope = true;
-                names.push(split.0.trim().into());
+                name = split.0.trim().into();
+                title = String::new();
+                command = String::new();
+                rules = String::new();
+                options = String::new();
             } else {
                 if !in_scope {
                     log("Syntax error in configuration: not in scope".into(), "WARN")?;
                 }
 
                 match split.0.trim() {
-                    "title" => titles.push(escape(split.1)),
-                    "command" => commands.push(escape(split.1)),
-                    "rules" => rules.push(escape(split.1)),
-                    "options" => options.push(escape(split.1)),
+                    "title" => title = escape(split.1),
+                    "command" => command = escape(split.1),
+                    "rules" => rules = escape(split.1),
+                    "options" => options = escape(split.1),
                     s => log(
                         format!("Unknown field given in configuration file: {s}"),
                         "WARN",
@@ -316,37 +388,38 @@ fn parse_hyprlang(config_file: &String) -> Result<[Vec<String>; 4]> {
             if !in_scope {
                 log("Syntax error in configuration: unopened '}'".into(), "WARN")?;
             }
-
             in_scope = false;
-            if rules.len() != names.len() {
-                rules.push("".into());
+
+            if title.is_empty() {
+                log(
+                    format!("Field title not found for scratchpad {name}"),
+                    "WARN",
+                )?;
+                continue;
             }
-            if options.len() != names.len() {
-                options.push("".into());
+
+            if command.is_empty() {
+                log(
+                    format!("Field command not found for scratchpad {name}"),
+                    "WARN",
+                )?;
+                continue;
             }
+
+            let cmd = if rules.is_empty() {
+                command.clone()
+            } else {
+                format!("[{rules}] {command}")
+            };
+
+            scratchpads.push(Scratchpad::new(&name, &title, &cmd, &options))
         }
     }
 
-    options
-        .iter()
-        .for_each(|opts| opts.split(" ").for_each(|opt| warn_unknown_option(opt)));
-
-    commands = commands
-        .into_iter()
-        .zip(rules)
-        .map(|(c, r)| {
-            if r.is_empty() {
-                c
-            } else {
-                format!("[{r}] {c}")
-            }
-        })
-        .collect::<Vec<_>>();
-
-    Ok([names, titles, commands, options])
+    Ok(scratchpads)
 }
 
-fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
+fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
         "WARN",
@@ -368,7 +441,7 @@ fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
             .collect::<Vec<_>>()
     };
 
-    let names = toml.keys().map(|k| k.into()).collect::<Vec<_>>();
+    let names = toml.keys().map(|k| k.into()).collect::<Vec<String>>();
     let titles = get_field("title");
     let options = get_field("options");
     let commands = get_field("command")
@@ -383,7 +456,15 @@ fn parse_toml(config_file: &String) -> Result<[Vec<String>; 4]> {
         })
         .collect::<Vec<_>>();
 
-    Ok([names, titles, commands, options])
+    let scratchpads: Vec<Scratchpad> = names
+        .into_iter()
+        .zip(titles)
+        .zip(commands)
+        .zip(options)
+        .map(|(((n, t), c), o)| Scratchpad::new(&n, &t, &c, &o))
+        .collect();
+
+    Ok(scratchpads)
 }
 
 #[cfg(test)]
@@ -393,100 +474,87 @@ mod tests {
 
     #[test]
     fn test_parse_hyprlang() {
-        let expected_names = vec!["btop", "nautilus", "noname", "wierd"];
-        let expected_titles = vec![
-            "btop",
-            "Loading…",
-            "\\\"",
-            " a program with ' a wierd ' name",
-        ];
-        let expected_commands = vec![
-            "[float;size 85% 85%;center] kitty --title btop -e btop",
-            "[float;size 70% 80%;center] nautilus",
-            "\\'",
-            " a \"command with\" \\'a wierd\\' format",
-        ];
-        let expected_options = vec![
-            "cover persist sticky shiny eager summon hide poly special",
-            "",
-            "cover eager special",
-            "hide summon",
+        let expected_scratchpads = vec![
+            Scratchpad::new(
+                "btop",
+                "btop",
+                "[float;size 85% 85%;center] kitty --title btop -e btop",
+                "cover persist sticky shiny eager summon hide poly special",
+            ),
+            Scratchpad::new(
+                "nautilus",
+                "Loading…",
+                "[float;size 70% 80%;center] nautilus",
+                "",
+            ),
+            Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
+            Scratchpad::new(
+                "wierd",
+                " a program with ' a wierd ' name",
+                " a \"command with\" \\'a wierd\\' format",
+                "hide summon",
+            ),
         ];
 
-        let [names, titles, commands, options] =
-            parse_hyprlang(&"./test_configs/test_hyprlang.conf".to_owned()).unwrap();
-
-        assert_eq!(names, expected_names);
-        assert_eq!(titles, expected_titles);
-        assert_eq!(commands, expected_commands);
-        assert_eq!(options, expected_options);
+        let scratchpads = parse_hyprlang(&"./test_configs/test_hyprlang.conf".to_owned()).unwrap();
+        assert_eq!(scratchpads, expected_scratchpads);
     }
 
     #[test]
     fn test_parse_toml() {
-        let expected_names = vec!["btop", "nautilus", "noname", "wierd"];
-        let expected_titles = vec![
-            "btop",
-            "Loading…",
-            "\\\"",
-            " a program with ' a wierd ' name",
-        ];
-        let expected_commands = vec![
-            "[float;size 85% 85%;center] kitty --title btop -e btop",
-            "[float;size 70% 80%;center] nautilus",
-            "\\'",
-            " a \"command with\" \\'a wierd\\' format",
-        ];
-        let expected_options = vec![
-            "cover persist sticky shiny eager summon hide poly special",
-            "",
-            "cover eager special",
-            "hide summon",
+        let expected_scratchpads = vec![
+            Scratchpad::new(
+                "btop",
+                "btop",
+                "[float;size 85% 85%;center] kitty --title btop -e btop",
+                "cover persist sticky shiny eager summon hide poly special",
+            ),
+            Scratchpad::new(
+                "nautilus",
+                "Loading…",
+                "[float;size 70% 80%;center] nautilus",
+                "",
+            ),
+            Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
+            Scratchpad::new(
+                "wierd",
+                " a program with ' a wierd ' name",
+                " a \"command with\" \\'a wierd\\' format",
+                "hide summon",
+            ),
         ];
 
-        let [names, titles, commands, options] =
-            parse_toml(&"./test_configs/test_toml.toml".to_owned()).unwrap();
+        let scratchpads = parse_toml(&"./test_configs/test_toml.toml".to_owned()).unwrap();
 
-        assert_eq!(names, expected_names);
-        assert_eq!(titles, expected_titles);
-        assert_eq!(commands, expected_commands);
-        assert_eq!(options, expected_options);
+        assert_eq!(scratchpads, expected_scratchpads);
     }
 
     #[test]
     fn test_parse_config() {
-        let expected_names = vec![
-            "btop",
-            "Loading…",
-            "\\\"",
-            " a program with ' a wierd ' name ",
-        ];
-        let expected_titles = vec![
-            "btop",
-            "Loading…",
-            "\\\"",
-            " a program with ' a wierd ' name ",
-        ];
-        let expected_commands = vec![
-            "[float;size 85% 85%;center] kitty --title btop -e btop",
-            "[float;size 70% 80%;center] nautilus",
-            "\\'",
-            " a \"command with\" \\'a wierd\\' format",
-        ];
-        let expected_options = vec![
-            "cover persist sticky shiny eager summon hide poly special",
-            "",
-            "cover eager special",
-            "hide summon",
+        let expected_scratchpads = vec![
+            Scratchpad::new(
+                "btop",
+                "btop",
+                "[float;size 85% 85%;center] kitty --title btop -e btop",
+                "cover persist sticky shiny eager summon hide poly special",
+            ),
+            Scratchpad::new(
+                "Loading…",
+                "Loading…",
+                "[float;size 70% 80%;center] nautilus",
+                "",
+            ),
+            Scratchpad::new("\\\"", "\\\"", "\\'", "cover eager special"),
+            Scratchpad::new(
+                " a program with ' a wierd ' name ",
+                " a program with ' a wierd ' name ",
+                " a \"command with\" \\'a wierd\\' format",
+                "hide summon",
+            ),
         ];
 
-        let [names, titles, commands, options] =
-            parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
-
-        assert_eq!(names, expected_names);
-        assert_eq!(titles, expected_titles);
-        assert_eq!(commands, expected_commands);
-        assert_eq!(options, expected_options);
+        let scratchpads = parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
+        assert_eq!(scratchpads, expected_scratchpads);
     }
 
     #[test]
@@ -499,34 +567,22 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
 
         let config_file = "./test_configs/test_config2.txt".to_string();
         let mut config = Config::new(Some(config_file.clone())).unwrap();
+        let scratchpads = vec![
+            Scratchpad::new("firefox", "firefox", "firefox", "cover"),
+            Scratchpad::new(
+                "btop",
+                "btop",
+                "kitty --title btop -e btop",
+                "cover shiny eager summon hide special sticky",
+            ),
+            Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "special"),
+            Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "eager"),
+        ];
         let expected_config = Config {
             config_file,
-            names: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            titles: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
+            scratchpads,
             normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
             special_titles: vec!["btop".to_string(), "htop".to_string()],
-            commands: vec![
-                "firefox".to_string(),
-                "kitty --title btop -e btop".to_string(),
-                "kitty --title htop -e htop".to_string(),
-                "kitty --title cmat -e cmat".to_string(),
-            ],
-            options: vec![
-                "cover".to_string(),
-                "cover shiny eager summon hide special sticky".to_string(),
-                "special".to_string(),
-                "eager".to_string(),
-            ],
             slick_titles: vec![
                 "firefox".to_string(),
                 "htop".to_string(),
@@ -541,13 +597,11 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
             ],
         };
 
-        assert_eq!(config.titles, expected_config.titles);
+        assert_eq!(config.scratchpads, expected_config.scratchpads);
         assert_eq!(config.normal_titles, expected_config.normal_titles);
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.slick_titles, expected_config.slick_titles);
         assert_eq!(config.dirty_titles, expected_config.dirty_titles);
-        assert_eq!(config.commands, expected_config.commands);
-        assert_eq!(config.options, expected_config.options);
 
         let mut config_path = File::create("./test_configs/test_config2.txt").unwrap();
         config_path
@@ -561,34 +615,22 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
 
         let config_file = "./test_configs/test_config2.txt".to_string();
         config.reload(Some(config_file.clone())).unwrap();
+        let scratchpads = vec![
+            Scratchpad::new(
+                "firefox",
+                "firefox",
+                "firefox --private-window",
+                "special sticky",
+            ),
+            Scratchpad::new("btop", "btop", "kitty --title btop -e btop", ""),
+            Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "cover shiny"),
+            Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "special"),
+        ];
         let expected_config = Config {
             config_file,
-            names: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            titles: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
+            scratchpads,
             normal_titles: vec!["btop".to_string(), "htop".to_string()],
             special_titles: vec!["firefox".to_string(), "cmat".to_string()],
-            commands: vec![
-                "firefox --private-window".to_string(),
-                "kitty --title btop -e btop".to_string(),
-                "kitty --title htop -e htop".to_string(),
-                "kitty --title cmat -e cmat".to_string(),
-            ],
-            options: vec![
-                "special sticky".to_string(),
-                "".to_string(),
-                "cover shiny".to_string(),
-                "special".to_string(),
-            ],
             slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
             dirty_titles: vec!["btop".to_string()],
             non_persist_titles: vec![
@@ -599,12 +641,10 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             ],
         };
 
-        assert_eq!(config.titles, expected_config.titles);
+        assert_eq!(config.scratchpads, expected_config.scratchpads);
         assert_eq!(config.normal_titles, expected_config.normal_titles);
         assert_eq!(config.special_titles, expected_config.special_titles);
         assert_eq!(config.slick_titles, expected_config.slick_titles);
         assert_eq!(config.dirty_titles, expected_config.dirty_titles);
-        assert_eq!(config.commands, expected_config.commands);
-        assert_eq!(config.options, expected_config.options);
     }
 }
