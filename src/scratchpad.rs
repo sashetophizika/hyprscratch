@@ -125,6 +125,7 @@ impl Scratchpad {
     fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
         if state.clients_with_title.is_empty() {
             self.command.split("?").for_each(|x| {
+                println!("{x}");
                 let cmd = prepend_rules(x, None, false, !self.options.tiled);
                 hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
             });
@@ -244,7 +245,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(""))
+            .summon_normal(&HyprlandState::new(&resources.title))
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -297,7 +298,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(""))
+            .summon_special(&HyprlandState::new(&resources.title))
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -361,7 +362,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(""))
+            .summon_normal(&HyprlandState::new(&resources.title))
             .unwrap();
         sleep(Duration::from_millis(1000));
 
