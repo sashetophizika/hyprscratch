@@ -1,6 +1,5 @@
 use crate::config::Config;
 use crate::logs::*;
-use crate::scratchpad::do_the_scratchpad;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::data::Clients;
@@ -61,10 +60,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     config.dirty_titles.retain(|x| *x != title);
     state.update_prev_titles(&title);
 
-    do_the_scratchpad(
-        &mut config.scratchpads[index],
-        &config.non_persist_titles.join(" "),
-    )?;
+    config.scratchpads[index].run(&config.non_persist_titles.join(" "))?;
 
     if !config.scratchpads[index].options.shiny {
         config.dirty_titles.push(title.to_string());
@@ -207,12 +203,10 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
         )
         .log_err(file!(), line!());
 
-        if let Ok(client) = Client::get_active() {
-            if let Some(cl) = client {
-                if cl.workspace.id < 0 && cl.workspace.id > -1000 {
-                    hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
-                        .unwrap_log(file!(), line!());
-                }
+        if let Ok(Some(cl)) = Client::get_active() {
+            if cl.workspace.id < 0 && cl.workspace.id > -1000 {
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
+                    .unwrap_log(file!(), line!());
             }
         }
     });
@@ -221,18 +215,16 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
 
 fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_active_window_changed_handler(move |_| {
-        if let Ok(client) = Client::get_active() {
-            if let Some(cl) = client {
-                if !cl.floating {
-                    move_floating(
-                        config
-                            .lock()
-                            .unwrap_log(file!(), line!())
-                            .dirty_titles
-                            .clone(),
-                    )
-                    .log_err(file!(), line!());
-                }
+        if let Ok(Some(cl)) = Client::get_active() {
+            if !cl.floating {
+                move_floating(
+                    config
+                        .lock()
+                        .unwrap_log(file!(), line!())
+                        .dirty_titles
+                        .clone(),
+                )
+                .log_err(file!(), line!());
             }
         }
     });

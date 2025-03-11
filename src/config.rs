@@ -1,4 +1,5 @@
 use crate::logs::{log, LogErr};
+use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use hyprland::Result;
 use std::env::var;
 use std::fs::File;
@@ -6,80 +7,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::vec;
 use toml::{Table, Value};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScratchpadOptions {
-    options_string: String,
-    pub summon: bool,
-    pub hide: bool,
-    pub shiny: bool,
-    pub sticky: bool,
-    pub poly: bool,
-    pub cover: bool,
-    pub stack: bool,
-    pub tiled: bool,
-    pub lazy: bool,
-    pub special: bool,
-}
-
-impl ScratchpadOptions {
-    pub fn new(opts: &str) -> ScratchpadOptions {
-        ScratchpadOptions {
-            options_string: opts.to_string(),
-            summon: opts.contains("summon"),
-            hide: opts.contains("hide"),
-            shiny: opts.contains("shiny"),
-            sticky: opts.contains("sticky"),
-            poly: opts.contains("poly"),
-            cover: opts.contains("cover"),
-            stack: opts.contains("stack"),
-            tiled: opts.contains("tiled"),
-            lazy: opts.contains("lazy"),
-            special: opts.contains("special"),
-        }
-    }
-
-    pub fn toggle(&mut self, opt: &str) {
-        match opt {
-            "summon" => self.summon ^= true,
-            "hide" => self.hide ^= true,
-            "shiny" => self.shiny ^= true,
-            "sticky" => self.sticky ^= true,
-            "poly" => self.poly ^= true,
-            "cover" => self.cover ^= true,
-            "stack" => self.stack ^= true,
-            "tiled" => self.tiled ^= true,
-            "lazy" => self.lazy ^= true,
-            "special" => self.special ^= true,
-            _ => (),
-        };
-    }
-
-    pub fn get_string(&self) -> String {
-        self.options_string.clone()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Scratchpad {
-    pub name: String,
-    pub title: String,
-    pub command: String,
-    pub workspace: String,
-    pub options: ScratchpadOptions,
-}
-
-impl Scratchpad {
-    pub fn new(name: &str, title: &str, command: &str, options: &str) -> Scratchpad {
-        Scratchpad {
-            name: name.into(),
-            title: title.into(),
-            command: command.into(),
-            workspace: name.into(),
-            options: ScratchpadOptions::new(options),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Config {

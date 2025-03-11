@@ -1,5 +1,6 @@
-use crate::config::{Config, Scratchpad};
+use crate::config::Config;
 use crate::logs::{log, LogErr};
+use crate::scratchpad::Scratchpad;
 use hyprland::data::Client;
 use hyprland::data::Clients;
 use hyprland::dispatch::*;
@@ -61,8 +62,8 @@ pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<(
     )
     .unwrap_or_else(|_| {
         let workspace = if workspace_name != "empty" {
-            workspace_name.push_str("1");
-            &workspace_name
+            workspace_name.push('1');
+            workspace_name
         } else {
             &client.initial_title.clone()
         };
@@ -150,7 +151,7 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Scratchpad;
+    use crate::scratchpad::Scratchpad;
     use hyprland::data::{Client, Workspace};
     use std::thread::sleep;
     use std::time::Duration;
