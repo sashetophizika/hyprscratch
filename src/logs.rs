@@ -8,6 +8,7 @@ use std::sync::LockResult;
 
 pub trait LogErr<T> {
     fn unwrap_log(self, file: &str, line: u32) -> T;
+    fn log_err(self, file: &str, line: u32);
 }
 
 impl<T> LogErr<T> for hyprland::Result<T> {
@@ -19,6 +20,11 @@ impl<T> LogErr<T> for hyprland::Result<T> {
                 log(msg.clone(), "ERROR").unwrap();
                 panic!()
             }
+        }
+    }
+    fn log_err(self, file: &str, line: u32) {
+        if let Err(e) = self {
+            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
         }
     }
 }
@@ -34,6 +40,11 @@ impl<T> LogErr<T> for Result<T, VarError> {
             }
         }
     }
+    fn log_err(self, file: &str, line: u32) {
+        if let Err(e) = self {
+            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
+        }
+    }
 }
 
 impl<T> LogErr<T> for LockResult<T> {
@@ -47,6 +58,11 @@ impl<T> LogErr<T> for LockResult<T> {
             }
         }
     }
+    fn log_err(self, file: &str, line: u32) {
+        if let Err(e) = self {
+            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
+        }
+    }
 }
 
 impl<T> LogErr<T> for Option<T> {
@@ -58,6 +74,12 @@ impl<T> LogErr<T> for Option<T> {
                 log(msg.clone(), "ERROR").unwrap();
                 panic!()
             }
+        }
+    }
+
+    fn log_err(self, file: &str, line: u32) {
+        if self.is_none() {
+            let _ = log(format!("Recieved None at {}:{}", file, line), "WARN");
         }
     }
 }

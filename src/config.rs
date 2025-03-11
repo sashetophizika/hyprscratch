@@ -75,7 +75,7 @@ impl Scratchpad {
             name: name.into(),
             title: title.into(),
             command: command.into(),
-            workspace: title.into(),
+            workspace: name.into(),
             options: ScratchpadOptions::new(options),
         }
     }

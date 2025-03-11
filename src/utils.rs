@@ -47,9 +47,9 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
     None
 }
 
-pub fn move_to_special(client: &Client, workspace_name: Option<&String>) -> Result<()> {
-    let workspace = if let Some(work) = workspace_name {
-        work
+pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<()> {
+    let workspace = if workspace_name != "empty" {
+        &workspace_name
     } else {
         &client.initial_title.clone()
     };
@@ -59,7 +59,20 @@ pub fn move_to_special(client: &Client, workspace_name: Option<&String>) -> Resu
         WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
         Some(WindowIdentifier::Address(client.address.clone()))
     )
-    .unwrap_log(file!(), line!());
+    .unwrap_or_else(|_| {
+        let workspace = if workspace_name != "empty" {
+            workspace_name.push_str("1");
+            &workspace_name
+        } else {
+            &client.initial_title.clone()
+        };
+        hyprland::dispatch!(
+            MoveToWorkspaceSilent,
+            WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
+            Some(WindowIdentifier::Address(client.address.clone()))
+        )
+        .log_err(file!(), line!());
+    });
     Ok(())
 }
 
@@ -67,7 +80,7 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Clients::get()?
         .into_iter()
         .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
-        .for_each(|x| move_to_special(&x, None).unwrap());
+        .for_each(|x| move_to_special(&x, &mut String::from("empty")).log_err(file!(), line!()));
     Ok(())
 }
 
@@ -128,7 +141,7 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
             true,
             !scratchpad.options.tiled,
         );
-        hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
+        hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
     });
 
     Ok(())

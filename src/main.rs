@@ -40,7 +40,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 
     match args.get(1).map_or("", |v| v.as_str()) {
         "clean" | "no-auto-reload" | "config" | "init" => {
-            initialize_daemon(args.join(" "), config, socket)?
+            initialize_daemon(args.join(" "), config, socket)
         }
         "hide-all" => hide_all(socket)?,
         "previous" => previous(socket)?,
@@ -55,7 +55,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 "WARN",
             )?;
             println!("Use 'hyprscratch init'.");
-            initialize_daemon(args.join(" "), config, socket)?;
+            initialize_daemon(args.join(" "), config, socket);
         }
         s if s.starts_with("-") => {
             log("Unknown flags".to_string(), "Error")?;

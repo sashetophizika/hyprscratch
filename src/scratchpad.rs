@@ -32,7 +32,7 @@ fn summon_special(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<
         .collect();
 
     if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-        move_to_special(&state.clients_with_title[0], Some(&scratchpad.title))?;
+        move_to_special(&state.clients_with_title[0], &mut scratchpad.workspace)?;
         if state.clients_with_title[0].workspace.id == state.active_workspace.id {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(scratchpad.workspace.clone()))?;
         }
@@ -54,7 +54,7 @@ fn summon_normal(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<(
     if state.clients_with_title.is_empty() {
         scratchpad.command.split("?").for_each(|x| {
             let cmd = prepend_rules(x, None, false, !scratchpad.options.tiled);
-            hyprland::dispatch!(Exec, &cmd).unwrap_log(file!(), line!())
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     } else {
         for client in state
@@ -63,11 +63,10 @@ fn summon_normal(scratchpad: &mut Scratchpad, state: &HyprlandState) -> Result<(
             .filter(|x| x.workspace.id != state.active_workspace.id)
         {
             hyprland::dispatch!(
-                MoveToWorkspaceSilent,
+                MoveToWorkspace,
                 WorkspaceIdentifierWithSpecial::Relative(0),
                 Some(WindowIdentifier::Address(client.address.clone()))
-            )
-            .unwrap_log(file!(), line!());
+            )?;
             if !scratchpad.options.poly {
                 break;
             }
@@ -96,7 +95,7 @@ fn hide_active(scratchpad: &mut Scratchpad, titles: &str, active_client: &Client
         && active_client.floating
         && titles.contains(&active_client.initial_title)
     {
-        move_to_special(active_client, Some(&scratchpad.title))?;
+        move_to_special(active_client, &mut String::from("empty"))?;
     }
     Ok(())
 }
@@ -120,7 +119,9 @@ pub fn do_the_scratchpad(scratchpad: &mut Scratchpad, titles: &str) -> Result<()
             summon(scratchpad, &state)?;
             hide_active(scratchpad, titles, &active_client)?;
         } else if hide_all && !scratchpad.options.summon {
-            clients_on_active.for_each(|x| move_to_special(&x, Some(&scratchpad.title)).unwrap());
+            clients_on_active.for_each(|x| {
+                move_to_special(&x, &mut scratchpad.workspace).log_err(file!(), line!());
+            });
         } else {
             hyprland::dispatch!(
                 FocusWindow,

@@ -188,8 +188,10 @@ fn handle_killall(config: &Config) -> Result<()> {
                 .any(|scratchpad| scratchpad.title == x.initial_title)
         })
         .for_each(|x| {
-            hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address))
-                .unwrap_log(file!(), line!())
+            let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address));
+            if let Err(e) = res {
+                let _ = log(format!("{e} in {} at {}", file!(), line!()), "WARN");
+            }
         });
     Ok(())
 }
@@ -203,12 +205,14 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
                 .slick_titles
                 .clone(),
         )
-        .unwrap_log(file!(), line!());
+        .log_err(file!(), line!());
 
-        if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
-            if cl.workspace.id < 0 && cl.workspace.id > -1000 {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
-                    .unwrap_log(file!(), line!());
+        if let Ok(client) = Client::get_active() {
+            if let Some(cl) = client {
+                if cl.workspace.id < 0 && cl.workspace.id > -1000 {
+                    hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
+                        .unwrap_log(file!(), line!());
+                }
             }
         }
     });
@@ -217,16 +221,18 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
 
 fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
     ev.add_active_window_changed_handler(move |_| {
-        if let Some(cl) = Client::get_active().unwrap_log(file!(), line!()) {
-            if !cl.floating {
-                move_floating(
-                    config
-                        .lock()
-                        .unwrap_log(file!(), line!())
-                        .dirty_titles
-                        .clone(),
-                )
-                .unwrap_log(file!(), line!());
+        if let Ok(client) = Client::get_active() {
+            if let Some(cl) = client {
+                if !cl.floating {
+                    move_floating(
+                        config
+                            .lock()
+                            .unwrap_log(file!(), line!())
+                            .dirty_titles
+                            .clone(),
+                    )
+                    .log_err(file!(), line!());
+                }
             }
         }
     });
@@ -335,22 +341,20 @@ fn start_unix_listener(
     Ok(())
 }
 
-pub fn initialize_daemon(
-    args: String,
-    config_path: Option<String>,
-    socket_path: Option<&str>,
-) -> Result<()> {
-    let config = Arc::new(Mutex::new(Config::new(config_path.clone())?));
+pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path: Option<&str>) {
+    let config = Arc::new(Mutex::new(
+        Config::new(config_path.clone()).unwrap_log(file!(), line!()),
+    ));
+
     let eager = args.contains("eager");
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()), eager)?;
+    autospawn(&mut config.lock().unwrap_log(file!(), line!()), eager).log_err(file!(), line!());
 
     let options = DaemonOptions::new(&args);
     let config_clone = Arc::clone(&config);
-    thread::spawn(move || start_event_listeners(options, config_clone));
+    thread::spawn(move || start_event_listeners(options, config_clone).log_err(file!(), line!()));
 
     let mut state = DaemonState::new();
-    start_unix_listener(socket_path, &mut state, config, eager)?;
-    Ok(())
+    start_unix_listener(socket_path, &mut state, config, eager).unwrap_log(file!(), line!());
 }
 
 #[cfg(test)]
@@ -378,7 +382,6 @@ mod tests {
                 Some("./test_configs/test_config2.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
-            .unwrap();
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -458,7 +461,6 @@ mod tests {
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
-            .unwrap();
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -503,7 +505,6 @@ mod tests {
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
             )
-            .unwrap();
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
