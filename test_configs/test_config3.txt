@@ -1,5 +1,5 @@
-bind = $mainMod, a, exec, hyprscratch test_normal_clean "[float] kitty --title test_normal_clean"
-bind = $mainMod, b, exec, hyprscratch test_nonfloating_clean "kitty --title test_nofloating_clean"
+bind = $mainMod, a, exec, hyprscratch test_normal_clean "kitty --title test_normal_clean"
+bind = $mainMod, b, exec, hyprscratch test_nonfloating_clean "kitty --title test_nofloating_clean" tiled
 bind = $mainMod, c, exec, hyprscratch test_special_clean "kitty --title test_special_clean" special
 bind = $mainMod, d, exec, hyprscratch test_sticky_clean "kitty --title test_sticky_clean" sticky
 bind = $mainMod, d, exec, hyprscratch test_shiny_clean "kitty --title test_shiny_clean" shiny
