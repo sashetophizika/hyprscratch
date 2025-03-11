@@ -209,9 +209,13 @@ fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
     let known_commands = [
         "clean",
         "init",
+        "summon",
+        "hide",
+        "eager",
         "spotless",
         "no-auto-reload",
         "hide-all",
+        "kill-all",
         "reload",
         "previous",
         "cycle",
@@ -399,21 +403,15 @@ mod tests {
     use super::*;
     use std::fs::File;
 
-    #[test]
-    fn test_parse_hyprlang() {
-        let expected_scratchpads = vec![
+    fn expected_scratchpads() -> Vec<Scratchpad> {
+        vec![
             Scratchpad::new(
                 "btop",
                 "btop",
-                "[float;size 85% 85%;center] kitty --title btop -e btop",
-                "cover persist sticky shiny eager summon hide poly special",
+                "[size 85% 85%] kitty --title btop -e btop",
+                "cover persist sticky shiny lazy summon hide poly special tiled",
             ),
-            Scratchpad::new(
-                "nautilus",
-                "Loading…",
-                "[float;size 70% 80%;center] nautilus",
-                "",
-            ),
+            Scratchpad::new("nautilus", "Loading…", "[size 70% 80%] nautilus", ""),
             Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
             Scratchpad::new(
                 "wierd",
@@ -421,66 +419,29 @@ mod tests {
                 " a \"command with\" \\'a wierd\\' format",
                 "hide summon",
             ),
-        ];
+        ]
+    }
 
+    #[test]
+    fn test_parse_hyprlang() {
         let scratchpads = parse_hyprlang(&"./test_configs/test_hyprlang.conf".to_owned()).unwrap();
-        assert_eq!(scratchpads, expected_scratchpads);
+        assert_eq!(scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_toml() {
-        let expected_scratchpads = vec![
-            Scratchpad::new(
-                "btop",
-                "btop",
-                "[float;size 85% 85%;center] kitty --title btop -e btop",
-                "cover persist sticky shiny eager summon hide poly special",
-            ),
-            Scratchpad::new(
-                "nautilus",
-                "Loading…",
-                "[float;size 70% 80%;center] nautilus",
-                "",
-            ),
-            Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
-            Scratchpad::new(
-                "wierd",
-                " a program with ' a wierd ' name",
-                " a \"command with\" \\'a wierd\\' format",
-                "hide summon",
-            ),
-        ];
-
         let scratchpads = parse_toml(&"./test_configs/test_toml.toml".to_owned()).unwrap();
-
-        assert_eq!(scratchpads, expected_scratchpads);
+        assert_eq!(scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_config() {
-        let expected_scratchpads = vec![
-            Scratchpad::new(
-                "btop",
-                "btop",
-                "[float;size 85% 85%;center] kitty --title btop -e btop",
-                "cover persist sticky shiny eager summon hide poly special",
-            ),
-            Scratchpad::new(
-                "Loading…",
-                "Loading…",
-                "[float;size 70% 80%;center] nautilus",
-                "",
-            ),
-            Scratchpad::new("\\\"", "\\\"", "\\'", "cover eager special"),
-            Scratchpad::new(
-                " a program with ' a wierd ' name ",
-                " a program with ' a wierd ' name ",
-                " a \"command with\" \\'a wierd\\' format",
-                "hide summon",
-            ),
-        ];
-
         let scratchpads = parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
+        let mut expected_scratchpads = expected_scratchpads();
+        for i in 0..4 {
+            expected_scratchpads[i].name = expected_scratchpads[i].title.clone();
+            expected_scratchpads[i].workspace = expected_scratchpads[i].title.clone();
+        }
         assert_eq!(scratchpads, expected_scratchpads);
     }
 
