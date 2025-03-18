@@ -39,11 +39,15 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
     let long = format!("--{flag}");
     let short = format!("-{}", flag.as_bytes()[0] as char);
 
-    if let Some(ci) = args
-        .iter()
-        .position(|x| x == flag || *x == long || *x == short)
-    {
+    let pred = |x: &String| x == flag || *x == long || *x == short;
+    if let Some(ci) = args.iter().position(|x| pred(x)) {
         return args.get(ci + 1).cloned();
+    }
+
+    if let Some(arg) = args.iter().find(|x| x.contains(flag)) {
+        if arg.contains('=') {
+            return Some(arg.split_once("=").unwrap().1.into());
+        }
     }
     None
 }
