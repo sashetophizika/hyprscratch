@@ -21,11 +21,15 @@ pub fn flag_present(args: &[String], flag: &str) -> Option<String> {
     let long = format!("--{flag}");
     let short = flag.as_bytes()[0] as char;
 
-    if args.iter().any(|x| {
-        x == flag
-            || x == &long
-            || (x.len() > 1 && x.starts_with("-") && !x[1..].starts_with("-") && x.contains(short))
-    }) {
+    let is_short = |x: &str| {
+        x.len() > 1
+            && x.starts_with("-")
+            && !x[1..].starts_with("-")
+            && x.contains(short)
+            && !x.contains('=')
+    };
+
+    if args.iter().any(|x| x == flag || x == &long || is_short(x)) {
         return Some(flag.to_string());
     }
     None
@@ -39,17 +43,19 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
     let long = format!("--{flag}");
     let short = format!("-{}", flag.as_bytes()[0] as char);
 
-    let pred = |x: &String| x == flag || *x == long || *x == short;
-    if let Some(ci) = args.iter().position(|x| pred(x)) {
+    let is_present = |x: &str| x == flag || *x == long || *x == short;
+    if let Some(ci) = args.iter().position(|x| is_present(x)) {
         return args.get(ci + 1).cloned();
     }
 
-    if let Some(arg) = args.iter().find(|x| x.contains(flag)) {
-        if arg.contains('=') {
-            return Some(arg.split_once("=").unwrap().1.into());
+    return args.iter().find_map(|x| {
+        if let Some((key, val)) = x.split_once('=') {
+            if is_present(key) {
+                return Some(val.to_string());
+            }
         }
-    }
-    None
+        None
+    });
 }
 
 pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<()> {
