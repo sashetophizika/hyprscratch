@@ -58,8 +58,12 @@ fn hyprscratch(args: &[String]) -> Result<()> {
             initialize_daemon(args.join(" "), config, socket);
         }
         s if s.starts_with("-") => {
-            log("Unknown flags".to_string(), "Error")?;
-            help();
+            if config.is_some() || socket.is_some() {
+                initialize_daemon(args.join(" "), config, socket)
+            } else {
+                log("Unknown flags".to_string(), "Error")?;
+                help();
+            }
         }
         _ => {
             if args[2..].is_empty() {
