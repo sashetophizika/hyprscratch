@@ -11,6 +11,10 @@ cargo install hyprscratch
 ```
 paru -S hyprscratch
 ```
+### Nix Flake (Non-NixOS)
+```
+nix profile install github:sashetophizika/hyprscratch
+```
 
 ## Usage
 In `hyprland.conf`:
@@ -39,7 +43,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `eager`: spawns all scratchpads hidden on start.
 
-* `no-auto-reload`: does not reload the configuration when the configuration file is updated.
+* `no-auto-reload`: does not reload the configuration when the `hyprland.conf` is updated.
 
 * `config </path/to/config>`: specify a path to the configuration file
 
@@ -106,7 +110,7 @@ rules = rule1;rule2;rule3
 
 And in `hyprland.conf`:
 
-```
+```bash
 exec-once = hyprscratch init
 
 bind = $mainMod, t, hyprscratch toggle name
