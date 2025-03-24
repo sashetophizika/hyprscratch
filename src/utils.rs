@@ -48,14 +48,14 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
         return args.get(ci + 1).cloned();
     }
 
-    return args.iter().find_map(|x| {
+    args.iter().find_map(|x| {
         if let Some((key, val)) = x.split_once('=') {
             if is_present(key) {
                 return Some(val.to_string());
             }
         }
         None
-    });
+    })
 }
 
 pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<()> {

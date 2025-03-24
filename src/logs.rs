@@ -17,7 +17,7 @@ impl<T> LogErr<T> for hyprland::Result<T> {
             Ok(t) => t,
             Err(err) => {
                 let msg = format!("{} at {}:{}", err, file, line);
-                log(msg.clone(), "ERROR").unwrap();
+                log(msg, "ERROR").unwrap();
                 panic!()
             }
         }
@@ -35,7 +35,7 @@ impl<T> LogErr<T> for Result<T, VarError> {
             Ok(t) => t,
             Err(err) => {
                 let msg = format!("{} at {}:{}", err, file, line);
-                log(msg.clone(), "ERROR").unwrap();
+                log(msg, "ERROR").unwrap();
                 panic!()
             }
         }
@@ -53,7 +53,7 @@ impl<T> LogErr<T> for LockResult<T> {
             Ok(t) => t,
             Err(err) => {
                 let msg = format!("{} at {}:{}", err, file, line);
-                log(msg.clone(), "ERROR").unwrap();
+                log(msg, "ERROR").unwrap();
                 panic!()
             }
         }
@@ -71,7 +71,7 @@ impl<T> LogErr<T> for Option<T> {
             Some(t) => t,
             None => {
                 let msg = format!("Function returned None in {} at line:{}", file, line);
-                log(msg.clone(), "ERROR").unwrap();
+                log(msg, "ERROR").unwrap();
                 panic!()
             }
         }

@@ -192,7 +192,7 @@ fn handle_killall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
+fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
         move_floating(
             config
@@ -206,14 +206,13 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
         if let Ok(Some(cl)) = Client::get_active() {
             if cl.workspace.id < 0 && cl.workspace.id > -1000 {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
-                    .unwrap_log(file!(), line!());
+                    .log_err(file!(), line!())
             }
         }
     });
-    Ok(())
 }
 
-fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
+fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             if !cl.floating {
@@ -228,18 +227,16 @@ fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
             }
         }
     });
-    Ok(())
 }
 
-fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) -> Result<()> {
+fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_config_reloaded_handler(move || {
         config
             .lock()
             .unwrap_log(file!(), line!())
             .reload(None)
-            .unwrap_log(file!(), line!())
+            .log_err(file!(), line!())
     });
-    Ok(())
 }
 
 fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> Result<()> {
@@ -247,21 +244,20 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
 
     if options.auto_reload {
         let config_clone = config.clone();
-        auto_reload(&mut ev, config_clone)?;
+        auto_reload(&mut ev, config_clone);
     }
 
     if options.clean {
         let config_clone = config.clone();
-        clean(&mut ev, config_clone)?;
+        clean(&mut ev, config_clone);
     }
 
     if options.spotless {
         let config_clone = config.clone();
-        spotless(&mut ev, config_clone)?;
+        spotless(&mut ev, config_clone);
     }
 
-    ev.start_listener()?;
-    Ok(())
+    ev.start_listener()
 }
 
 fn start_unix_listener(
