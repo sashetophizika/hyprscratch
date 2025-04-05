@@ -29,7 +29,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                 "get-config" => get_config(socket)?,
                 "reload" => reload(socket, config)?,
                 "kill" => kill(socket)?,
-                "help" => help(),
+                "help" => print_help(),
                 "logs" => print_logs()?,
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
                 _ => (),
@@ -38,17 +38,16 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         }
     }
 
-    match args.get(1).map_or("", |v| v.as_str()) {
-        "clean" | "no-auto-reload" | "config" | "init" => {
+    let cmd = args.get(1).map_or("", |v| v.as_str());
+    match cmd {
+        "init" | "eager" | "clean" | "no-auto-reload" | "config" | "socket" => {
             initialize_daemon(args.join(" "), config, socket)
         }
-        "hide-all" => hide_all(socket)?,
-        "previous" => previous(socket)?,
-        "kill-all" => kill_all(socket)?,
+        "toggle" | "summon" | "hide" => call(socket, &args[1..], cmd)?,
         "cycle" => cycle(socket, args.join(" "))?,
-        "toggle" => call(socket, &args[1..], "toggle")?,
-        "summon" => call(socket, &args[1..], "summon")?,
-        "hide" => call(socket, &args[1..], "hide")?,
+        "hide-all" => hide_all(socket)?,
+        "kill-all" => kill_all(socket)?,
+        "previous" => previous(socket)?,
         "" => {
             log(
                 "Initializing the daemon with no arguments is deprecated".to_string(),
@@ -61,8 +60,8 @@ fn hyprscratch(args: &[String]) -> Result<()> {
             if config.is_some() || socket.is_some() {
                 initialize_daemon(args.join(" "), config, socket)
             } else {
-                log("Unknown flags".to_string(), "Error")?;
-                help();
+                log("Unknown flags".to_string(), "WARN")?;
+                print_help();
             }
         }
         _ => {
@@ -72,7 +71,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                         "Unknown command or not enough arguments for scratchpad: '{}'.",
                         args[1..].join(" ")
                     ),
-                    "ERROR",
+                    "WARN",
                 )?;
             } else {
                 call(socket, args, "toggle")?

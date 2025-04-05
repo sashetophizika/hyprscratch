@@ -71,6 +71,7 @@ pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<(
         Some(WindowIdentifier::Address(client.address.clone()))
     )
     .unwrap_or_else(|_| {
+        log("MoveToSpecial returned Error".into(), "DEBUG").unwrap();
         let workspace = if workspace_name != "empty" {
             workspace_name.push('1');
             workspace_name

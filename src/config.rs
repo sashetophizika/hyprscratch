@@ -39,7 +39,6 @@ impl Config {
         let mut scratchpads: Vec<Scratchpad> = vec![];
         for config in &config_files {
             let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
-
             let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
                 parse_config(config)?
             } else if ext == "conf" {
@@ -62,19 +61,12 @@ impl Config {
                 .map(|scratchpad| scratchpad.title)
                 .collect::<Vec<_>>()
         };
-        let contains_any =
-            |opts: &String, s: &[&str]| -> bool { opts.split(" ").any(|o| s.contains(&o)) };
 
-        let normal_titles = filter_titles(&|opts: &ScratchpadOptions| !opts.special);
-        let special_titles = filter_titles(&|opts: &ScratchpadOptions| opts.special);
-        let slick_titles = filter_titles(&|opts: &ScratchpadOptions| !opts.sticky);
-
-        let non_persist_titles = filter_titles(&|opts: &ScratchpadOptions| {
-            !contains_any(&opts.get_string(), &["persist", "special"])
-        });
-        let dirty_titles = filter_titles(&|opts: &ScratchpadOptions| {
-            !contains_any(&opts.get_string(), &["sticky", "shiny", "special"])
-        });
+        let normal_titles = filter_titles(&|opts| !opts.special);
+        let special_titles = filter_titles(&|opts| opts.special);
+        let slick_titles = filter_titles(&|opts| !opts.sticky);
+        let non_persist_titles = filter_titles(&|opts| !opts.persist && !opts.special);
+        let dirty_titles = filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special);
 
         log(
             format!(

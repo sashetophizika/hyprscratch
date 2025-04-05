@@ -11,15 +11,16 @@ struct HyprlandState {
 }
 
 impl HyprlandState {
-    fn new(title: &str) -> HyprlandState {
-        HyprlandState {
-            active_workspace: Workspace::get_active().unwrap_log(file!(), line!()),
-            clients_with_title: Clients::get()
-                .unwrap_log(file!(), line!())
+    fn new(title: &str) -> Result<HyprlandState> {
+        let active_workspace = Workspace::get_active()?;
+        let clients = Clients::get()?;
+        Ok(HyprlandState {
+            active_workspace,
+            clients_with_title: clients
                 .into_iter()
                 .filter(|x| x.initial_title == title)
                 .collect(),
-        }
+        })
     }
 }
 
@@ -32,6 +33,7 @@ pub struct ScratchpadOptions {
     pub sticky: bool,
     pub poly: bool,
     pub cover: bool,
+    pub persist: bool,
     pub stack: bool,
     pub tiled: bool,
     pub lazy: bool,
@@ -48,6 +50,7 @@ impl ScratchpadOptions {
             sticky: opts.contains("sticky"),
             poly: opts.contains("poly"),
             cover: opts.contains("cover"),
+            persist: opts.contains("persist"),
             stack: opts.contains("stack"),
             tiled: opts.contains("tiled"),
             lazy: opts.contains("lazy"),
@@ -63,6 +66,7 @@ impl ScratchpadOptions {
             "sticky" => self.sticky ^= true,
             "poly" => self.poly ^= true,
             "cover" => self.cover ^= true,
+            "persist" => self.persist ^= true,
             "stack" => self.stack ^= true,
             "tiled" => self.tiled ^= true,
             "lazy" => self.lazy ^= true,
@@ -125,7 +129,6 @@ impl Scratchpad {
     fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
         if state.clients_with_title.is_empty() {
             self.command.split("?").for_each(|x| {
-                println!("{x}");
                 let cmd = prepend_rules(x, None, false, !self.options.tiled);
                 hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
             });
@@ -174,7 +177,7 @@ impl Scratchpad {
     }
 
     pub fn run(&mut self, titles: &str) -> Result<()> {
-        let state = HyprlandState::new(&self.title);
+        let state = HyprlandState::new(&self.title)?;
 
         if let Some(active_client) = Client::get_active()? {
             let mut clients_on_active = state
@@ -245,7 +248,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title))
+            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -271,7 +274,7 @@ mod tests {
 
         let active_workspace = Workspace::get_active().unwrap();
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title))
+            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -298,7 +301,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title))
+            .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -308,7 +311,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title))
+            .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -325,7 +328,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title))
+            .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -362,7 +365,7 @@ mod tests {
         );
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title))
+            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(1000));
 

@@ -173,7 +173,7 @@ pub fn print_logs() -> Result<()> {
     Ok(())
 }
 
-pub fn help() {
+pub fn print_help() {
     println!(
         "Usage:
   Daemon:
