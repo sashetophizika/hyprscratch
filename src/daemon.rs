@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::logs::*;
+use crate::scratchpad::Scratchpad;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::data::Clients;
@@ -60,7 +61,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     config.dirty_titles.retain(|x| *x != title);
     state.update_prev_titles(&title);
 
-    config.scratchpads[index].run(&config.non_persist_titles.join(" "))?;
+    config.scratchpads[index].run(&config.non_persist_titles)?;
 
     if !config.scratchpads[index].options.shiny {
         config.dirty_titles.push(title.to_string());
@@ -70,7 +71,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if config.scratchpads.is_empty() {
-        return Ok(());
+        return log("No scratchpads configured for 'cycle'".into(), "WARN");
     }
 
     let mut current_index = state.cycle_index % config.scratchpads.len();
@@ -99,7 +100,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 
 fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if msg.is_empty() {
-        return Ok(());
+        return log(format!("No scratchpad title given to '{req}'"), "WARN");
     }
 
     let i = config
@@ -115,12 +116,15 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     Ok(())
 }
 
-fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if msg.is_empty() {
-        return Ok(());
-    }
+fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    let active_client = Client::get_active()?;
+    let active_title = if let Some(ac) = active_client {
+        ac.initial_title
+    } else {
+        "something that will never be a real title".into()
+    };
 
-    let prev_active = (msg == state.prev_titles[0]) as usize;
+    let prev_active = (active_title == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
         return Ok(());
     }
@@ -151,23 +155,19 @@ fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
 }
 
 fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
+    let map_format = |field: &dyn Fn(&Scratchpad) -> String| {
+        conf.scratchpads
+            .iter()
+            .map(field)
+            .collect::<Vec<_>>()
+            .join("^")
+    };
+
     let config = format!(
         "{}?{}?{}",
-        conf.scratchpads
-            .iter()
-            .map(|x| x.title.clone())
-            .collect::<Vec<_>>()
-            .join("^"),
-        conf.scratchpads
-            .iter()
-            .map(|x| x.command.clone())
-            .collect::<Vec<_>>()
-            .join("^"),
-        conf.scratchpads
-            .iter()
-            .map(|x| x.options.clone().get_string())
-            .collect::<Vec<_>>()
-            .join("^"),
+        map_format(&|x| x.title.clone()),
+        map_format(&|x| x.command.clone()),
+        map_format(&|x| x.options.clone().get_string()),
     );
 
     stream.write_all(config.as_bytes())?;
@@ -190,6 +190,22 @@ fn handle_killall(config: &Config) -> Result<()> {
             }
         });
     Ok(())
+}
+
+fn handle_hideall(config: &Config) -> Result<()> {
+    move_floating(config.normal_titles.clone())?;
+    let active_client = Client::get_active()?;
+    if let Some(ac) = active_client {
+        if ac.workspace.id <= 0 {
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(ac.initial_title))?;
+        }
+    }
+    Ok(())
+}
+
+fn handle_manual(msg: &str, config: &Config) -> Result<()> {
+    let args: Vec<&str> = msg.splitn(2, "^").collect();
+    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).run(&config.non_persist_titles)
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
@@ -302,9 +318,11 @@ fn start_unix_listener(
                 let res = match req {
                     "toggle" | "summon" | "hide" => handle_call(msg, req, conf, state),
                     "get-config" => handle_get_config(&mut stream, conf),
-                    "previous" => handle_previous(msg, conf, state),
-                    "killall" => handle_killall(conf),
+                    "previous" => handle_previous(conf, state),
+                    "kill-all" => handle_killall(conf),
+                    "hide-all" => handle_hideall(conf),
                     "reload" => handle_reload(msg, conf, eager),
+                    "manual" => handle_manual(msg, conf),
                     "cycle" => handle_cycle(msg, conf, state),
                     "kill" => {
                         log(
@@ -388,7 +406,8 @@ mod tests {
         //test_handle("hide?btop");
 
         test_handle("reload?");
-        test_handle("killall?");
+        test_handle("kill-all?");
+        test_handle("hide-all?");
         test_handle("?unknown");
         test_handle("kill?");
     }

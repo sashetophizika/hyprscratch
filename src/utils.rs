@@ -6,6 +6,9 @@ use hyprland::data::Clients;
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::io::Write;
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 
 pub fn warn_deprecated(feature: &str) -> Result<()> {
     log(format!("The '{feature}' feature is deprecated."), "WARN")?;
@@ -56,6 +59,13 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
         }
         None
     })
+}
+
+pub fn connect_to_sock(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
+    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
+    stream.write_all(format!("{request}?{message}").as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
+    Ok(())
 }
 
 pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<()> {

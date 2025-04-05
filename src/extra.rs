@@ -1,85 +1,16 @@
-use crate::logs::log;
-use crate::utils::move_floating;
-use hyprland::data::Client;
-use hyprland::dispatch::*;
-use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
-fn connect_to_sock(socket: Option<&str>, request: &str) -> Result<UnixStream> {
-    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
-    stream.write_all(request.as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
-    Ok(stream)
-}
-
-pub fn hide_all(socket: Option<&str>) -> Result<()> {
-    let mut titles = String::new();
-    let mut stream = connect_to_sock(socket, "scratchpad?")?;
-    stream.read_to_string(&mut titles)?;
-
-    move_floating(titles.split(" ").map(|x| x.to_string()).collect())?;
-    let active_client = Client::get_active()?.unwrap();
-    if active_client.workspace.id <= 0 {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(active_client.initial_title))?;
-    }
-    Ok(())
-}
-
-pub fn cycle(socket: Option<&str>, args: String) -> Result<()> {
-    let request = if args.contains("special") {
-        "cycle?1"
-    } else if args.contains("normal") {
-        "cycle?0"
-    } else {
-        "cycle?"
-    };
-
-    connect_to_sock(socket, request)?;
-    Ok(())
-}
-
-pub fn call(socket: Option<&str>, args: &[String], mode: &str) -> Result<()> {
-    if args.len() <= 1 {
-        log(format!("No scratchpad title given to '{mode}'"), "WARN")?
-    }
-
-    let title = args[1].clone();
-    connect_to_sock(socket, format!("{mode}?{title}").as_str())?;
-    Ok(())
-}
-
-pub fn previous(socket: Option<&str>) -> Result<()> {
-    let active_title = Client::get_active()?.unwrap().initial_title;
-    connect_to_sock(socket, format!("previous?{active_title}").as_str())?;
-    Ok(())
-}
-
-pub fn reload(socket: Option<&str>, config_file: Option<String>) -> Result<()> {
-    connect_to_sock(
-        socket,
-        &format!("reload?{}", config_file.unwrap_or("".to_string())),
-    )?;
-    Ok(())
-}
-
-pub fn kill(socket: Option<&str>) -> Result<()> {
-    connect_to_sock(socket, "kill?")?;
-    Ok(())
-}
-
-pub fn kill_all(socket: Option<&str>) -> Result<()> {
-    connect_to_sock(socket, "killall?")?;
-    Ok(())
-}
-
 pub fn get_config(socket: Option<&str>) -> Result<()> {
-    let mut socket = connect_to_sock(socket, "get-config?")?;
+    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
+    stream.write_all("get-config?".as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
+
     let mut buf = String::new();
-    socket.read_to_string(&mut buf)?;
+    stream.read_to_string(&mut buf)?;
 
     let [titles, commands, options]: [Vec<&str>; 3] = buf
         .splitn(3, '?')
@@ -233,7 +164,7 @@ mod tests {
     use crate::initialize_daemon;
 
     #[test]
-    fn test_extra_commands() {
+    fn test_get_config() {
         std::thread::spawn(|| {
             initialize_daemon(
                 "".to_string(),
@@ -244,19 +175,6 @@ mod tests {
         sleep(Duration::from_millis(1000));
 
         let socket = Some("/tmp/hyprscratch_test.sock");
-        cycle(socket, "".to_string()).unwrap();
-        cycle(socket, "special".to_string()).unwrap();
-        cycle(socket, "normal".to_string()).unwrap();
-        previous(socket).unwrap();
-        sleep(Duration::from_millis(1000));
-
-        hide_all(socket).unwrap();
-        reload(socket, None).unwrap();
         get_config(socket).unwrap();
-        sleep(Duration::from_millis(1000));
-
-        kill_all(socket).unwrap();
-        kill(socket).unwrap();
-        sleep(Duration::from_millis(1000));
     }
 }

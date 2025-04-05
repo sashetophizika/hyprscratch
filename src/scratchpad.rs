@@ -165,7 +165,7 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide_active(&self, titles: &str, active_client: &Client) -> Result<()> {
+    fn hide_active(&self, titles: &[String], active_client: &Client) -> Result<()> {
         if !self.options.cover
             && !self.options.stack
             && active_client.floating
@@ -176,7 +176,7 @@ impl Scratchpad {
         Ok(())
     }
 
-    pub fn run(&mut self, titles: &str) -> Result<()> {
+    pub fn run(&mut self, titles: &[String]) -> Result<()> {
         let state = HyprlandState::new(&self.title)?;
 
         if let Some(active_client) = Client::get_active()? {
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(&resources.title, &active_client)
+            .hide_active(&vec![resources.title.clone()], &active_client)
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -341,7 +341,7 @@ mod tests {
             &resources.command,
             "cover",
         )
-        .hide_active(&resources.title, &active_client)
+        .hide_active(&vec![resources.title.clone()], &active_client)
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active("", &active_client)
+            .hide_active(&vec![], &active_client)
             .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -404,7 +404,7 @@ mod tests {
             &resources.command,
             "poly",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -424,7 +424,7 @@ mod tests {
             &resources.command,
             "poly",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -467,7 +467,7 @@ mod tests {
             &resources[0].command,
             "tiled",
         )
-        .run(&resources[0].title)
+        .run(&vec![resources[0].title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -481,7 +481,7 @@ mod tests {
             &resources[1].command,
             "",
         )
-        .run(&resources[1].title)
+        .run(&vec![resources[1].title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -511,7 +511,7 @@ mod tests {
             &resources.command,
             "summon",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -526,7 +526,7 @@ mod tests {
             &resources.command,
             "summon",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -548,7 +548,7 @@ mod tests {
             &resources.command,
             "hide",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 
@@ -575,7 +575,7 @@ mod tests {
             &resources.command,
             "hide",
         )
-        .run(&resources.title)
+        .run(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(1000));
 

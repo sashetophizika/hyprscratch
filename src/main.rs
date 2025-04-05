@@ -27,8 +27,8 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         if let Some(f) = flag_present(args, flag) {
             match f.as_str() {
                 "get-config" => get_config(socket)?,
-                "reload" => reload(socket, config)?,
-                "kill" => kill(socket)?,
+                "reload" => connect_to_sock(socket, "reload", &config.unwrap_or("".into()))?,
+                "kill" => connect_to_sock(socket, "kill", "")?,
                 "help" => print_help(),
                 "logs" => print_logs()?,
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
@@ -38,16 +38,15 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         }
     }
 
-    let cmd = args.get(1).map_or("", |v| v.as_str());
-    match cmd {
+    let req = args.get(1).map_or("", |v| v.as_str());
+    let msg = args.get(2).map_or("", |v| v.as_str());
+    match req {
+        "toggle" | "summon" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
+            connect_to_sock(socket, req, msg)?
+        }
         "init" | "eager" | "clean" | "no-auto-reload" | "config" | "socket" => {
             initialize_daemon(args.join(" "), config, socket)
         }
-        "toggle" | "summon" | "hide" => call(socket, &args[1..], cmd)?,
-        "cycle" => cycle(socket, args.join(" "))?,
-        "hide-all" => hide_all(socket)?,
-        "kill-all" => kill_all(socket)?,
-        "previous" => previous(socket)?,
         "" => {
             log(
                 "Initializing the daemon with no arguments is deprecated".to_string(),
@@ -74,7 +73,7 @@ fn hyprscratch(args: &[String]) -> Result<()> {
                     "WARN",
                 )?;
             } else {
-                call(socket, args, "toggle")?
+                connect_to_sock(socket, "manual", &args[1..].join("^"))?
             }
         }
     }
