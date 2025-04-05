@@ -11,7 +11,7 @@ cargo install hyprscratch
 ```
 paru -S hyprscratch
 ```
-### Nix Flake (Non-NixOS)
+### Nix Flake (Non-NixOS):
 ```
 nix profile install github:sashetophizika/hyprscratch
 ```
@@ -97,7 +97,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
 ```py
-name = {
+name {
 #Mandatory fields
 title = title                        
 command = command

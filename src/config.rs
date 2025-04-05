@@ -287,43 +287,54 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
     };
 
     for line in buf.lines() {
-        if let Some(split) = line.split_once("=") {
-            if split.1.trim() == "{" {
-                if in_scope {
-                    log("Syntax error in configuration: unclosed '{'".into(), "WARN")?;
-                }
+        if line.split_whitespace().any(|x| x == "{") {
+            if in_scope {
+                log("Syntax error in configuration: unclosed '{'".into(), "WARN")?;
+                continue;
+            }
 
-                in_scope = true;
-                name = split.0.trim().into();
-                title = String::new();
-                command = String::new();
-                rules = String::new();
-                options = String::new();
-            } else {
-                if !in_scope {
-                    log("Syntax error in configuration: not in scope".into(), "WARN")?;
-                }
-
-                match split.0.trim() {
-                    "title" => title = escape(split.1),
-                    "command" => command = escape(split.1),
-                    "rules" => rules = escape(split.1),
-                    "options" => options = escape(split.1),
-                    s => log(
-                        format!("Unknown field given in configuration file: {s}"),
+            if let Some(n) = line.split_whitespace().next() {
+                if n == "{" {
+                    log(
+                        "No name given to scratchpad in configuration".into(),
                         "WARN",
-                    )?,
+                    )?;
+                } else {
+                    name = n.into();
                 }
+            }
+
+            in_scope = true;
+            title = String::new();
+            command = String::new();
+            rules = String::new();
+            options = String::new();
+        } else if let Some(split) = line.split_once("=") {
+            if !in_scope {
+                log("Syntax error in configuration: not in scope".into(), "WARN")?;
+                continue;
+            }
+
+            match split.0.trim() {
+                "title" => title = escape(split.1),
+                "command" => command = escape(split.1),
+                "rules" => rules = escape(split.1),
+                "options" => options = escape(split.1),
+                s => log(
+                    format!("Unknown field given in configuration file: {s}"),
+                    "WARN",
+                )?,
             }
         } else if line.trim() == "}" {
             if !in_scope {
                 log("Syntax error in configuration: unopened '}'".into(), "WARN")?;
+                continue;
             }
             in_scope = false;
 
             if title.is_empty() {
                 log(
-                    format!("Field title not found for scratchpad {name}"),
+                    format!("Field 'title' not defined for scratchpad '{name}'"),
                     "WARN",
                 )?;
                 continue;
@@ -331,7 +342,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
 
             if command.is_empty() {
                 log(
-                    format!("Field command not found for scratchpad {name}"),
+                    format!("Field 'command' not defined for scratchpad '{name}'"),
                     "WARN",
                 )?;
                 continue;
