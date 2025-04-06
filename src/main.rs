@@ -83,10 +83,18 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let log_err = |err: HyprError| {
-        let _ = log(
-            format!("{}, command: '{}'.", err, args[1..].join(" ")),
-            "ERROR",
-        );
+        if let HyprError::IoError(e) = err {
+            if e.to_string() == "Connection refused (os error 111)" {
+                println!("Could not connect to daemon. Is it running?");
+            }
+        } else {
+            {
+                let _ = log(
+                    format!("{}, command: '{}'.", err, args[1..].join(" ")),
+                    "WARN",
+                );
+            }
+        }
     };
 
     hyprscratch(&args).unwrap_or_else(log_err);
