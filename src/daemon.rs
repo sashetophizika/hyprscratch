@@ -69,11 +69,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
-fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if config.scratchpads.is_empty() {
-        return log("No scratchpads configured for 'cycle'".into(), "WARN");
-    }
-
+fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let mut current_index = state.cycle_index % config.scratchpads.len();
     let mode = if msg.contains("special") {
         Some(true)
@@ -85,7 +81,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 
     if let Some(m) = mode {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            return Ok(());
+            return None;
         }
 
         while m != config.scratchpads[current_index].options.special {
@@ -95,8 +91,49 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 
     state.update_prev_titles(&config.scratchpads[current_index].title);
     state.cycle_index = current_index + 1;
+    Some(current_index)
+}
 
-    handle_scratchpad(config, state, current_index)?;
+fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    if config.scratchpads.is_empty() {
+        return log("No scratchpads configured for 'cycle'".into(), "WARN");
+    }
+
+    if let Some(i) = get_cycle_index(msg, config, state) {
+        handle_scratchpad(config, state, i)?;
+    }
+
+    Ok(())
+}
+
+fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -> Option<usize> {
+    let prev_active = (title == state.prev_titles[0]) as usize;
+    if state.prev_titles[prev_active].is_empty() {
+        let _ = log("No previous scratchpad found".into(), "WARN");
+        return None;
+    }
+
+    config
+        .scratchpads
+        .clone()
+        .into_iter()
+        .position(|x| x.title == state.prev_titles[prev_active])
+}
+
+fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    if state.prev_titles[0].is_empty() {
+        return log("No previous scratchpads exist".into(), "WARN");
+    }
+
+    let active_title = if let Ok(Some(ac)) = Client::get_active() {
+        ac.initial_title
+    } else {
+        "something that will never be a real title".into()
+    };
+
+    if let Some(i) = get_previous_index(active_title, config, state) {
+        handle_scratchpad(config, state, i)?;
+    }
     Ok(())
 }
 
@@ -118,29 +155,11 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     Ok(())
 }
 
-fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let active_client = Client::get_active()?;
-    let active_title = if let Some(ac) = active_client {
-        ac.initial_title
-    } else {
-        "something that will never be a real title".into()
-    };
-
-    let prev_active = (active_title == state.prev_titles[0]) as usize;
-    if state.prev_titles[prev_active].is_empty() {
-        return log("No previous scratchpad found".into(), "WARN");
-    }
-
-    let index = config
-        .scratchpads
-        .clone()
-        .into_iter()
-        .position(|x| x.title == state.prev_titles[prev_active]);
-
-    if let Some(i) = index {
-        handle_scratchpad(config, state, i)?;
-    }
-    Ok(())
+fn handle_manual(msg: &str, config: &Config) -> Result<()> {
+    println!("{msg}");
+    let args: Vec<&str> = msg.splitn(3, "^").collect();
+    println!("{args:?}");
+    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).run(&config.non_persist_titles)
 }
 
 fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
@@ -203,11 +222,6 @@ fn handle_hideall(config: &Config) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn handle_manual(msg: &str, config: &Config) -> Result<()> {
-    let args: Vec<&str> = msg.splitn(2, "^").collect();
-    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).run(&config.non_persist_titles)
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
@@ -393,25 +407,32 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        //test_handle("cycle?");
-        //test_handle("cycle?0");
-        //test_handle("cycle?1");
-        //
-        //test_handle("toggle?");
-        //test_handle("toggle?unknown");
-        //test_handle("toggle?btop");
-        //
-        //test_handle("previous?cmat");
-        //test_handle("previous?htop");
-        //
-        //test_handle("summon?btop");
-        //test_handle("hide?btop");
-
         test_handle("reload?");
         test_handle("kill-all?");
         test_handle("hide-all?");
         test_handle("?unknown");
         test_handle("kill?");
+    }
+
+    #[test]
+    fn test_state() {
+        let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
+        let mut state = DaemonState::new();
+
+        assert_eq!(get_cycle_index("special", &config, &mut state), Some(2));
+        assert_eq!(get_cycle_index("normal", &config, &mut state), Some(3));
+        assert_eq!(get_cycle_index("", &config, &mut state), Some(4));
+        assert_eq!(get_cycle_index("", &config, &mut state), Some(0));
+        assert_eq!(get_cycle_index("unknown", &config, &mut state), Some(1));
+
+        assert_eq!(
+            get_previous_index("test_nonexistant".into(), &config, &mut state),
+            Some(1)
+        );
+        assert_eq!(
+            get_previous_index("test_nonfloating_clean".into(), &config, &mut state),
+            Some(0)
+        );
     }
 
     struct TestResources {
