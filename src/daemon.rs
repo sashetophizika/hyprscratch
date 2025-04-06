@@ -75,10 +75,12 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
     }
 
     let mut current_index = state.cycle_index % config.scratchpads.len();
-    let mode = if msg.is_empty() {
-        None
+    let mode = if msg.contains("special") {
+        Some(true)
+    } else if msg.contains("normal") {
+        Some(false)
     } else {
-        Some(msg.as_bytes()[0] != 48)
+        None
     };
 
     if let Some(m) = mode {
@@ -126,7 +128,7 @@ fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
 
     let prev_active = (active_title == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
-        return Ok(());
+        return log("No previous scratchpad found".into(), "WARN");
     }
 
     let index = config
