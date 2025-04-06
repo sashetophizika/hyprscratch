@@ -156,9 +156,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
 }
 
 fn handle_manual(msg: &str, config: &Config) -> Result<()> {
-    println!("{msg}");
     let args: Vec<&str> = msg.splitn(3, "^").collect();
-    println!("{args:?}");
     Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).run(&config.non_persist_titles)
 }
 
