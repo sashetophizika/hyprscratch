@@ -68,32 +68,14 @@ pub fn connect_to_sock(socket: Option<&str>, request: &str, message: &str) -> Re
     Ok(())
 }
 
-pub fn move_to_special(client: &Client, workspace_name: &mut String) -> Result<()> {
-    let workspace = if workspace_name != "empty" {
-        &workspace_name
-    } else {
-        &client.initial_title.clone()
-    };
-
+pub fn move_to_special(client: &Client) -> Result<()> {
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
+        WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title.clone())),
         Some(WindowIdentifier::Address(client.address.clone()))
     )
     .unwrap_or_else(|_| {
-        log("MoveToSpecial returned Error".into(), "DEBUG").unwrap();
-        let workspace = if workspace_name != "empty" {
-            workspace_name.push('1');
-            workspace_name
-        } else {
-            &client.initial_title.clone()
-        };
-        hyprland::dispatch!(
-            MoveToWorkspaceSilent,
-            WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
-            Some(WindowIdentifier::Address(client.address.clone()))
-        )
-        .log_err(file!(), line!());
+        log("MoveToSpecial returned Err".into(), "DEBUG").unwrap();
     });
     Ok(())
 }
@@ -102,7 +84,7 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
     Clients::get()?
         .into_iter()
         .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
-        .for_each(|x| move_to_special(&x, &mut String::from("empty")).log_err(file!(), line!()));
+        .for_each(|x| move_to_special(&x).log_err(file!(), line!()));
     Ok(())
 }
 
@@ -159,7 +141,7 @@ pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
     auto_spawn_commands.into_iter().for_each(|scratchpad| {
         let cmd = prepend_rules(
             &scratchpad.command,
-            Some(&scratchpad.workspace),
+            Some(&scratchpad.name),
             true,
             !scratchpad.options.tiled,
         );

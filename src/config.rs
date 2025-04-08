@@ -27,7 +27,6 @@ impl Config {
                 if !Path::new(&conf).exists() {
                     log(format!("Config file not found: {conf}"), "ERROR")?;
                 }
-
                 vec![conf]
             } else {
                 default_configs
@@ -443,7 +442,6 @@ mod tests {
         let mut expected_scratchpads = expected_scratchpads();
         for i in 0..4 {
             expected_scratchpads[i].name = expected_scratchpads[i].title.clone();
-            expected_scratchpads[i].workspace = expected_scratchpads[i].title.clone();
         }
         assert_eq!(scratchpads, expected_scratchpads);
     }

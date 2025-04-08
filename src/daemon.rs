@@ -155,8 +155,9 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     Ok(())
 }
 
-fn handle_manual(msg: &str, config: &Config) -> Result<()> {
+fn handle_manual(msg: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
     let args: Vec<&str> = msg.splitn(3, "^").collect();
+    state.update_prev_titles(args[0]);
     Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).run(&config.non_persist_titles)
 }
 
@@ -336,7 +337,7 @@ fn start_unix_listener(
                     "kill-all" => handle_killall(conf),
                     "hide-all" => handle_hideall(conf),
                     "reload" => handle_reload(msg, conf, eager),
-                    "manual" => handle_manual(msg, conf),
+                    "manual" => handle_manual(msg, conf, state),
                     "cycle" => handle_cycle(msg, conf, state),
                     "kill" => {
                         log(
@@ -444,7 +445,7 @@ mod tests {
             self.titles.clone().into_iter().for_each(|title| {
                 hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
             });
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(500));
         }
     }
 
@@ -516,12 +517,12 @@ mod tests {
 
         setup_test(&resources);
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
 
         verify_test(&resources);
         test_handle("kill?");
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
     }
 
     #[test]
@@ -570,6 +571,6 @@ mod tests {
 
         verify_test(&resources);
         test_handle("kill?");
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
     }
 }

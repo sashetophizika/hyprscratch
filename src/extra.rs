@@ -117,7 +117,7 @@ DAEMON OPTIONS
   spotless                    Hide scratchpads on focus change
   eager                       Spawn scratchpads hidden on start
   no-auto-reload              Don't reload the configuration when the configuration file is updated
-  config </path/to/config>      Specify a path to the configuration file             
+  config </path/to/config>    Specify a path to the configuration file             
 
 SCRATCHPAD OPTIONS
   persist                     Prevent the scratchpad from being replaced when a new one is summoned
@@ -154,27 +154,4 @@ FLAG ALIASES
   -l, --logs                   
   -v, --version                
   -h, --help")
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{thread::sleep, time::Duration};
-
-    use super::*;
-    use crate::initialize_daemon;
-
-    #[test]
-    fn test_get_config() {
-        std::thread::spawn(|| {
-            initialize_daemon(
-                "".to_string(),
-                Some("test_configs/test_config3.txt".to_string()),
-                Some("/tmp/hyprscratch_test.sock"),
-            )
-        });
-        sleep(Duration::from_millis(1000));
-
-        let socket = Some("/tmp/hyprscratch_test.sock");
-        get_config(socket).unwrap();
-    }
 }

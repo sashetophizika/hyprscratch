@@ -85,7 +85,6 @@ pub struct Scratchpad {
     pub name: String,
     pub title: String,
     pub command: String,
-    pub workspace: String,
     pub options: ScratchpadOptions,
 }
 
@@ -95,7 +94,6 @@ impl Scratchpad {
             name: name.into(),
             title: title.into(),
             command: command.into(),
-            workspace: name.into(),
             options: ScratchpadOptions::new(options),
         }
     }
@@ -104,24 +102,20 @@ impl Scratchpad {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
             .iter()
-            .filter(|x| x.workspace.id < 0 && x.workspace.id > -1000)
+            .filter(|x| x.workspace.id < 0)
             .collect();
 
         if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-            move_to_special(&state.clients_with_title[0], &mut self.workspace)?;
+            move_to_special(&state.clients_with_title[0])?;
             if state.clients_with_title[0].workspace.id == state.active_workspace.id {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.workspace.clone()))?;
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
             }
         } else if state.clients_with_title.is_empty() {
-            let special_cmd = prepend_rules(
-                &self.command,
-                Some(&self.workspace),
-                false,
-                !self.options.tiled,
-            );
+            let special_cmd =
+                prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
             hyprland::dispatch!(Exec, &special_cmd)?;
         } else {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.workspace.clone()))?;
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
     }
@@ -171,7 +165,7 @@ impl Scratchpad {
             && active_client.floating
             && titles.contains(&active_client.initial_title)
         {
-            move_to_special(active_client, &mut String::from("empty"))?;
+            move_to_special(active_client)?;
         }
         Ok(())
     }
@@ -196,7 +190,7 @@ impl Scratchpad {
                 self.hide_active(titles, &active_client)?;
             } else if hide_all && !self.options.summon {
                 clients_on_active.for_each(|x| {
-                    move_to_special(&x, &mut self.workspace).log_err(file!(), line!());
+                    move_to_special(&x).log_err(file!(), line!());
                 });
             } else {
                 hyprland::dispatch!(
@@ -227,7 +221,7 @@ mod tests {
         fn drop(&mut self) {
             self.command.split("?").for_each(|_| {
                 hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&self.title)).unwrap();
-                sleep(Duration::from_millis(1000));
+                sleep(Duration::from_millis(500));
             });
         }
     }
@@ -250,7 +244,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
@@ -258,7 +252,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .hide_active(&vec![resources.title.clone()], &active_client)
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Clients::get()
@@ -276,7 +270,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
         assert_eq!(
@@ -303,7 +297,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
@@ -313,7 +307,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Clients::get()
@@ -330,7 +324,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_special(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
@@ -343,7 +337,7 @@ mod tests {
         )
         .hide_active(&vec![resources.title.clone()], &active_client)
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
@@ -367,7 +361,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .summon_normal(&HyprlandState::new(&resources.title).unwrap())
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
@@ -375,7 +369,7 @@ mod tests {
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
             .hide_active(&vec![], &active_client)
             .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert!(Clients::get()
             .unwrap()
@@ -406,7 +400,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Clients::get()
@@ -426,7 +420,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Clients::get()
@@ -469,7 +463,7 @@ mod tests {
         )
         .run(&vec![resources[0].title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources[0].title);
@@ -483,7 +477,7 @@ mod tests {
         )
         .run(&vec![resources[1].title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources[1].title);
@@ -513,7 +507,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_eq!(
             Client::get_active().unwrap().unwrap().initial_title,
@@ -528,7 +522,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let clients_with_title: Vec<Client> = Clients::get()
             .unwrap()
@@ -550,7 +544,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         assert_ne!(
             Client::get_active().unwrap().unwrap().initial_title,
@@ -577,7 +571,7 @@ mod tests {
         )
         .run(&vec![resources.title.clone()])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         let clients_with_title: Vec<Client> = Clients::get()
             .unwrap()
