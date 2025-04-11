@@ -61,6 +61,18 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
     })
 }
 
+pub fn dequote(s: &str) -> String {
+    let tr = s.trim();
+    if tr.is_empty() {
+        return String::new();
+    }
+
+    match &tr[..1] {
+        "\"" | "'" => tr[1..tr.len() - 1].into(),
+        _ => tr.into(),
+    }
+}
+
 pub fn connect_to_sock(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all(format!("{request}?{message}").as_bytes())?;

@@ -363,6 +363,8 @@ fn start_unix_listener(
 }
 
 pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path: Option<&str>) {
+    let _ = connect_to_sock(socket_path, "kill", "");
+
     let config = Arc::new(Mutex::new(
         Config::new(config_path.clone()).unwrap_log(file!(), line!()),
     ));

@@ -1,5 +1,6 @@
 use crate::logs::{log, LogErr};
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
+use crate::utils::dequote;
 use hyprland::Result;
 use std::env::var;
 use std::fs::File;
@@ -176,14 +177,6 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
         }
     }
     lines
-}
-
-fn dequote(s: &str) -> String {
-    let tr = s.trim();
-    match &tr[..1] {
-        "\"" | "'" => tr[1..tr.len() - 1].to_string(),
-        _ => tr.to_string(),
-    }
 }
 
 fn warn_unknown_option(opt: &str) {

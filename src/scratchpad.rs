@@ -1,25 +1,37 @@
+use crate::logs::log;
 use crate::logs::LogErr;
-use crate::utils::{move_to_special, prepend_rules};
-use hyprland::data::{Client, Clients, FullscreenMode, Workspace};
+use crate::utils::dequote;
+use crate::utils::{get_flag_arg, move_to_special, prepend_rules};
+use hyprland::data::{Client, Clients, FullscreenMode, Monitors, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::collections::HashMap;
 
 struct HyprlandState {
-    active_workspace: Workspace,
+    active_workspace_id: i32,
     clients_with_title: Vec<Client>,
+    monitors: HashMap<String, i32>,
 }
 
 impl HyprlandState {
     fn new(title: &str) -> Result<HyprlandState> {
-        let active_workspace = Workspace::get_active()?;
-        let clients = Clients::get()?;
+        let mut monitors = HashMap::new();
+        Monitors::get()?.into_iter().for_each(|x| {
+            monitors.insert(x.name, x.active_workspace.id);
+            monitors.insert(x.id.to_string(), x.active_workspace.id);
+        });
+
+        let active_workspace_id = Workspace::get_active()?.id;
+        let clients_with_title = Clients::get()?
+            .into_iter()
+            .filter(|x| x.initial_title == title)
+            .collect();
+
         Ok(HyprlandState {
-            active_workspace,
-            clients_with_title: clients
-                .into_iter()
-                .filter(|x| x.initial_title == title)
-                .collect(),
+            active_workspace_id,
+            monitors,
+            clients_with_title,
         })
     }
 }
@@ -38,10 +50,21 @@ pub struct ScratchpadOptions {
     pub tiled: bool,
     pub lazy: bool,
     pub special: bool,
+    pub monitor: Option<String>,
 }
 
 impl ScratchpadOptions {
     pub fn new(opts: &str) -> ScratchpadOptions {
+        let get_arg = |opt| {
+            get_flag_arg(
+                &dequote(opts)
+                    .split(" ")
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>(),
+                opt,
+            )
+        };
+
         ScratchpadOptions {
             options_string: opts.to_string(),
             summon: opts.contains("summon"),
@@ -55,6 +78,7 @@ impl ScratchpadOptions {
             tiled: opts.contains("tiled"),
             lazy: opts.contains("lazy"),
             special: opts.contains("special"),
+            monitor: get_arg("monitor"),
         }
     }
 
@@ -107,7 +131,7 @@ impl Scratchpad {
 
         if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
             move_to_special(&state.clients_with_title[0])?;
-            if state.clients_with_title[0].workspace.id == state.active_workspace.id {
+            if state.clients_with_title[0].workspace.id == state.active_workspace_id {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
             }
         } else if state.clients_with_title.is_empty() {
@@ -127,14 +151,25 @@ impl Scratchpad {
                 hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
             });
         } else {
+            let workspace_id = if let Some(m) = &self.options.monitor {
+                if let Some(id) = state.monitors.get(m) {
+                    *id
+                } else {
+                    log(format!("Monitor {m} not found"), "WARN")?;
+                    state.active_workspace_id
+                }
+            } else {
+                state.active_workspace_id
+            };
+
             for client in state
                 .clients_with_title
                 .iter()
-                .filter(|x| x.workspace.id != state.active_workspace.id)
+                .filter(|x| !self.is_on_active(x, state))
             {
                 hyprland::dispatch!(
                     MoveToWorkspace,
-                    WorkspaceIdentifierWithSpecial::Relative(0),
+                    WorkspaceIdentifierWithSpecial::Id(workspace_id),
                     Some(WindowIdentifier::Address(client.address.clone()))
                 )?;
                 if !self.options.poly {
@@ -170,6 +205,14 @@ impl Scratchpad {
         Ok(())
     }
 
+    fn is_on_active(&self, client: &Client, state: &HyprlandState) -> bool {
+        if self.options.monitor.is_some() {
+            state.monitors.values().any(|id| *id == client.workspace.id)
+        } else {
+            state.active_workspace_id == client.workspace.id
+        }
+    }
+
     pub fn run(&mut self, titles: &[String]) -> Result<()> {
         let state = HyprlandState::new(&self.title)?;
 
@@ -178,7 +221,7 @@ impl Scratchpad {
                 .clients_with_title
                 .clone()
                 .into_iter()
-                .filter(|x| x.workspace.id == state.active_workspace.id)
+                .filter(|x| self.is_on_active(x, &state))
                 .peekable();
 
             let hide_all = !active_client.floating
