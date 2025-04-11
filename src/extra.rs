@@ -130,6 +130,7 @@ SCRATCHPAD OPTIONS
   poly                        Toggles all scratchpads matching the title simultaneously
   tiled                       Makes a tiled scratchpad instead of a floating one
   special                     Use Hyprland's special workspace, ignores most other options
+  monitor <id>                Restrict the scratchpad to a specified monitor
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
