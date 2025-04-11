@@ -81,6 +81,7 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
 
     if let Some(m) = mode {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
+            let _ = log(format!("No {msg} scratchpads found"), "WARN");
             return None;
         }
 
@@ -142,16 +143,20 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         return log(format!("No scratchpad title given to '{req}'"), "WARN");
     }
 
-    let i = config
+    let index = config
         .scratchpads
         .clone()
         .into_iter()
         .position(|x| x.name == msg);
-    if let Some(i) = i {
+
+    if let Some(i) = index {
         config.scratchpads[i].options.toggle(req);
         handle_scratchpad(config, state, i)?;
         config.scratchpads[i].options.toggle(req);
+    } else {
+        log(format!("Scratchpad '{msg}' not found"), "WARN")?;
     }
+
     Ok(())
 }
 
