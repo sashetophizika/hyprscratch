@@ -1,5 +1,5 @@
 # Hyprscratch
-A small tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, that can be configured entirely inside of `hyprland.conf`.
+A simple tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, that can be configured entirely inside of `hyprland.conf`.
 
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
@@ -10,10 +10,6 @@ cargo install hyprscratch
 ### [AUR](https://aur.archlinux.org/packages/hyprscratch):
 ```
 paru -S hyprscratch
-```
-### Nix Flake (Non-NixOS):
-```
-nix profile install github:sashetophizika/hyprscratch
 ```
 
 ## Usage
@@ -51,7 +47,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `persist`: prevents the scratchpad from getting replaced when a new one is summoned.
 
-* `cover`: prevents the scratchpad from replacing another one if one is already present.
+* `cover`: prevents the scratchpad from replacing an already active one.
 
 * `sticky`: prevents the scratchpad from being hidden by `clean`.
 
@@ -61,11 +57,13 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `summon`: only creates or brings up the scratchpad.
 
-* `hide`: only hides the scratchpad.
+* `hide`: only hides the scratchpad if active.
 
 * `poly`: toggle all scratchpads with the same title simultaneously
 
 * `tiled`: spawns the scratchpad tiled instead of floating
+
+* `monitor <id>`: restricts the scratchpad to a specific monitor
 
 * `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean` and `spotless`.
 
@@ -79,7 +77,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `hide <name>`: hides the scratchpad with the given name
 
-* `previous`: summon the last used scratchpad that is not currently active.
+* `previous`: summons the last used scratchpad that is not currently active.
 
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
@@ -91,7 +89,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `kill`: kills the hyprscratch daemon
 
-* `logs`: show logs
+* `logs`: shows logs
 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
@@ -119,10 +117,10 @@ bind = $mainMod, h, hyprscratch hide name
 ```
 
 ## Other Relevant Information
-To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned instead.
+To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned every time.
 
-To group multiple scratchpads together, bind them to the same key and use `stack` on all of them. 
+To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-If there are multiple scratchpads with the same initial title, the program just grabs the first one it finds.
+If there are multiple scratchpads with the same title, the program just grabs the first one it finds.
