@@ -165,7 +165,7 @@ impl Scratchpad {
             for client in state
                 .clients_with_title
                 .iter()
-                .filter(|x| !self.is_on_active(x, state))
+                .filter(|x| !self.is_on_workspace(x, state))
             {
                 hyprland::dispatch!(
                     MoveToWorkspace,
@@ -194,18 +194,26 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide_active(&self, titles: &[String], active_client: &Client) -> Result<()> {
-        if !self.options.cover
-            && !self.options.stack
-            && active_client.floating
-            && titles.contains(&active_client.initial_title)
-        {
-            move_to_special(active_client)?;
+    fn hide_active(&self, titles: &[String], state: &HyprlandState) -> Result<()> {
+        if self.options.cover || self.options.stack {
+            return Ok(());
         }
+
+        let should_hide = |cl: &Client| {
+            titles.contains(&cl.initial_title)
+                && cl.initial_title != self.title
+                && cl.workspace.id == state.active_workspace_id
+                && cl.floating
+        };
+
+        Clients::get()?
+            .into_iter()
+            .filter(should_hide)
+            .for_each(|cl| move_to_special(&cl).log_err(file!(), line!()));
         Ok(())
     }
 
-    fn is_on_active(&self, client: &Client, state: &HyprlandState) -> bool {
+    fn is_on_workspace(&self, client: &Client, state: &HyprlandState) -> bool {
         if self.options.monitor.is_some() {
             state.monitors.values().any(|id| *id == client.workspace.id)
         } else {
@@ -221,7 +229,7 @@ impl Scratchpad {
                 .clients_with_title
                 .clone()
                 .into_iter()
-                .filter(|x| self.is_on_active(x, &state))
+                .filter(|x| self.is_on_workspace(x, &state))
                 .peekable();
 
             let hide_all = !active_client.floating
@@ -230,7 +238,7 @@ impl Scratchpad {
 
             if self.options.special || clients_on_active.peek().is_none() {
                 self.summon(&state)?;
-                self.hide_active(titles, &active_client)?;
+                self.hide_active(titles, &state)?
             } else if hide_all && !self.options.summon {
                 clients_on_active.for_each(|x| {
                     move_to_special(&x).log_err(file!(), line!());
@@ -293,7 +301,10 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(&vec![resources.title.clone()], &active_client)
+            .hide_active(
+                &vec![resources.title.clone()],
+                &HyprlandState::new(&resources.title).unwrap(),
+            )
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -378,7 +389,10 @@ mod tests {
             &resources.command,
             "cover",
         )
-        .hide_active(&vec![resources.title.clone()], &active_client)
+        .hide_active(
+            &vec![resources.title.clone()],
+            &HyprlandState::new(&resources.title).unwrap(),
+        )
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -410,7 +424,7 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(&vec![], &active_client)
+            .hide_active(&vec![], &HyprlandState::new(&resources.title).unwrap())
             .unwrap();
         sleep(Duration::from_millis(500));
 

@@ -64,7 +64,7 @@ impl Config {
 
         let normal_titles = filter_titles(&|opts| !opts.special);
         let special_titles = filter_titles(&|opts| opts.special);
-        let slick_titles = filter_titles(&|opts| !opts.sticky);
+        let slick_titles = filter_titles(&|opts| !opts.sticky && !opts.tiled);
         let non_persist_titles = filter_titles(&|opts| !opts.persist && !opts.special);
         let dirty_titles = filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special);
 
