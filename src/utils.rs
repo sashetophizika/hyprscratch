@@ -110,12 +110,12 @@ pub fn move_floating(titles: Vec<String>) -> Result<()> {
 
 pub fn prepend_rules(
     command: &str,
-    workspace_name: Option<&String>,
+    workspace: Option<&String>,
     silent: bool,
     float: bool,
 ) -> String {
     let mut rules = String::from("[");
-    if let Some(workspace) = workspace_name {
+    if let Some(workspace) = workspace {
         let silent = if silent { "silent" } else { "" };
         rules += &format!("workspace special:{workspace} {silent};");
     }
@@ -132,39 +132,28 @@ pub fn prepend_rules(
 }
 
 pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
-    let client_titles = Clients::get()?
+    let client_titles: Vec<String> = Clients::get()?
         .into_iter()
         .map(|x| x.initial_title)
-        .collect::<Vec<_>>();
+        .collect();
 
-    let auto_spawn_commands: Vec<Scratchpad> = if eager {
+    let get_spawnable = |cond: &dyn Fn(&Scratchpad) -> bool| {
         config
             .scratchpads
             .clone()
             .into_iter()
-            .filter(|scratchpad| {
-                !scratchpad.options.lazy && !client_titles.contains(&scratchpad.title)
-            })
-            .collect()
-    } else {
-        config
-            .scratchpads
-            .clone()
-            .into_iter()
-            .filter(|scratchpad| {
-                scratchpad.options.get_string().contains("eager")
-                    && !client_titles.contains(&scratchpad.title)
-            })
+            .filter(cond)
             .collect()
     };
 
-    auto_spawn_commands.into_iter().for_each(|scratchpad| {
-        let cmd = prepend_rules(
-            &scratchpad.command,
-            Some(&scratchpad.name),
-            true,
-            !scratchpad.options.tiled,
-        );
+    let auto_spawn_commands: Vec<Scratchpad> = if eager {
+        get_spawnable(&|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
+    } else {
+        get_spawnable(&|sc| !client_titles.contains(&sc.title))
+    };
+
+    auto_spawn_commands.into_iter().for_each(|sc| {
+        let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);
         hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
     });
 

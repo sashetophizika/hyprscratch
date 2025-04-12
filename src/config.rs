@@ -59,7 +59,7 @@ impl Config {
                 .into_iter()
                 .filter(|scratchpad| cond(&scratchpad.options))
                 .map(|scratchpad| scratchpad.title)
-                .collect::<Vec<_>>()
+                .collect()
         };
 
         let normal_titles = filter_titles(&|opts| !opts.special);

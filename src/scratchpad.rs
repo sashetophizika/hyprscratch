@@ -48,7 +48,6 @@ pub struct ScratchpadOptions {
     pub poly: bool,
     pub cover: bool,
     pub persist: bool,
-    pub stack: bool,
     pub tiled: bool,
     pub lazy: bool,
     pub special: bool,
@@ -76,7 +75,6 @@ impl ScratchpadOptions {
             poly: opts.contains("poly"),
             cover: opts.contains("cover"),
             persist: opts.contains("persist"),
-            stack: opts.contains("stack"),
             tiled: opts.contains("tiled"),
             lazy: opts.contains("lazy"),
             special: opts.contains("special"),
@@ -93,7 +91,6 @@ impl ScratchpadOptions {
             "poly" => self.poly ^= true,
             "cover" => self.cover ^= true,
             "persist" => self.persist ^= true,
-            "stack" => self.stack ^= true,
             "tiled" => self.tiled ^= true,
             "lazy" => self.lazy ^= true,
             "special" => self.special ^= true,
@@ -219,7 +216,7 @@ impl Scratchpad {
     }
 
     fn hide_active(&self, titles: &[String], state: &HyprlandState) -> Result<()> {
-        if self.options.cover || self.options.stack {
+        if self.options.cover {
             return Ok(());
         }
 
@@ -250,7 +247,7 @@ impl Scratchpad {
             .clients_with_title
             .clone()
             .into_iter()
-            .filter(|cl| self.is_on_workspace(cl, &state))
+            .filter(|cl| self.is_on_workspace(cl, state))
             .peekable();
 
         let hide_all = !active.floating
@@ -258,8 +255,8 @@ impl Scratchpad {
             || active.fullscreen == FullscreenMode::None;
 
         if self.options.special || clients_on_active.peek().is_none() {
-            self.summon(&state)?;
-            self.hide_active(titles, &state)?;
+            self.summon(state)?;
+            self.hide_active(titles, state)?;
         } else if hide_all && !self.options.summon {
             clients_on_active.for_each(|cl| {
                 move_to_special(&cl).log_err(file!(), line!());
