@@ -85,7 +85,7 @@ fn main() {
     let log_err = |err: HyprError| {
         if let HyprError::IoError(e) = err {
             if e.to_string() == "Connection refused (os error 111)" {
-                println!("Could not connect to daemon. Is it running?");
+                let _ = log("Could not connect to daemon. Is it running?".into(), "WARN");
             }
         } else {
             {

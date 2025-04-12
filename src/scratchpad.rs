@@ -9,9 +9,10 @@ use hyprland::Result;
 use std::collections::HashMap;
 
 struct HyprlandState {
-    active_workspace_id: i32,
+    active_client: Option<Client>,
     clients_with_title: Vec<Client>,
     monitors: HashMap<String, i32>,
+    active_workspace_id: i32,
 }
 
 impl HyprlandState {
@@ -22,6 +23,7 @@ impl HyprlandState {
             monitors.insert(x.id.to_string(), x.active_workspace.id);
         });
 
+        let active_client = Client::get_active()?;
         let active_workspace_id = Workspace::get_active()?.id;
         let clients_with_title = Clients::get()?
             .into_iter()
@@ -29,9 +31,10 @@ impl HyprlandState {
             .collect();
 
         Ok(HyprlandState {
-            active_workspace_id,
-            monitors,
+            active_client,
             clients_with_title,
+            monitors,
+            active_workspace_id,
         })
     }
 }
@@ -122,7 +125,21 @@ impl Scratchpad {
         }
     }
 
-    fn summon_special(&mut self, state: &HyprlandState) -> Result<()> {
+    fn show_special(&self, state: &HyprlandState) -> Result<()> {
+        move_to_special(&state.clients_with_title[0])?;
+        if state.clients_with_title[0].workspace.id == state.active_workspace_id {
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+        }
+        Ok(())
+    }
+
+    fn spawn_special(&self) -> Result<()> {
+        let special_cmd =
+            prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
+        hyprland::dispatch!(Exec, &special_cmd)
+    }
+
+    fn summon_special(&self, state: &HyprlandState) -> Result<()> {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
             .iter()
@@ -130,57 +147,73 @@ impl Scratchpad {
             .collect();
 
         if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-            move_to_special(&state.clients_with_title[0])?;
-            if state.clients_with_title[0].workspace.id == state.active_workspace_id {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
-            }
+            self.show_special(state)?;
         } else if state.clients_with_title.is_empty() {
-            let special_cmd =
-                prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
-            hyprland::dispatch!(Exec, &special_cmd)?;
+            self.spawn_special()?;
         } else {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
     }
 
+    fn get_workspace_id(&self, state: &HyprlandState) -> i32 {
+        if let Some(m) = &self.options.monitor {
+            if let Some(id) = state.monitors.get(m) {
+                *id
+            } else {
+                let _ = log(format!("Monitor {m} not found"), "WARN");
+                state.active_workspace_id
+            }
+        } else {
+            state.active_workspace_id
+        }
+    }
+
+    fn show_normal(&self, state: &HyprlandState) -> Result<()> {
+        for client in state
+            .clients_with_title
+            .iter()
+            .filter(|x| !self.is_on_workspace(x, state))
+        {
+            let workspace_id = self.get_workspace_id(state);
+            hyprland::dispatch!(
+                MoveToWorkspace,
+                WorkspaceIdentifierWithSpecial::Id(workspace_id),
+                Some(WindowIdentifier::Address(client.address.clone()))
+            )?;
+
+            if !self.options.poly {
+                break;
+            }
+        }
+
+        hyprland::dispatch!(
+            FocusWindow,
+            WindowIdentifier::Address(state.clients_with_title[0].address.clone())
+        )
+    }
+
+    fn hide_special(active_client: &Option<Client>) {
+        if let Some(ac) = &active_client {
+            if ac.workspace.name.contains("special") {
+                hyprland::dispatch!(ToggleSpecialWorkspace, None).log_err(file!(), line!());
+            }
+        }
+    }
+
+    fn spawn_normal(&self, state: &HyprlandState) {
+        self.command.split("?").for_each(|x| {
+            Self::hide_special(&state.active_client);
+            let cmd = prepend_rules(x, None, false, !self.options.tiled);
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        });
+    }
+
     fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
         if state.clients_with_title.is_empty() {
-            self.command.split("?").for_each(|x| {
-                let cmd = prepend_rules(x, None, false, !self.options.tiled);
-                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-            });
+            self.spawn_normal(state);
         } else {
-            let workspace_id = if let Some(m) = &self.options.monitor {
-                if let Some(id) = state.monitors.get(m) {
-                    *id
-                } else {
-                    log(format!("Monitor {m} not found"), "WARN")?;
-                    state.active_workspace_id
-                }
-            } else {
-                state.active_workspace_id
-            };
-
-            for client in state
-                .clients_with_title
-                .iter()
-                .filter(|x| !self.is_on_workspace(x, state))
-            {
-                hyprland::dispatch!(
-                    MoveToWorkspace,
-                    WorkspaceIdentifierWithSpecial::Id(workspace_id),
-                    Some(WindowIdentifier::Address(client.address.clone()))
-                )?;
-                if !self.options.poly {
-                    break;
-                }
-            }
-
-            hyprland::dispatch!(
-                FocusWindow,
-                WindowIdentifier::Address(state.clients_with_title[0].address.clone())
-            )?;
+            self.show_normal(state)?;
         }
         Ok(())
     }
@@ -221,34 +254,38 @@ impl Scratchpad {
         }
     }
 
-    pub fn run(&mut self, titles: &[String]) -> Result<()> {
+    fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
+        let mut clients_on_active = state
+            .clients_with_title
+            .clone()
+            .into_iter()
+            .filter(|cl| self.is_on_workspace(cl, &state))
+            .peekable();
+
+        let hide_all = !active.floating
+            || active.initial_title == self.title
+            || active.fullscreen == FullscreenMode::None;
+
+        if self.options.special || clients_on_active.peek().is_none() {
+            self.summon(&state)?;
+            self.hide_active(titles, &state)?;
+        } else if hide_all && !self.options.summon {
+            clients_on_active.for_each(|cl| {
+                move_to_special(&cl).log_err(file!(), line!());
+            });
+        } else {
+            hyprland::dispatch!(
+                FocusWindow,
+                WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn trigger(&mut self, titles: &[String]) -> Result<()> {
         let state = HyprlandState::new(&self.title)?;
-
-        if let Some(active_client) = Client::get_active()? {
-            let mut clients_on_active = state
-                .clients_with_title
-                .clone()
-                .into_iter()
-                .filter(|x| self.is_on_workspace(x, &state))
-                .peekable();
-
-            let hide_all = !active_client.floating
-                || active_client.initial_title == self.title
-                || active_client.fullscreen == FullscreenMode::None;
-
-            if self.options.special || clients_on_active.peek().is_none() {
-                self.summon(&state)?;
-                self.hide_active(titles, &state)?
-            } else if hide_all && !self.options.summon {
-                clients_on_active.for_each(|x| {
-                    move_to_special(&x).log_err(file!(), line!());
-                });
-            } else {
-                hyprland::dispatch!(
-                    FocusWindow,
-                    WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
-                )?;
-            }
+        if let Some(active_client) = &state.active_client {
+            self.shoot(titles, &state, active_client)?;
         } else {
             self.summon(&state)?;
         }
@@ -455,7 +492,7 @@ mod tests {
             &resources.command,
             "poly",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -475,7 +512,7 @@ mod tests {
             &resources.command,
             "poly",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -518,7 +555,7 @@ mod tests {
             &resources[0].command,
             "tiled",
         )
-        .run(&vec![resources[0].title.clone()])
+        .trigger(&vec![resources[0].title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -532,7 +569,7 @@ mod tests {
             &resources[1].command,
             "",
         )
-        .run(&vec![resources[1].title.clone()])
+        .trigger(&vec![resources[1].title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -562,7 +599,7 @@ mod tests {
             &resources.command,
             "summon",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -577,7 +614,7 @@ mod tests {
             &resources.command,
             "summon",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -599,7 +636,7 @@ mod tests {
             &resources.command,
             "hide",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -626,7 +663,7 @@ mod tests {
             &resources.command,
             "hide",
         )
-        .run(&vec![resources.title.clone()])
+        .trigger(&vec![resources.title.clone()])
         .unwrap();
         sleep(Duration::from_millis(500));
 
