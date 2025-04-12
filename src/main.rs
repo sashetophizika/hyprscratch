@@ -11,35 +11,30 @@ use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
 use logs::log;
+use logs::LogErr;
 
-fn hyprscratch(args: &[String]) -> Result<()> {
-    for feature in [""] {
-        if args.contains(&feature.to_string()) {
-            warn_deprecated(feature)?;
-        }
-    }
-
-    let config = get_flag_arg(args, "config");
-    let sock = get_flag_arg(args, "socket");
-    let socket = sock.as_deref();
-
+fn cli_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> bool {
     for flag in ["help", "logs", "kill", "version", "get-config", "reload"] {
         if let Some(f) = flag_present(args, flag) {
             match f.as_str() {
-                "get-config" => get_config(socket)?,
-                "reload" => connect_to_sock(socket, "reload", &config.unwrap_or("".into()))?,
-                "kill" => connect_to_sock(socket, "kill", "")?,
+                "get-config" => get_config(socket).log_err(file!(), line!()),
+                "kill" => connect_to_sock(socket, "kill", "").log_err(file!(), line!()),
                 "help" => print_help(),
-                "logs" => print_logs()?,
+                "logs" => print_logs().log_err(file!(), line!()),
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
+                "reload" => connect_to_sock(socket, "reload", &config.unwrap_or("".into()))
+                    .log_err(file!(), line!()),
                 _ => (),
             }
-            return Ok(());
+            return true;
         }
     }
+    false
+}
 
-    let req = args.get(1).map_or("", |v| v.as_str());
-    let msg = args.get(2).map_or("", |v| v.as_str());
+fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
+    let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
+    let (req, msg) = (get_arg(1), get_arg(2));
     match req {
         "toggle" | "summon" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
             connect_to_sock(socket, req, msg)?
@@ -65,19 +60,37 @@ fn hyprscratch(args: &[String]) -> Result<()> {
         }
         _ => {
             if args[2..].is_empty() {
-                log(
-                    format!(
-                        "Unknown command or not enough arguments for scratchpad: '{}'.",
-                        args[1..].join(" ")
-                    ),
-                    "WARN",
-                )?;
+                let msg = format!(
+                    "Unknown command or not enough arguments for scratchpad in '{}'",
+                    args[1..].join(" ")
+                );
+                log(msg, "WARN")?;
             } else {
                 connect_to_sock(socket, "manual", &args[1..].join("^"))?
             }
         }
     }
     Ok(())
+}
+
+fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
+    if cli_commands(args, config.clone(), socket) {
+        return Ok(());
+    }
+    main_commands(args, config, socket)
+}
+
+fn hyprscratch(args: &[String]) -> Result<()> {
+    for feature in [""] {
+        if args.contains(&feature.to_string()) {
+            warn_deprecated(feature)?;
+        }
+    }
+
+    let config = get_flag_arg(args, "config");
+    let sock = get_flag_arg(args, "socket");
+    let socket = sock.as_deref();
+    resolve_command(args, config, socket)
 }
 
 fn main() {
