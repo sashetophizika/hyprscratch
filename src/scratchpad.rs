@@ -1,7 +1,6 @@
 use crate::logs::log;
 use crate::logs::LogErr;
-use crate::utils::dequote;
-use crate::utils::{get_flag_arg, move_to_special, prepend_rules};
+use crate::utils::*;
 use hyprland::data::{Client, Clients, FullscreenMode, Monitors, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -193,17 +192,9 @@ impl Scratchpad {
         )
     }
 
-    fn hide_special(active_client: &Option<Client>) {
-        if let Some(ac) = &active_client {
-            if ac.workspace.name.contains("special") {
-                hyprland::dispatch!(ToggleSpecialWorkspace, None).log_err(file!(), line!());
-            }
-        }
-    }
-
     fn spawn_normal(&self, state: &HyprlandState) {
         self.command.split("?").for_each(|x| {
-            Self::hide_special(&state.active_client);
+            hide_special(&state.active_client);
             let cmd = prepend_rules(x, None, false, !self.options.tiled);
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });

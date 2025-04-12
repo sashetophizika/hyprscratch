@@ -29,6 +29,24 @@ impl<T> LogErr<T> for hyprland::Result<T> {
     }
 }
 
+impl<T> LogErr<T> for std::io::Result<T> {
+    fn unwrap_log(self, file: &str, line: u32) -> T {
+        match self {
+            Ok(t) => t,
+            Err(err) => {
+                let msg = format!("{} at {}:{}", err, file, line);
+                log(msg, "ERROR").unwrap();
+                panic!()
+            }
+        }
+    }
+    fn log_err(self, file: &str, line: u32) {
+        if let Err(e) = self {
+            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
+        }
+    }
+}
+
 impl<T> LogErr<T> for Result<T, VarError> {
     fn unwrap_log(self, file: &str, line: u32) -> T {
         match self {

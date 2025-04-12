@@ -69,17 +69,19 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
-fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
-    let mut current_index = state.cycle_index % config.scratchpads.len();
-    let mode = if msg.contains("special") {
+fn get_mode(msg: &str) -> Option<bool> {
+    if msg.contains("special") {
         Some(true)
     } else if msg.contains("normal") {
         Some(false)
     } else {
         None
-    };
+    }
+}
 
-    if let Some(m) = mode {
+fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
+    let mut current_index = state.cycle_index % config.scratchpads.len();
+    if let Some(m) = get_mode(msg) {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
             let _ = log(format!("No {msg} scratchpads found"), "WARN");
             return None;
@@ -163,16 +165,20 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
 fn handle_manual(msg: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
     let args: Vec<&str> = msg.splitn(3, "^").collect();
     state.update_prev_titles(args[0]);
-    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).trigger(&config.non_persist_titles)
+    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" "))
+        .trigger(&config.non_persist_titles)
 }
 
-fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
-    let config_path = if !msg.is_empty() && Path::new(msg).exists() {
+fn get_config_path(msg: &str) -> Option<String> {
+    if !msg.is_empty() && Path::new(msg).exists() {
         Some(msg.to_string())
     } else {
         None
-    };
-    config.reload(config_path)?;
+    }
+}
+
+fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
+    config.reload(get_config_path(msg))?;
     autospawn(config, eager)?;
 
     log("Configuration reloaded".to_string(), "INFO")?;
@@ -200,30 +206,31 @@ fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
 }
 
 fn handle_killall(config: &Config) -> Result<()> {
+    let is_scratchpad = |cl: &Client| {
+        config
+            .scratchpads
+            .iter()
+            .any(|scratchpad| scratchpad.title == cl.initial_title)
+    };
+
+    let kill = |cl: Client| {
+        let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));
+        if let Err(e) = res {
+            let _ = log(format!("{e} in {} at {}", file!(), line!()), "WARN");
+        }
+    };
+
     Clients::get()?
         .into_iter()
-        .filter(|x| {
-            config
-                .scratchpads
-                .iter()
-                .any(|scratchpad| scratchpad.title == x.initial_title)
-        })
-        .for_each(|x| {
-            let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(x.address));
-            if let Err(e) = res {
-                let _ = log(format!("{e} in {} at {}", file!(), line!()), "WARN");
-            }
-        });
+        .filter(is_scratchpad)
+        .for_each(kill);
     Ok(())
 }
 
 fn handle_hideall(config: &Config) -> Result<()> {
     move_floating(config.normal_titles.clone())?;
-    let active_client = Client::get_active()?;
-    if let Some(ac) = active_client {
-        if ac.workspace.id <= 0 {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(ac.initial_title))?;
-        }
+    if let Ok(ac) = Client::get_active() {
+        hide_special(&ac);
     }
     Ok(())
 }
@@ -239,11 +246,8 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         )
         .log_err(file!(), line!());
 
-        if let Ok(Some(cl)) = Client::get_active() {
-            if cl.workspace.id < 0 && cl.workspace.id > -1000 {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title))
-                    .log_err(file!(), line!())
-            }
+        if let Ok(ac) = Client::get_active() {
+            hide_special(&ac);
         }
     });
 }
@@ -296,33 +300,33 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
     ev.start_listener()
 }
 
+fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
+    match socket_path {
+        Some(sp) => Path::new(sp),
+        None => {
+            let temp_dir = Path::new("/tmp/hyprscratch/");
+            if !temp_dir.exists() {
+                create_dir(temp_dir).log_err(file!(), line!());
+            }
+            Path::new("/tmp/hyprscratch/hyprscratch.sock")
+        }
+    }
+}
+
 fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
     config: Arc<Mutex<Config>>,
     eager: bool,
 ) -> Result<()> {
-    let path_to_sock = match socket_path {
-        Some(sp) => Path::new(sp),
-        None => {
-            let temp_dir = Path::new("/tmp/hyprscratch/");
-            if !temp_dir.exists() {
-                create_dir(temp_dir)?;
-            }
-            Path::new("/tmp/hyprscratch/hyprscratch.sock")
-        }
-    };
-
+    let path_to_sock = get_path_to_sock(socket_path);
     if path_to_sock.exists() {
         remove_file(path_to_sock)?;
     }
 
     let listener = UnixListener::bind(path_to_sock)?;
     log(
-        format!(
-            "Daemon started successfully, listening on {:?}",
-            path_to_sock
-        ),
+        format!("Daemon started successfully, listening on {path_to_sock:?}",),
         "INFO",
     )?;
 
