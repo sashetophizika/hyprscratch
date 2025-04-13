@@ -325,12 +325,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(
-                &vec![resources.title.clone()],
-                &HyprlandState::new(&resources.title).unwrap(),
-            )
-            .unwrap();
+        move_to_special(&active_client).unwrap();
         sleep(Duration::from_millis(500));
 
         assert_eq!(
