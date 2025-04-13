@@ -132,28 +132,20 @@ pub fn prepend_rules(
     }
 }
 
-pub fn autospawn(config: &mut Config, eager: bool) -> Result<()> {
+pub fn autospawn(config: &mut Config) -> Result<()> {
     let client_titles: Vec<String> = Clients::get()?
         .into_iter()
         .map(|x| x.initial_title)
         .collect();
 
-    let get_spawnable = |cond: &dyn Fn(&Scratchpad) -> bool| {
-        config
-            .scratchpads
-            .clone()
-            .into_iter()
-            .filter(cond)
-            .collect()
-    };
+    let auto_spawn_scratchpads: Vec<Scratchpad> = config
+        .scratchpads
+        .clone()
+        .into_iter()
+        .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
+        .collect();
 
-    let auto_spawn_commands: Vec<Scratchpad> = if eager {
-        get_spawnable(&|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
-    } else {
-        get_spawnable(&|sc| !client_titles.contains(&sc.title))
-    };
-
-    auto_spawn_commands.into_iter().for_each(|sc| {
+    auto_spawn_scratchpads.into_iter().for_each(|sc| {
         let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);
         hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
     });
@@ -307,7 +299,7 @@ mod tests {
             non_persist_titles: resources.titles.to_vec(),
         };
 
-        autospawn(&mut config, true).unwrap();
+        autospawn(&mut config).unwrap();
         sleep(Duration::from_millis(2000));
 
         clients = Clients::get().unwrap().into_iter();

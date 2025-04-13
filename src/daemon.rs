@@ -18,13 +18,15 @@ use std::thread;
 struct DaemonState {
     cycle_index: usize,
     prev_titles: [String; 2],
+    eager: bool,
 }
 
 impl DaemonState {
-    fn new() -> DaemonState {
+    fn new(args: &str) -> DaemonState {
         DaemonState {
             cycle_index: 0,
             prev_titles: [String::new(), String::new()],
+            eager: args.contains("eager"),
         }
     }
 
@@ -177,9 +179,11 @@ fn get_config_path(msg: &str) -> Option<String> {
     }
 }
 
-fn handle_reload(msg: &str, config: &mut Config, eager: bool) -> Result<()> {
+fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     config.reload(get_config_path(msg))?;
-    autospawn(config, eager)?;
+    if state.eager {
+        autospawn(config)?;
+    }
 
     log("Configuration reloaded".to_string(), "INFO")?;
     Ok(())
@@ -317,7 +321,6 @@ fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
     config: Arc<Mutex<Config>>,
-    eager: bool,
 ) -> Result<()> {
     let path_to_sock = get_path_to_sock(socket_path);
     if path_to_sock.exists() {
@@ -345,7 +348,7 @@ fn start_unix_listener(
                     "previous" => handle_previous(conf, state),
                     "kill-all" => handle_killall(conf),
                     "hide-all" => handle_hideall(conf),
-                    "reload" => handle_reload(msg, conf, eager),
+                    "reload" => handle_reload(msg, conf, state),
                     "manual" => handle_manual(msg, conf, state),
                     "cycle" => handle_cycle(msg, conf, state),
                     "kill" => {
@@ -378,15 +381,16 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
         Config::new(config_path.clone()).unwrap_log(file!(), line!()),
     ));
 
-    let eager = args.contains("eager");
-    autospawn(&mut config.lock().unwrap_log(file!(), line!()), eager).log_err(file!(), line!());
-
     let options = DaemonOptions::new(&args);
     let config_clone = Arc::clone(&config);
     thread::spawn(move || start_event_listeners(options, config_clone).log_err(file!(), line!()));
 
-    let mut state = DaemonState::new();
-    start_unix_listener(socket_path, &mut state, config, eager).unwrap_log(file!(), line!());
+    let mut state = DaemonState::new(&args);
+    if state.eager {
+        autospawn(&mut config.lock().unwrap_log(file!(), line!())).log_err(file!(), line!());
+    }
+
+    start_unix_listener(socket_path, &mut state, config).unwrap_log(file!(), line!());
 }
 
 #[cfg(test)]
@@ -427,7 +431,7 @@ mod tests {
     #[test]
     fn test_state() {
         let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
-        let mut state = DaemonState::new();
+        let mut state = DaemonState::new("".into());
 
         assert_eq!(get_cycle_index("special", &config, &mut state), Some(2));
         assert_eq!(get_cycle_index("normal", &config, &mut state), Some(3));
