@@ -31,10 +31,10 @@ impl HyprlandState {
             .collect();
 
         Ok(HyprlandState {
-            active_client,
-            clients_with_title,
-            monitors,
             active_workspace_id,
+            clients_with_title,
+            active_client,
+            monitors,
         })
     }
 }
@@ -42,6 +42,7 @@ impl HyprlandState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScratchpadOptions {
     options_string: String,
+    pub monitor: Option<String>,
     pub persist: bool,
     pub special: bool,
     pub summon: bool,
@@ -52,7 +53,6 @@ pub struct ScratchpadOptions {
     pub hide: bool,
     pub poly: bool,
     pub lazy: bool,
-    pub monitor: Option<String>,
 }
 
 impl ScratchpadOptions {
@@ -132,12 +132,6 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn spawn_special(&self) -> Result<()> {
-        let special_cmd =
-            prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
-        hyprland::dispatch!(Exec, &special_cmd)
-    }
-
     fn toggle_special(&self, state: &HyprlandState) -> Result<()> {
         if let Some(ac) = &state.active_client {
             let should_toggle = (ac.initial_title == self.title && !self.options.summon)
@@ -151,6 +145,13 @@ impl Scratchpad {
         }
         Ok(())
     }
+
+    fn spawn_special(&self) -> Result<()> {
+        let special_cmd =
+            prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
+        hyprland::dispatch!(Exec, &special_cmd)
+    }
+
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
@@ -160,10 +161,10 @@ impl Scratchpad {
 
         if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
             self.capture_special(state)?;
-        } else if state.clients_with_title.is_empty() {
-            self.spawn_special()?;
-        } else {
+        } else if !state.clients_with_title.is_empty() {
             self.toggle_special(state)?;
+        } else {
+            self.spawn_special()?;
         }
         Ok(())
     }
@@ -181,16 +182,23 @@ impl Scratchpad {
         }
     }
 
+    fn spawn_normal(&self, state: &HyprlandState) {
+        self.command.split("?").for_each(|x| {
+            hide_special(&state.active_client);
+            let cmd = prepend_rules(x, None, false, !self.options.tiled);
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        });
+    }
+
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
         for client in state
             .clients_with_title
             .iter()
             .filter(|x| !self.is_on_workspace(x, state))
         {
-            let workspace_id = self.get_workspace_id(state);
             hyprland::dispatch!(
                 MoveToWorkspace,
-                WorkspaceIdentifierWithSpecial::Id(workspace_id),
+                WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
                 Some(WindowIdentifier::Address(client.address.clone()))
             )?;
 
@@ -203,14 +211,6 @@ impl Scratchpad {
             FocusWindow,
             WindowIdentifier::Address(state.clients_with_title[0].address.clone())
         )
-    }
-
-    fn spawn_normal(&self, state: &HyprlandState) {
-        self.command.split("?").for_each(|x| {
-            hide_special(&state.active_client);
-            let cmd = prepend_rules(x, None, false, !self.options.tiled);
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-        });
     }
 
     fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
@@ -232,7 +232,7 @@ impl Scratchpad {
     }
 
     fn hide_active(&self, titles: &[String], state: &HyprlandState) -> Result<()> {
-        if self.options.cover {
+        if self.options.cover || self.options.hide {
             return Ok(());
         }
 
@@ -274,12 +274,14 @@ impl Scratchpad {
         let should_refocus = client_on_active.peek().is_some()
             && !self.options.special
             && !self.options.summon
-            && active.initial_title != self.title
-            && active.floating;
+            && !self.options.hide
+            && active.floating
+            && active.initial_title != self.title;
 
-        let should_hide = active.initial_title == self.title || !active.floating;
         let should_summon =
             self.options.special || self.options.summon || client_on_active.peek().is_none();
+        let should_hide =
+            self.options.hide || !active.floating || active.initial_title == self.title;
 
         if should_refocus {
             self.hide_active(titles, state)?;
@@ -291,6 +293,8 @@ impl Scratchpad {
             client_on_active.for_each(|cl| {
                 move_to_special(&cl).log_err(file!(), line!());
             });
+        } else {
+            focus(&client_on_active.peek().unwrap().address);
         }
 
         if !should_hide {
@@ -301,8 +305,8 @@ impl Scratchpad {
 
     pub fn trigger(&mut self, titles: &[String]) -> Result<()> {
         let state = HyprlandState::new(&self.title)?;
-        if let Some(active_client) = &state.active_client {
-            self.shoot(titles, &state, active_client)?;
+        if let Some(active) = &state.active_client {
+            self.shoot(titles, &state, active)?;
         } else {
             self.summon(&state)?;
         }
