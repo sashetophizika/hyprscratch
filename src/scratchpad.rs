@@ -1,9 +1,10 @@
 use crate::logs::log;
 use crate::logs::LogErr;
 use crate::utils::*;
-use hyprland::data::{Client, Clients, FullscreenMode, Monitors, Workspace};
+use hyprland::data::{Client, Clients, Monitors, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
+use hyprland::shared::Address;
 use hyprland::Result;
 use std::collections::HashMap;
 
@@ -250,22 +251,37 @@ impl Scratchpad {
             .filter(|cl| self.is_on_workspace(cl, state))
             .peekable();
 
-        let hide_all = !active.floating
-            || active.initial_title == self.title
-            || active.fullscreen == FullscreenMode::None;
+        let focus = |adr: &Address| {
+            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(adr.clone()))
+                .log_err(file!(), line!());
+        };
 
-        if self.options.special || clients_on_active.peek().is_none() {
+        let should_refocus = clients_on_active.peek().is_some()
+            && !self.options.special
+            && !self.options.summon
+            && active.initial_title != self.title
+            && active.floating;
+
+        let should_hide = active.initial_title == self.title || !active.floating;
+        let should_summon =
+            self.options.special || self.options.summon || clients_on_active.peek().is_none();
+
+        if should_refocus {
+            self.hide_active(titles, state)?;
+            focus(&clients_on_active.peek().unwrap().address);
+        } else if should_summon {
             self.summon(state)?;
             self.hide_active(titles, state)?;
-        } else if hide_all && !self.options.summon {
+        } else if should_hide {
             clients_on_active.for_each(|cl| {
                 move_to_special(&cl).log_err(file!(), line!());
             });
         } else {
-            hyprland::dispatch!(
-                FocusWindow,
-                WindowIdentifier::Address(clients_on_active.peek().unwrap().address.clone())
-            )?;
+            focus(&clients_on_active.peek().unwrap().address);
+        }
+
+        if !should_hide {
+            Dispatch::call(DispatchType::BringActiveToTop)?;
         }
         Ok(())
     }
@@ -278,7 +294,6 @@ impl Scratchpad {
             self.summon(&state)?;
         }
 
-        Dispatch::call(DispatchType::BringActiveToTop)?;
         Ok(())
     }
 }
