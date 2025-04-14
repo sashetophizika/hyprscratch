@@ -181,8 +181,8 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
 
 fn warn_unknown_option(opt: &str) {
     let known_options = [
-        "", "cover", "persist", "sticky", "shiny", "lazy", "summon", "hide", "poly", "tiled",
-        "special",
+        "", "cover", "persist", "sticky", "shiny", "lazy", "show", "hide", "poly", "tiled",
+        "special", "summon",
     ];
     if !known_options.contains(&opt) {
         log("Unknown scratchpad option: ".to_string() + opt, "WARN").unwrap();
@@ -194,6 +194,7 @@ fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
         "clean",
         "init",
         "summon",
+        "show",
         "hide",
         "eager",
         "spotless",
@@ -404,7 +405,7 @@ mod tests {
                 "btop",
                 "btop",
                 "[size 85% 85%] kitty --title btop -e btop",
-                "cover persist sticky shiny lazy summon hide poly special tiled",
+                "cover persist sticky shiny lazy show hide poly special tiled",
             ),
             Scratchpad::new("nautilus", "Loading…", "[size 70% 80%] nautilus", ""),
             Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
@@ -412,7 +413,7 @@ mod tests {
                 "wierd",
                 " a program with ' a wierd ' name",
                 " a \"command with\" \\'a wierd\\' format",
-                "hide summon",
+                "hide show",
             ),
         ]
     }
@@ -443,7 +444,7 @@ mod tests {
     fn test_reload() {
         let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
         config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager summon hide special sticky
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
 bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n").unwrap();
 
@@ -455,7 +456,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
                 "btop",
                 "btop",
                 "kitty --title btop -e btop",
-                "cover shiny eager summon hide special sticky",
+                "cover shiny eager show hide special sticky",
             ),
             Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "special"),
             Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "eager"),

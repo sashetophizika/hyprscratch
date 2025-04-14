@@ -36,7 +36,7 @@ fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) 
     let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
-        "toggle" | "summon" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
+        "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
             connect_to_sock(socket, req, msg)?
         }
         "init" | "eager" | "clean" | "no-auto-reload" | "config" | "socket" => {
@@ -81,7 +81,7 @@ fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>
 }
 
 fn hyprscratch(args: &[String]) -> Result<()> {
-    for feature in [""] {
+    for feature in ["summon"] {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }

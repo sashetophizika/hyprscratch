@@ -45,11 +45,11 @@ pub struct ScratchpadOptions {
     pub monitor: Option<String>,
     pub persist: bool,
     pub special: bool,
-    pub summon: bool,
     pub sticky: bool,
     pub shiny: bool,
     pub cover: bool,
     pub tiled: bool,
+    pub show: bool,
     pub hide: bool,
     pub poly: bool,
     pub lazy: bool,
@@ -72,10 +72,10 @@ impl ScratchpadOptions {
             persist: opts.contains("persist"),
             special: opts.contains("special"),
             sticky: opts.contains("sticky"),
-            summon: opts.contains("summon"),
             shiny: opts.contains("shiny"),
             cover: opts.contains("cover"),
             tiled: opts.contains("tiled"),
+            show: opts.contains("summon") || opts.contains("show"),
             hide: opts.contains("hide"),
             poly: opts.contains("poly"),
             lazy: opts.contains("lazy"),
@@ -87,11 +87,12 @@ impl ScratchpadOptions {
         match opt {
             "persist" => self.persist ^= true,
             "special" => self.special ^= true,
-            "summon" => self.summon ^= true,
+            "summon" => self.show ^= true,
             "sticky" => self.sticky ^= true,
             "shiny" => self.shiny ^= true,
             "cover" => self.cover ^= true,
             "tiled" => self.tiled ^= true,
+            "show" => self.show ^= true,
             "hide" => self.hide ^= true,
             "poly" => self.poly ^= true,
             "lazy" => self.lazy ^= true,
@@ -134,13 +135,13 @@ impl Scratchpad {
 
     fn toggle_special(&self, state: &HyprlandState) -> Result<()> {
         if let Some(ac) = &state.active_client {
-            let should_toggle = (ac.initial_title == self.title && !self.options.summon)
+            let should_toggle = (ac.initial_title == self.title && !self.options.show)
                 || (ac.initial_title != self.title && !self.options.hide);
 
             if should_toggle {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
             }
-        } else if self.options.summon {
+        } else if self.options.show {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
@@ -273,13 +274,13 @@ impl Scratchpad {
 
         let should_refocus = client_on_active.peek().is_some()
             && !self.options.special
-            && !self.options.summon
+            && !self.options.show
             && !self.options.hide
             && active.floating
             && active.initial_title != self.title;
 
         let should_summon =
-            self.options.special || self.options.summon || client_on_active.peek().is_none();
+            self.options.special || self.options.show || client_on_active.peek().is_none();
         let should_hide =
             self.options.hide || !active.floating || active.initial_title == self.title;
 

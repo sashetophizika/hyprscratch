@@ -55,7 +55,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `lazy`: prevents the scratchpad from being spawned by `eager`.
 
-* `summon`: only creates or brings up the scratchpad.
+* `show`: only creates or brings up the scratchpad.
 
 * `hide`: only hides the scratchpad if active.
 
@@ -73,7 +73,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `toggle <name>`: toggles the scratchpad with the given name
 
-* `summon <name>`: summons the scratchpad with the given name
+* `show <name>`: shows the scratchpad with the given name
 
 * `hide <name>`: hides the scratchpad with the given name
 
@@ -112,7 +112,7 @@ And in `hyprland.conf`:
 exec-once = hyprscratch init
 
 bind = $mainMod, t, hyprscratch toggle name
-bind = $mainMod, s, hyprscratch summon name
+bind = $mainMod, s, hyprscratch show name
 bind = $mainMod, h, hyprscratch hide name
 ```
 

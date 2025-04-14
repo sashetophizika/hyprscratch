@@ -125,7 +125,7 @@ SCRATCHPAD OPTIONS
   sticky                      Prevent the scratchpad from being hidden by 'clean'
   shiny                       Prevent the scratchpad from being hidden by 'spotless'
   lazy                        Prevent the scratchpad from being spawned by 'eager'
-  summon                      Only creates or brings up the scratchpad
+  show                        Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
   poly                        Toggles all scratchpads matching the title simultaneously
   tiled                       Makes a tiled scratchpad instead of a floating one
@@ -135,7 +135,7 @@ SCRATCHPAD OPTIONS
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads
   toggle <name>               Toggles the scratchpad with the given name
-  summon <name>               Summons the scratchpad with the given name
+  show <name>                 Shows the scratchpad with the given name
   hide <name>                 Hides the scratchpad with the given name
   previous                    Summon the previous non-active scratchpad
   hide-all                    Hide all scratchpads
