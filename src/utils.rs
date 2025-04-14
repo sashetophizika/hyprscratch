@@ -296,7 +296,7 @@ mod tests {
             special_titles: Vec::new(),
             slick_titles: Vec::new(),
             dirty_titles: Vec::new(),
-            non_persist_titles: resources.titles.to_vec(),
+            fickle_titles: resources.titles.to_vec(),
         };
 
         autospawn(&mut config).unwrap();

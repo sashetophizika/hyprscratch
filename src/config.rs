@@ -13,11 +13,11 @@ use toml::{Table, Value};
 pub struct Config {
     pub config_file: String,
     pub scratchpads: Vec<Scratchpad>,
-    pub normal_titles: Vec<String>,
     pub special_titles: Vec<String>,
+    pub normal_titles: Vec<String>,
+    pub fickle_titles: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
-    pub non_persist_titles: Vec<String>,
 }
 
 impl Config {
@@ -62,10 +62,10 @@ impl Config {
                 .collect()
         };
 
-        let normal_titles = filter_titles(&|opts| !opts.special);
         let special_titles = filter_titles(&|opts| opts.special);
+        let normal_titles = filter_titles(&|opts| !opts.special);
+        let fickle_titles = filter_titles(&|opts| !opts.persist && !opts.special);
         let slick_titles = filter_titles(&|opts| !opts.sticky && !opts.tiled);
-        let non_persist_titles = filter_titles(&|opts| !opts.persist && !opts.special);
         let dirty_titles = filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special);
 
         log(
@@ -79,11 +79,11 @@ impl Config {
         Ok(Config {
             config_file: config_files[0].clone(),
             scratchpads,
-            normal_titles,
             special_titles,
+            normal_titles,
+            fickle_titles,
             slick_titles,
             dirty_titles,
-            non_persist_titles,
         })
     }
 
@@ -471,7 +471,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
                 "cmat".to_string(),
             ],
             dirty_titles: vec!["firefox".to_string(), "cmat".to_string()],
-            non_persist_titles: vec![
+            fickle_titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),
@@ -515,7 +515,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             special_titles: vec!["firefox".to_string(), "cmat".to_string()],
             slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
             dirty_titles: vec!["btop".to_string()],
-            non_persist_titles: vec![
+            fickle_titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
                 "htop".to_string(),

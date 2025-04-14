@@ -42,16 +42,16 @@ impl HyprlandState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScratchpadOptions {
     options_string: String,
-    pub summon: bool,
-    pub hide: bool,
-    pub shiny: bool,
-    pub sticky: bool,
-    pub poly: bool,
-    pub cover: bool,
     pub persist: bool,
-    pub tiled: bool,
-    pub lazy: bool,
     pub special: bool,
+    pub summon: bool,
+    pub sticky: bool,
+    pub shiny: bool,
+    pub cover: bool,
+    pub tiled: bool,
+    pub hide: bool,
+    pub poly: bool,
+    pub lazy: bool,
     pub monitor: Option<String>,
 }
 
@@ -69,32 +69,32 @@ impl ScratchpadOptions {
 
         ScratchpadOptions {
             options_string: opts.to_string(),
-            summon: opts.contains("summon"),
-            hide: opts.contains("hide"),
-            shiny: opts.contains("shiny"),
-            sticky: opts.contains("sticky"),
-            poly: opts.contains("poly"),
-            cover: opts.contains("cover"),
             persist: opts.contains("persist"),
-            tiled: opts.contains("tiled"),
-            lazy: opts.contains("lazy"),
             special: opts.contains("special"),
+            sticky: opts.contains("sticky"),
+            summon: opts.contains("summon"),
+            shiny: opts.contains("shiny"),
+            cover: opts.contains("cover"),
+            tiled: opts.contains("tiled"),
+            hide: opts.contains("hide"),
+            poly: opts.contains("poly"),
+            lazy: opts.contains("lazy"),
             monitor: get_arg("monitor"),
         }
     }
 
     pub fn toggle(&mut self, opt: &str) {
         match opt {
-            "summon" => self.summon ^= true,
-            "hide" => self.hide ^= true,
-            "shiny" => self.shiny ^= true,
-            "sticky" => self.sticky ^= true,
-            "poly" => self.poly ^= true,
-            "cover" => self.cover ^= true,
             "persist" => self.persist ^= true,
-            "tiled" => self.tiled ^= true,
-            "lazy" => self.lazy ^= true,
             "special" => self.special ^= true,
+            "summon" => self.summon ^= true,
+            "sticky" => self.sticky ^= true,
+            "shiny" => self.shiny ^= true,
+            "cover" => self.cover ^= true,
+            "tiled" => self.tiled ^= true,
+            "hide" => self.hide ^= true,
+            "poly" => self.poly ^= true,
+            "lazy" => self.lazy ^= true,
             _ => (),
         };
     }
@@ -122,9 +122,11 @@ impl Scratchpad {
         }
     }
 
-    fn show_special(&self, state: &HyprlandState) -> Result<()> {
-        move_to_special(&state.clients_with_title[0])?;
-        if state.clients_with_title[0].workspace.id == state.active_workspace_id {
+    fn capture_special(&self, state: &HyprlandState) -> Result<()> {
+        let first_title = &state.clients_with_title[0];
+        move_to_special(first_title)?;
+
+        if !self.options.hide && first_title.workspace.id == state.active_workspace_id {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
@@ -136,6 +138,19 @@ impl Scratchpad {
         hyprland::dispatch!(Exec, &special_cmd)
     }
 
+    fn toggle_special(&self, state: &HyprlandState) -> Result<()> {
+        if let Some(ac) = &state.active_client {
+            let should_toggle = (ac.initial_title == self.title && !self.options.summon)
+                || (ac.initial_title != self.title && !self.options.hide);
+
+            if should_toggle {
+                hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+            }
+        } else if self.options.summon {
+            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+        }
+        Ok(())
+    }
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
@@ -144,11 +159,11 @@ impl Scratchpad {
             .collect();
 
         if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-            self.show_special(state)?;
+            self.capture_special(state)?;
         } else if state.clients_with_title.is_empty() {
             self.spawn_special()?;
         } else {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+            self.toggle_special(state)?;
         }
         Ok(())
     }
@@ -244,7 +259,7 @@ impl Scratchpad {
     }
 
     fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
-        let mut clients_on_active = state
+        let mut client_on_active = state
             .clients_with_title
             .clone()
             .into_iter()
@@ -256,7 +271,7 @@ impl Scratchpad {
                 .log_err(file!(), line!());
         };
 
-        let should_refocus = clients_on_active.peek().is_some()
+        let should_refocus = client_on_active.peek().is_some()
             && !self.options.special
             && !self.options.summon
             && active.initial_title != self.title
@@ -264,20 +279,18 @@ impl Scratchpad {
 
         let should_hide = active.initial_title == self.title || !active.floating;
         let should_summon =
-            self.options.special || self.options.summon || clients_on_active.peek().is_none();
+            self.options.special || self.options.summon || client_on_active.peek().is_none();
 
         if should_refocus {
             self.hide_active(titles, state)?;
-            focus(&clients_on_active.peek().unwrap().address);
+            focus(&client_on_active.peek().unwrap().address);
         } else if should_summon {
             self.summon(state)?;
             self.hide_active(titles, state)?;
         } else if should_hide {
-            clients_on_active.for_each(|cl| {
+            client_on_active.for_each(|cl| {
                 move_to_special(&cl).log_err(file!(), line!());
             });
-        } else {
-            focus(&clients_on_active.peek().unwrap().address);
         }
 
         if !should_hide {

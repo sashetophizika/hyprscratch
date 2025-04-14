@@ -63,7 +63,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     config.dirty_titles.retain(|x| *x != title);
     state.update_prev_titles(&title);
 
-    config.scratchpads[index].trigger(&config.non_persist_titles)?;
+    config.scratchpads[index].trigger(&config.fickle_titles)?;
 
     if !config.scratchpads[index].options.shiny {
         config.dirty_titles.push(title.to_string());
@@ -168,7 +168,7 @@ fn handle_manual(msg: &str, config: &Config, state: &mut DaemonState) -> Result<
     let args: Vec<&str> = msg.splitn(3, "^").collect();
     state.update_prev_titles(args[0]);
     Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" "))
-        .trigger(&config.non_persist_titles)
+        .trigger(&config.fickle_titles)
 }
 
 fn get_config_path(msg: &str) -> Option<String> {
