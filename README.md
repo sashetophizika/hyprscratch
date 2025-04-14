@@ -41,7 +41,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `no-auto-reload`: does not reload the configuration when the `hyprland.conf` is updated.
 
-* `config </path/to/config>`: specify a path to the configuration file
+* `config </path/to/config>`: specify a path to the configuration file.
 
 ### Scratchpad options:
 
@@ -59,37 +59,37 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `hide`: only hides the scratchpad if active.
 
-* `poly`: toggle all scratchpads with the same title simultaneously
+* `poly`: toggle all scratchpads with the same title simultaneously.
 
-* `tiled`: spawns the scratchpad tiled instead of floating
+* `tiled`: spawns the scratchpad tiled instead of floating.
 
-* `monitor <id>`: restricts the scratchpad to a specific monitor
+* `monitor <id>`: restricts the scratchpad to a specific monitor.
 
-* `special`: uses the special workspace. Ignores most other scratchpad options and is ignored by `clean` and `spotless`.
+* `special`: uses the special workspace. Does not work with all other options.
 
 ### Extra subcommands:
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
 
-* `toggle <name>`: toggles the scratchpad with the given name
+* `toggle <name>`: toggles the scratchpad with the given name.
 
-* `show <name>`: shows the scratchpad with the given name
+* `show <name>`: shows the scratchpad with the given name.
 
-* `hide <name>`: hides the scratchpad with the given name
+* `hide <name>`: hides the scratchpad with the given name.
 
 * `previous`: summons the last used scratchpad that is not currently active.
 
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
-* `kill-all`: closes all scratchpad clients that are open
+* `kill-all`: closes all scratchpad clients that are open.
 
 * `reload`: re-parses the configuration file without restarting the daemon.
 
 * `get-config`: prints out the parsed configuration.
 
-* `kill`: kills the hyprscratch daemon
+* `kill`: kills the hyprscratch daemon.
 
-* `logs`: shows logs
+* `logs`: shows logs.
 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
