@@ -191,24 +191,23 @@ fn warn_unknown_option(opt: &str) {
 
 fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
     let known_commands = [
-        "clean",
-        "init",
-        "summon",
-        "show",
-        "hide",
-        "eager",
-        "spotless",
         "no-auto-reload",
+        "get-config",
+        "spotless",
         "hide-all",
         "kill-all",
-        "reload",
         "previous",
-        "cycle",
+        "version",
+        "reload",
         "toggle",
-        "get-config",
+        "clean",
+        "eager",
+        "cycle",
+        "init",
+        "show",
+        "hide",
         "kill",
         "logs",
-        "version",
         "help",
     ];
 
@@ -254,6 +253,32 @@ fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
     Ok(scratchpads)
 }
 
+enum SyntaxErr<'a> {
+    MissingField(&'a str, &'a str),
+    UnknownField(&'a str),
+    NotInScope,
+    Unopened,
+    Unclosed,
+    Nameless,
+}
+
+fn warn_syntax_err(err: SyntaxErr) -> Result<()> {
+    match err {
+        SyntaxErr::MissingField(f, n) => log(
+            format!("Field '{f}' not defined for scratchpad '{n}'"),
+            "WARN",
+        ),
+        SyntaxErr::UnknownField(f) => log(
+            format!("Unknown field given in configuration file: {f}"),
+            "WARN",
+        ),
+        SyntaxErr::NotInScope => log("Syntax error in configuration: not in scope".into(), "WARN"),
+        SyntaxErr::Unclosed => log("Syntax error in configuration: unclosed '{'".into(), "WARN"),
+        SyntaxErr::Unopened => log("Syntax error in configuration: unopened '}'".into(), "WARN"),
+        SyntaxErr::Nameless => log("Scratchpad with no name in configuration".into(), "WARN"),
+    }
+}
+
 fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
     let mut buf = String::new();
     File::open(config_file)?.read_to_string(&mut buf)?;
@@ -271,19 +296,24 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
         dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
     };
 
+    let warn_empty = |field: &str, name: &str| -> bool {
+        if field.is_empty() {
+            warn_syntax_err(SyntaxErr::MissingField(field, name)).unwrap_log(file!(), line!());
+            return true;
+        }
+        false
+    };
+
     for line in buf.lines() {
         if line.split_whitespace().any(|x| x == "{") {
             if in_scope {
-                log("Syntax error in configuration: unclosed '{'".into(), "WARN")?;
+                warn_syntax_err(SyntaxErr::Unclosed)?;
                 continue;
             }
 
             if let Some(n) = line.split_whitespace().next() {
                 if n == "{" {
-                    log(
-                        "No name given to scratchpad in configuration".into(),
-                        "WARN",
-                    )?;
+                    warn_syntax_err(SyntaxErr::Nameless)?;
                 } else {
                     name = n.into();
                 }
@@ -296,7 +326,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
             options = String::new();
         } else if let Some(split) = line.split_once("=") {
             if !in_scope {
-                log("Syntax error in configuration: not in scope".into(), "WARN")?;
+                warn_syntax_err(SyntaxErr::NotInScope)?;
                 continue;
             }
 
@@ -305,31 +335,16 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
                 "command" => command = escape(split.1),
                 "rules" => rules = escape(split.1),
                 "options" => options = escape(split.1),
-                s => log(
-                    format!("Unknown field given in configuration file: {s}"),
-                    "WARN",
-                )?,
+                f => warn_syntax_err(SyntaxErr::UnknownField(f))?,
             }
         } else if line.trim() == "}" {
             if !in_scope {
-                log("Syntax error in configuration: unopened '}'".into(), "WARN")?;
+                warn_syntax_err(SyntaxErr::Unopened)?;
                 continue;
             }
             in_scope = false;
 
-            if title.is_empty() {
-                log(
-                    format!("Field 'title' not defined for scratchpad '{name}'"),
-                    "WARN",
-                )?;
-                continue;
-            }
-
-            if command.is_empty() {
-                log(
-                    format!("Field 'command' not defined for scratchpad '{name}'"),
-                    "WARN",
-                )?;
+            if warn_empty(&title, &name) || warn_empty(&command, &name) {
                 continue;
             }
 
