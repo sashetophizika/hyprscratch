@@ -101,7 +101,7 @@ pub fn hide_special(active_client: &Option<Client>) {
     }
 }
 
-pub fn move_floating(titles: Vec<String>) -> Result<()> {
+pub fn move_floating(titles: &[String]) -> Result<()> {
     Clients::get()?
         .into_iter()
         .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
@@ -222,7 +222,7 @@ mod tests {
             .clone()
             .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), true));
 
-        move_floating(vec![
+        move_floating(&[
             "test_nonfloating_move".to_owned(),
             "test_scratchpad_move".to_owned(),
         ])
@@ -292,8 +292,9 @@ mod tests {
         let mut config = Config {
             scratchpads,
             config_file: "".to_string(),
-            normal_titles: Vec::new(),
             special_titles: Vec::new(),
+            normal_titles: Vec::new(),
+            pinned_titles: Vec::new(),
             slick_titles: Vec::new(),
             dirty_titles: Vec::new(),
             fickle_titles: resources.titles.to_vec(),

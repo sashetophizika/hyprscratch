@@ -53,6 +53,7 @@ pub struct ScratchpadOptions {
     pub hide: bool,
     pub poly: bool,
     pub lazy: bool,
+    pub pin: bool,
 }
 
 impl ScratchpadOptions {
@@ -79,6 +80,7 @@ impl ScratchpadOptions {
             hide: opts.contains("hide"),
             poly: opts.contains("poly"),
             lazy: opts.contains("lazy"),
+            pin: opts.contains("pin"),
             monitor: get_arg("monitor"),
         }
     }
@@ -96,6 +98,7 @@ impl ScratchpadOptions {
             "hide" => self.hide ^= true,
             "poly" => self.poly ^= true,
             "lazy" => self.lazy ^= true,
+            "pin" => self.pin ^= true,
             _ => (),
         };
     }

@@ -11,13 +11,14 @@ use toml::{Table, Value};
 
 #[derive(Debug)]
 pub struct Config {
-    pub config_file: String,
     pub scratchpads: Vec<Scratchpad>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
+    pub pinned_titles: Vec<String>,
     pub fickle_titles: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
+    pub config_file: String,
 }
 
 impl Config {
@@ -103,8 +104,9 @@ impl Config {
             special_titles: filter_titles(&|opts| opts.special),
             normal_titles: filter_titles(&|opts| !opts.special),
             fickle_titles: filter_titles(&|opts| !opts.persist && !opts.special),
-            slick_titles: filter_titles(&|opts| !opts.sticky && !opts.tiled),
-            dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special),
+            pinned_titles: filter_titles(&|opts| !opts.special && opts.pin),
+            slick_titles: filter_titles(&|opts| !opts.sticky && !opts.pin),
+            dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
             config_file: config_files[0].clone(),
             scratchpads,
         })
@@ -492,6 +494,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
                 "htop".to_string(),
                 "cmat".to_string(),
             ],
+            pinned_titles: vec![],
         };
 
         assert_eq!(config.scratchpads, expected_config.scratchpads);
@@ -536,6 +539,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 "htop".to_string(),
                 "cmat".to_string(),
             ],
+            pinned_titles: vec![],
         };
 
         assert_eq!(config.scratchpads, expected_config.scratchpads);

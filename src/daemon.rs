@@ -65,7 +65,8 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
 
     config.scratchpads[index].trigger(&config.fickle_titles)?;
 
-    if !config.scratchpads[index].options.shiny {
+    let opts = &config.scratchpads[index].options;
+    if !opts.shiny && !opts.pin {
         config.dirty_titles.push(title.to_string());
     }
     Ok(())
@@ -231,7 +232,7 @@ fn handle_killall(config: &Config) -> Result<()> {
 }
 
 fn handle_hideall(config: &Config) -> Result<()> {
-    move_floating(config.normal_titles.clone())?;
+    move_floating(&config.normal_titles)?;
     if let Ok(ac) = Client::get_active() {
         hide_special(&ac);
     }
@@ -240,38 +241,29 @@ fn handle_hideall(config: &Config) -> Result<()> {
 
 fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
-        Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| {
-                config
-                    .lock()
-                    .unwrap()
-                    .pinned_titles
-                    .contains(&x.initial_title)
-                    && x.workspace.id > 0
-            })
-            .for_each(|x| {
-                hyprland::dispatch!(
-                    MoveToWorkspace,
-                    WorkspaceIdentifierWithSpecial::Relative(0),
-                    Some(WindowIdentifier::Address(x.address))
-                )
-                .unwrap();
-            });
+        let move_to_current = |cl: Client| {
+            hyprland::dispatch!(
+                MoveToWorkspace,
+                WorkspaceIdentifierWithSpecial::Relative(0),
+                Some(WindowIdentifier::Address(cl.address))
+            )
+            .log_err(file!(), line!())
+        };
+
+        let pinned_titles = &config.lock().unwrap_log(file!(), line!()).pinned_titles;
+        if let Ok(clients) = Clients::get() {
+            clients
+                .into_iter()
+                .filter(|cl| pinned_titles.contains(&cl.initial_title) && cl.workspace.id > 0)
+                .for_each(move_to_current);
+        }
     });
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
-        move_floating(
-            config
-                .lock()
-                .unwrap_log(file!(), line!())
-                .slick_titles
-                .clone(),
-        )
-        .log_err(file!(), line!());
+        let slick_titles = &config.lock().unwrap_log(file!(), line!()).slick_titles;
+        move_floating(slick_titles).log_err(file!(), line!());
 
         if let Ok(ac) = Client::get_active() {
             hide_special(&ac);
@@ -283,14 +275,8 @@ fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             if !cl.floating {
-                move_floating(
-                    config
-                        .lock()
-                        .unwrap_log(file!(), line!())
-                        .dirty_titles
-                        .clone(),
-                )
-                .log_err(file!(), line!());
+                let dirty_titles = &config.lock().unwrap_log(file!(), line!()).dirty_titles;
+                move_floating(dirty_titles).log_err(file!(), line!());
             }
         }
     });
