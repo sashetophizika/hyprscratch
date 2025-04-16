@@ -241,16 +241,17 @@ fn handle_hideall(config: &Config) -> Result<()> {
 
 fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
+        let (f, l) = (file!(), line!());
         let move_to_current = |cl: Client| {
             hyprland::dispatch!(
                 MoveToWorkspace,
                 WorkspaceIdentifierWithSpecial::Relative(0),
                 Some(WindowIdentifier::Address(cl.address))
             )
-            .log_err(file!(), line!())
+            .log_err(f, l)
         };
 
-        let pinned_titles = &config.lock().unwrap_log(file!(), line!()).pinned_titles;
+        let pinned_titles = &config.lock().unwrap_log(f, l).pinned_titles;
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
@@ -262,8 +263,9 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
-        let slick_titles = &config.lock().unwrap_log(file!(), line!()).slick_titles;
-        move_floating(slick_titles).log_err(file!(), line!());
+        let (f, l) = (file!(), line!());
+        let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
+        move_floating(slick_titles).log_err(f, l);
 
         if let Ok(ac) = Client::get_active() {
             hide_special(&ac);
@@ -275,8 +277,9 @@ fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             if !cl.floating {
-                let dirty_titles = &config.lock().unwrap_log(file!(), line!()).dirty_titles;
-                move_floating(dirty_titles).log_err(file!(), line!());
+                let (f, l) = (file!(), line!());
+                let dirty_titles = &config.lock().unwrap_log(f, l).dirty_titles;
+                move_floating(dirty_titles).log_err(f, l);
             }
         }
     });
@@ -284,11 +287,8 @@ fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 
 fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_config_reloaded_handler(move || {
-        config
-            .lock()
-            .unwrap_log(file!(), line!())
-            .reload(None)
-            .log_err(file!(), line!())
+        let (f, l) = (file!(), line!());
+        config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
     });
 }
 
@@ -399,7 +399,8 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 
     let mut state = DaemonState::new(&args);
     if state.eager {
-        autospawn(&mut config.lock().unwrap_log(file!(), line!())).log_err(file!(), line!());
+        let (f, l) = (file!(), line!());
+        autospawn(&mut config.lock().unwrap_log(f, l)).log_err(f, l);
     }
 
     start_unix_listener(socket_path, &mut state, config).unwrap_log(file!(), line!());
