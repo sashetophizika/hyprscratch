@@ -252,6 +252,7 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         };
 
         let pinned_titles = &config.lock().unwrap_log(f, l).pinned_titles;
+        println!("{pinned_titles:?}");
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
@@ -262,11 +263,13 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+    println!("Why am I here");
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
         let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
         move_floating(slick_titles).log_err(f, l);
 
+        println!("I am here");
         if let Ok(ac) = Client::get_active() {
             hide_special(&ac);
         }
@@ -295,6 +298,7 @@ fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
 
+    println!("{}", options.clean);
     if options.auto_reload {
         let config_clone = config.clone();
         auto_reload(&mut ev, config_clone);
@@ -302,6 +306,7 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
 
     if options.clean {
         let config_clone = config.clone();
+        println!("Am I here");
         clean(&mut ev, config_clone);
     }
 
@@ -449,6 +454,7 @@ mod tests {
         assert_eq!(get_cycle_index("special", &config, &mut state), Some(2));
         assert_eq!(get_cycle_index("normal", &config, &mut state), Some(3));
         assert_eq!(get_cycle_index("", &config, &mut state), Some(4));
+        assert_eq!(get_cycle_index("", &config, &mut state), Some(5));
         assert_eq!(get_cycle_index("", &config, &mut state), Some(0));
         assert_eq!(get_cycle_index("unknown", &config, &mut state), Some(1));
 
@@ -457,7 +463,7 @@ mod tests {
             Some(1)
         );
         assert_eq!(
-            get_previous_index("test_nonfloating_clean".into(), &config, &mut state),
+            get_previous_index("test_nonfloating".into(), &config, &mut state),
             Some(0)
         );
     }
@@ -524,21 +530,21 @@ mod tests {
         let active_workspace = Workspace::get_active().unwrap();
         let resources = TestResources {
             titles: [
-                "test_sticky_clean".to_string(),
-                "test_normal_clean".to_string(),
-                "test_special_clean".to_string(),
-                "test_nonfloating_clean".to_string(),
+                "test_sticky".to_string(),
+                "test_normal".to_string(),
+                "test_special".to_string(),
+                "test_nonfloating".to_string(),
             ],
             commands: [
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky_clean".to_string(),
-                "[float; workspace special:test_special_clean; size 30% 30%; move 30% 0] kitty --title test_special_clean".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
-                "kitty --title test_nonfloating_clean".to_string(),
+                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
+                "[float; workspace special:test_special; size 30% 30%; move 30% 0] kitty --title test_special".to_string(),
+                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
+                "kitty --title test_nonfloating".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
-                "special:test_normal_clean".to_string(),
-                "special:test_special_clean".to_string(),
+                "special:test_normal".to_string(),
+                "special:test_special".to_string(),
                 active_workspace.name,
             ],
         };
@@ -549,7 +555,6 @@ mod tests {
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
 
         verify_test(&resources);
-        test_handle("kill?");
         sleep(Duration::from_millis(500));
     }
 
@@ -568,22 +573,22 @@ mod tests {
         let active_workspace = Workspace::get_active().unwrap();
         let resources = TestResources {
             titles: [
-                "test_nonfloating_clean".to_string(),
-                "test_sticky_clean".to_string(),
-                "test_shiny_clean".to_string(),
-                "test_normal_clean".to_string(),
+                "test_nonfloating".to_string(),
+                "test_sticky".to_string(),
+                "test_shiny".to_string(),
+                "test_normal".to_string(),
             ],
             commands: [
-                "kitty --title test_nonfloating_clean".to_string(),
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky_clean".to_string(),
-                "[float; size 30% 30%; move 30% 0] kitty --title test_shiny_clean".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal_clean".to_string(),
+                "kitty --title test_nonfloating".to_string(),
+                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
+                "[float; size 30% 30%; move 30% 0] kitty --title test_shiny".to_string(),
+                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
                 active_workspace.name.clone(),
                 active_workspace.name,
-                "special:test_normal_clean".to_string(),
+                "special:test_normal".to_string(),
             ],
         };
 
@@ -598,7 +603,49 @@ mod tests {
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
-        test_handle("kill?");
+        sleep(Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_pin() {
+        std::thread::spawn(|| {
+            let args = "clean".to_string();
+            initialize_daemon(
+                args,
+                Some("./test_configs/test_config3.txt".to_string()),
+                Some("/tmp/hyprscratch_test.sock"),
+            )
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let active_workspace = Workspace::get_active().unwrap();
+        let resources = TestResources {
+            titles: [
+                "test_sticky".to_string(),
+                "test_pin".to_string(),
+                "test_normal".to_string(),
+                "test_nonfloating".to_string(),
+            ],
+            commands: [
+                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
+                "[float; size 30% 30%; move 30% 0] kitty --title test_pin".to_string(),
+                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
+                "kitty --title test_nonfloating".to_string(),
+            ],
+            expected_workspace: [
+                active_workspace.name.clone(),
+                (active_workspace.id + 1).to_string(),
+                "special:test_normal".to_string(),
+                active_workspace.name,
+            ],
+        };
+
+        setup_test(&resources);
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        sleep(Duration::from_millis(500));
+
+        verify_test(&resources);
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
         sleep(Duration::from_millis(500));
     }
 }
