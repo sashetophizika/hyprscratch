@@ -252,7 +252,6 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         };
 
         let pinned_titles = &config.lock().unwrap_log(f, l).pinned_titles;
-        println!("{pinned_titles:?}");
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
@@ -263,13 +262,11 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
-    println!("Why am I here");
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
         let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
         move_floating(slick_titles).log_err(f, l);
 
-        println!("I am here");
         if let Ok(ac) = Client::get_active() {
             hide_special(&ac);
         }
@@ -298,7 +295,6 @@ fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> Result<()> {
     let mut ev = EventListener::new();
 
-    println!("{}", options.clean);
     if options.auto_reload {
         let config_clone = config.clone();
         auto_reload(&mut ev, config_clone);
@@ -306,7 +302,6 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
 
     if options.clean {
         let config_clone = config.clone();
-        println!("Am I here");
         clean(&mut ev, config_clone);
     }
 
