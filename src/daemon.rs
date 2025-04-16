@@ -238,6 +238,30 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
+fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+    ev.add_workspace_changed_handler(move |_| {
+        Clients::get()
+            .unwrap()
+            .into_iter()
+            .filter(|x| {
+                config
+                    .lock()
+                    .unwrap()
+                    .pinned_titles
+                    .contains(&x.initial_title)
+                    && x.workspace.id > 0
+            })
+            .for_each(|x| {
+                hyprland::dispatch!(
+                    MoveToWorkspace,
+                    WorkspaceIdentifierWithSpecial::Relative(0),
+                    Some(WindowIdentifier::Address(x.address))
+                )
+                .unwrap();
+            });
+    });
+}
+
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
         move_floating(
@@ -299,6 +323,9 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
         let config_clone = config.clone();
         spotless(&mut ev, config_clone);
     }
+
+    let config_clone = config.clone();
+    pin(&mut ev, config_clone);
 
     ev.start_listener()
 }

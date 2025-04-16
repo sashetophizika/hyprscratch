@@ -21,8 +21,31 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(config_path: Option<String>) -> Result<Config> {
-        let default_configs = find_config_files();
+    fn find_config_files() -> Vec<String> {
+        let home = var("HOME").unwrap_log(file!(), line!());
+        let prepend_home = |str| format!("{home}/.config/{str}");
+
+        [
+            "hypr/hyprscratch.conf",
+            "hypr/hyprscratch.toml",
+            "hyprscratch/config.conf",
+            "hyprscratch/config.toml",
+            "hyprscratch/hyprscratch.conf",
+            "hyprscratch/hyprscratch.toml",
+            "hypr/hyprland.conf",
+        ]
+        .iter()
+        .map(prepend_home)
+        .filter(|x| Path::new(&x).exists())
+        .collect()
+    }
+
+    fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
+        let default_configs = Self::find_config_files();
+        if default_configs.is_empty() {
+            log("No configuration files found".into(), "ERROR")?;
+        }
+
         let config_files = if let Some(conf) = config_path {
             if !default_configs.contains(&conf) {
                 if !Path::new(&conf).exists() {
@@ -35,23 +58,37 @@ impl Config {
         } else {
             default_configs
         };
+        Ok(config_files)
+    }
 
+    fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
         let mut scratchpads: Vec<Scratchpad> = vec![];
-        for config in &config_files {
+        for config in config_files {
             let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
             let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
                 parse_config(config)?
-            } else if ext == "conf" {
-                parse_hyprlang(config)?
             } else if ext == "toml" {
                 parse_toml(config)?
             } else {
-                log("No configuration file found".to_string(), "ERROR")?;
-                panic!()
+                parse_hyprlang(config)?
             };
-
             scratchpads.append(&mut config_data);
         }
+
+        Ok(scratchpads)
+    }
+
+    pub fn new(config_path: Option<String>) -> Result<Config> {
+        let config_files = Self::get_config_files(config_path)?;
+        let scratchpads = Self::get_scratchpads(&config_files)?;
+
+        log(
+            format!(
+                "Configuration parsed successfully, config is {:?}",
+                config_files[0]
+            ),
+            "INFO",
+        )?;
 
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
             scratchpads
@@ -62,28 +99,14 @@ impl Config {
                 .collect()
         };
 
-        let special_titles = filter_titles(&|opts| opts.special);
-        let normal_titles = filter_titles(&|opts| !opts.special);
-        let fickle_titles = filter_titles(&|opts| !opts.persist && !opts.special);
-        let slick_titles = filter_titles(&|opts| !opts.sticky && !opts.tiled);
-        let dirty_titles = filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special);
-
-        log(
-            format!(
-                "Configuration parsed successfully, config is {:?}",
-                config_files[0]
-            ),
-            "INFO",
-        )?;
-
         Ok(Config {
+            special_titles: filter_titles(&|opts| opts.special),
+            normal_titles: filter_titles(&|opts| !opts.special),
+            fickle_titles: filter_titles(&|opts| !opts.persist && !opts.special),
+            slick_titles: filter_titles(&|opts| !opts.sticky && !opts.tiled),
+            dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.special),
             config_file: config_files[0].clone(),
             scratchpads,
-            special_titles,
-            normal_titles,
-            fickle_titles,
-            slick_titles,
-            dirty_titles,
         })
     }
 
@@ -94,25 +117,6 @@ impl Config {
         };
         Ok(())
     }
-}
-
-fn find_config_files() -> Vec<String> {
-    let home = var("HOME").unwrap_log(file!(), line!());
-    let prepend_home = |str| format!("{home}/.config/{str}");
-
-    [
-        "hypr/hyprscratch.conf",
-        "hypr/hyprscratch.toml",
-        "hyprscratch/config.conf",
-        "hyprscratch/config.toml",
-        "hyprscratch/hyprscratch.conf",
-        "hyprscratch/hyprscratch.toml",
-        "hypr/hyprland.conf",
-    ]
-    .iter()
-    .map(prepend_home)
-    .filter(|x| Path::new(&x).exists())
-    .collect()
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -263,20 +267,15 @@ enum SyntaxErr<'a> {
 }
 
 fn warn_syntax_err(err: SyntaxErr) -> Result<()> {
-    match err {
-        SyntaxErr::MissingField(f, n) => log(
-            format!("Field '{f}' not defined for scratchpad '{n}'"),
-            "WARN",
-        ),
-        SyntaxErr::UnknownField(f) => log(
-            format!("Unknown field given in configuration file: {f}"),
-            "WARN",
-        ),
-        SyntaxErr::NotInScope => log("Syntax error in configuration: not in scope".into(), "WARN"),
-        SyntaxErr::Unclosed => log("Syntax error in configuration: unclosed '{'".into(), "WARN"),
-        SyntaxErr::Unopened => log("Syntax error in configuration: unopened '}'".into(), "WARN"),
-        SyntaxErr::Nameless => log("Scratchpad with no name in configuration".into(), "WARN"),
-    }
+    let msg = match err {
+        SyntaxErr::MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
+        SyntaxErr::UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
+        SyntaxErr::NotInScope => "Not in scope",
+        SyntaxErr::Unclosed => "Unclosed '{'",
+        SyntaxErr::Unopened => "Unopened '}'",
+        SyntaxErr::Nameless => "Scratchpad with no name",
+    };
+    log(format!("Syntax error in configuration: {msg}"), "WARN")
 }
 
 fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
