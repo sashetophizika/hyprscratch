@@ -39,7 +39,7 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `eager`: spawns all scratchpads hidden on start.
 
-* `no-auto-reload`: does not reload the configuration when the `hyprland.conf` is updated.
+* `no-auto-reload`: does not reload the configuration when `hyprland.conf` is updated.
 
 * `config </path/to/config>`: specify a path to the configuration file.
 
@@ -60,6 +60,8 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 * `hide`: only hides the scratchpad if active.
 
 * `poly`: toggle all scratchpads with the same title simultaneously.
+
+* `pin`: keeps the scratchpad active through workspace changes
 
 * `tiled`: spawns the scratchpad tiled instead of floating.
 
