@@ -127,7 +127,8 @@ SCRATCHPAD OPTIONS
   lazy                        Prevent the scratchpad from being spawned by 'eager'
   show                        Only creates or brings up the scratchpad
   hide                        Only hides the scratchpad
-  poly                        Toggles all scratchpads matching the title simultaneously
+  poly                        Toggle all scratchpads matching the title simultaneously
+  pin                         Keep the scratchpad active through workspace changes
   tiled                       Makes a tiled scratchpad instead of a floating one
   special                     Use Hyprland's special workspace, ignores most other options
   monitor <id>                Restrict the scratchpad to a specified monitor

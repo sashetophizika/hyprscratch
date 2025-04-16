@@ -187,8 +187,8 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
 
 fn warn_unknown_option(opt: &str) {
     let known_options = [
-        "", "cover", "persist", "sticky", "shiny", "lazy", "show", "hide", "poly", "tiled",
-        "special", "summon",
+        "", "pin", "cover", "persist", "sticky", "shiny", "lazy", "show", "hide", "poly", "tiled",
+        "special",
     ];
     if !known_options.contains(&opt) {
         log("Unknown scratchpad option: ".to_string() + opt, "WARN").unwrap();
