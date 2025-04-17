@@ -144,7 +144,7 @@ impl Scratchpad {
             if should_toggle {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
             }
-        } else if self.options.show {
+        } else if !self.options.hide {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
@@ -187,9 +187,12 @@ impl Scratchpad {
     }
 
     fn spawn_normal(&self, state: &HyprlandState) {
-        self.command.split("?").for_each(|x| {
-            hide_special(&state.active_client);
-            let cmd = prepend_rules(x, None, false, !self.options.tiled);
+        if let Some(ac) = &state.active_client {
+            hide_special(ac);
+        }
+
+        self.command.split("?").for_each(|cmd| {
+            let cmd = prepend_rules(cmd, None, false, !self.options.tiled);
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }

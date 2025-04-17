@@ -1,9 +1,11 @@
 use crate::config::Config;
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
+use crate::scratchpad::ScratchpadOptions;
 use crate::utils::*;
 use hyprland::data::Client;
 use hyprland::data::Clients;
+use hyprland::data::Monitor;
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
@@ -233,7 +235,7 @@ fn handle_killall(config: &Config) -> Result<()> {
 
 fn handle_hideall(config: &Config) -> Result<()> {
     move_floating(&config.normal_titles)?;
-    if let Ok(ac) = Client::get_active() {
+    if let Ok(Some(ac)) = Client::get_active() {
         hide_special(&ac);
     }
     Ok(())
@@ -241,8 +243,33 @@ fn handle_hideall(config: &Config) -> Result<()> {
 
 fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
+        let should_move = |opts: &ScratchpadOptions| -> bool {
+            if opts.special {
+                return false;
+            }
+
+            if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
+                if active.name != *monitor && active.id.to_string() != *monitor {
+                    return false;
+                }
+            }
+
+            true
+        };
+
         let (f, l) = (file!(), line!());
+        let conf = &config.lock().unwrap_log(f, l);
         let move_to_current = |cl: Client| {
+            let idx = conf
+                .scratchpads
+                .iter()
+                .position(|x| x.title == cl.initial_title)
+                .unwrap_log(f, l);
+
+            if !should_move(&conf.scratchpads[idx].options) {
+                return;
+            }
+
             hyprland::dispatch!(
                 MoveToWorkspace,
                 WorkspaceIdentifierWithSpecial::Relative(0),
@@ -251,11 +278,10 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
             .log_err(f, l)
         };
 
-        let pinned_titles = &config.lock().unwrap_log(f, l).pinned_titles;
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
-                .filter(|cl| pinned_titles.contains(&cl.initial_title) && cl.workspace.id > 0)
+                .filter(|cl| conf.pinned_titles.contains(&cl.initial_title) && cl.workspace.id > 0)
                 .for_each(move_to_current);
         }
     });
@@ -267,8 +293,10 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
         move_floating(slick_titles).log_err(f, l);
 
-        if let Ok(ac) = Client::get_active() {
-            hide_special(&ac);
+        if let Ok(Some(ac)) = Client::get_active() {
+            if slick_titles.contains(&ac.initial_title) {
+                hide_special(&ac);
+            }
         }
     });
 }

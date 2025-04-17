@@ -92,12 +92,10 @@ pub fn move_to_special(client: &Client) -> Result<()> {
     Ok(())
 }
 
-pub fn hide_special(active_client: &Option<Client>) {
-    if let Some(ac) = &active_client {
-        if ac.workspace.id <= 0 {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(ac.initial_title.clone()))
-                .log_err(file!(), line!());
-        }
+pub fn hide_special(cl: &Client) {
+    if cl.workspace.id <= 0 {
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title.clone()))
+            .log_err(file!(), line!());
     }
 }
 
