@@ -242,21 +242,20 @@ fn handle_hideall(config: &Config) -> Result<()> {
 }
 
 fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
-    ev.add_workspace_changed_handler(move |_| {
-        let should_move = |opts: &ScratchpadOptions| -> bool {
-            if opts.special {
+    let should_move = |opts: &ScratchpadOptions| -> bool {
+        if opts.special {
+            return false;
+        }
+
+        if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
+            if active.name != *monitor && active.id.to_string() != *monitor {
                 return false;
             }
+        }
+        true
+    };
 
-            if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
-                if active.name != *monitor && active.id.to_string() != *monitor {
-                    return false;
-                }
-            }
-
-            true
-        };
-
+    let follow = move || {
         let (f, l) = (file!(), line!());
         let conf = &config.lock().unwrap_log(f, l);
         let move_to_current = |cl: Client| {
@@ -284,7 +283,11 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
                 .filter(|cl| conf.pinned_titles.contains(&cl.initial_title) && cl.workspace.id > 0)
                 .for_each(move_to_current);
         }
-    });
+    };
+
+    let follow_clone = follow.clone();
+    ev.add_workspace_changed_handler(move |_| follow_clone());
+    ev.add_active_monitor_changed_handler(move |_| follow());
 }
 
 fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
