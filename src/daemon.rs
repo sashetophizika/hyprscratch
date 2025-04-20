@@ -62,15 +62,8 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     }
 
     let title = config.scratchpads[index].title.clone();
-    config.dirty_titles.retain(|x| *x != title);
     state.update_prev_titles(&title);
-
     config.scratchpads[index].trigger(&config.fickle_titles)?;
-
-    let opts = &config.scratchpads[index].options;
-    if !opts.shiny && !opts.pin {
-        config.dirty_titles.push(title.to_string());
-    }
     Ok(())
 }
 
@@ -307,9 +300,10 @@ fn add_clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
 fn add_spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
-            if !cl.floating {
-                let (f, l) = (file!(), line!());
-                let dirty_titles = &config.lock().unwrap_log(f, l).dirty_titles;
+            let (f, l) = (file!(), line!());
+            let conf = &config.lock().unwrap_log(f, l);
+            if !is_known(&conf.normal_titles, &cl) {
+                let dirty_titles = &conf.dirty_titles;
                 move_floating(dirty_titles).log_err(f, l);
             }
         }
