@@ -241,7 +241,7 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     let should_move = |opts: &ScratchpadOptions| -> bool {
         if opts.special {
             return false;
@@ -280,7 +280,7 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
-                .filter(|cl| is_on_special(cl) && is_known(&conf.pinned_titles, cl))
+                .filter(|cl| !is_on_special(cl) && is_known(&conf.pinned_titles, cl))
                 .for_each(move_to_current);
         }
     };
@@ -290,7 +290,7 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_monitor_changed_handler(move |_| follow());
 }
 
-fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
         let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
@@ -304,7 +304,7 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     });
 }
 
-fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             if !cl.floating {
@@ -316,7 +316,7 @@ fn spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     });
 }
 
-fn auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_config_reloaded_handler(move || {
         let (f, l) = (file!(), line!());
         config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
@@ -328,21 +328,21 @@ fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> 
 
     if options.auto_reload {
         let config_clone = config.clone();
-        auto_reload(&mut ev, config_clone);
+        add_auto_reload(&mut ev, config_clone);
     }
 
     if options.clean {
         let config_clone = config.clone();
-        clean(&mut ev, config_clone);
+        add_clean(&mut ev, config_clone);
     }
 
     if options.spotless {
         let config_clone = config.clone();
-        spotless(&mut ev, config_clone);
+        add_spotless(&mut ev, config_clone);
     }
 
     let config_clone = config.clone();
-    pin(&mut ev, config_clone);
+    add_pin(&mut ev, config_clone);
 
     ev.start_listener()
 }
