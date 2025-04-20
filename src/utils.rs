@@ -16,24 +16,35 @@ pub fn warn_deprecated(feature: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn flag_present(args: &[String], flag: &str) -> Option<String> {
-    if flag.is_empty() {
+pub fn flag_present<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
+    if flags.is_empty() {
         return None;
     }
 
-    let long = format!("--{flag}");
-    let short = flag.as_bytes()[0] as char;
+    for flag in flags {
+        if flag.is_empty() {
+            continue;
+        }
 
-    let is_short = |x: &str| {
-        x.len() > 1
-            && x.starts_with("-")
-            && !x[1..].starts_with("-")
-            && x.contains(short)
-            && !x.contains('=')
-    };
+        let long = format!("--{flag}");
+        let is_short = |x: &str| {
+            x.len() > 1
+                && !x.contains('=')
+                && x.starts_with("-")
+                && !x[1..].starts_with("-")
+                && x.contains(flag.as_bytes()[0] as char)
+        };
 
-    if args.iter().any(|x| x == flag || x == &long || is_short(x)) {
-        return Some(flag.to_string());
+        let is_present = |x: &str| x == *flag || *x == long || is_short(x);
+        if is_present(arg) {
+            return Some(flag);
+        }
+
+        if let Some((key, _)) = arg.split_once('=') {
+            if is_present(key) {
+                return Some(flag);
+            }
+        }
     }
     None
 }
@@ -73,7 +84,7 @@ pub fn dequote(s: &str) -> String {
     }
 }
 
-pub fn connect_to_sock(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
+pub fn send(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all(format!("{request}?{message}").as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
