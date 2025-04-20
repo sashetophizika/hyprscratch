@@ -7,11 +7,10 @@ mod utils;
 
 use crate::daemon::initialize_daemon;
 use crate::extra::*;
+use crate::logs::*;
 use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
-use logs::log;
-use logs::LogErr;
 
 fn cli_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> bool {
     let known_flags = [

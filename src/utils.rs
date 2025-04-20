@@ -1,8 +1,7 @@
 use crate::config::Config;
 use crate::logs::{log, LogErr};
 use crate::scratchpad::Scratchpad;
-use hyprland::data::Client;
-use hyprland::data::Clients;
+use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;

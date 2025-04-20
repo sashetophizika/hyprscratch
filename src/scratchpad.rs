@@ -1,5 +1,4 @@
-use crate::logs::log;
-use crate::logs::LogErr;
+use crate::logs::*;
 use crate::utils::*;
 use hyprland::data::{Client, Clients, Monitors, Workspace};
 use hyprland::dispatch::*;
