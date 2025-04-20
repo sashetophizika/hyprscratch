@@ -67,17 +67,8 @@ fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) 
         "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
             send(socket, req, msg)?
         }
-        "init" | "eager" | "clean" | "no-auto-reload" | "config" | "socket" => {
-            initialize_daemon(args.join(" "), config, socket)
-        }
-        "" => {
-            log(
-                "Initializing the daemon with no arguments is deprecated".to_string(),
-                "WARN",
-            )?;
-            println!("Use 'hyprscratch init'.");
-            initialize_daemon(args.join(" "), config, socket);
-        }
+        "init" => initialize_daemon(args.join(" "), config, socket),
+        "" => print_help(),
         _ => send_manual(args, socket)?,
     }
     Ok(())
