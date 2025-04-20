@@ -1,11 +1,8 @@
 use crate::config::Config;
 use crate::logs::*;
-use crate::scratchpad::Scratchpad;
-use crate::scratchpad::ScratchpadOptions;
+use crate::scratchpad::*;
 use crate::utils::*;
-use hyprland::data::Client;
-use hyprland::data::Clients;
-use hyprland::data::Monitor;
+use hyprland::data::{Client, Clients, Monitor};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
