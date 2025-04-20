@@ -487,7 +487,11 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
                 "htop".to_string(),
                 "cmat".to_string(),
             ],
-            dirty_titles: vec!["firefox".to_string(), "cmat".to_string()],
+            dirty_titles: vec![
+                "firefox".to_string(),
+                "htop".to_string(),
+                "cmat".to_string(),
+            ],
             fickle_titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
@@ -532,7 +536,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             normal_titles: vec!["btop".to_string(), "htop".to_string()],
             special_titles: vec!["firefox".to_string(), "cmat".to_string()],
             slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
-            dirty_titles: vec!["btop".to_string()],
+            dirty_titles: vec!["btop".to_string(), "cmat".to_string()],
             fickle_titles: vec![
                 "firefox".to_string(),
                 "btop".to_string(),
