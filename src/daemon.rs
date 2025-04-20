@@ -280,7 +280,7 @@ fn pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         if let Ok(clients) = Clients::get() {
             clients
                 .into_iter()
-                .filter(|cl| conf.pinned_titles.contains(&cl.initial_title) && cl.workspace.id > 0)
+                .filter(|cl| is_on_special(cl) && is_known(&conf.pinned_titles, cl))
                 .for_each(move_to_current);
         }
     };
@@ -297,7 +297,7 @@ fn clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         move_floating(slick_titles).log_err(f, l);
 
         if let Ok(Some(ac)) = Client::get_active() {
-            if slick_titles.contains(&ac.initial_title) {
+            if is_known(&slick_titles, &ac) {
                 hide_special(&ac);
             }
         }

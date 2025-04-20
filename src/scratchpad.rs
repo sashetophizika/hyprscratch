@@ -244,7 +244,7 @@ impl Scratchpad {
         }
 
         let should_hide = |cl: &Client| {
-            titles.contains(&cl.initial_title)
+            is_known(titles, cl)
                 && cl.initial_title != self.title
                 && cl.workspace.id == state.active_workspace_id
                 && cl.floating

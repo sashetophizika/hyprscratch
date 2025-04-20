@@ -110,11 +110,19 @@ pub fn hide_special(cl: &Client) {
     }
 }
 
+pub fn is_on_special(client: &Client) -> bool {
+    client.workspace.name.contains("special")
+}
+
+pub fn is_known(titles: &[String], client: &Client) -> bool {
+    titles.contains(&client.initial_title)
+}
+
 pub fn move_floating(titles: &[String]) -> Result<()> {
     Clients::get()?
         .into_iter()
-        .filter(|x| x.floating && x.workspace.id > 0 && titles.contains(&x.initial_title))
-        .for_each(|x| move_to_special(&x).log_err(file!(), line!()));
+        .filter(|cl| cl.floating && !is_on_special(cl) && is_known(titles, cl))
+        .for_each(|cl| move_to_special(&cl).log_err(file!(), line!()));
     Ok(())
 }
 
