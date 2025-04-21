@@ -287,7 +287,7 @@ fn add_clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
         move_floating(slick_titles).log_err(f, l);
 
         if let Ok(Some(ac)) = Client::get_active() {
-            if is_known(&slick_titles, &ac) {
+            if is_known(slick_titles, &ac) {
                 hide_special(&ac);
             }
         }
