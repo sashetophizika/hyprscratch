@@ -1,6 +1,5 @@
 use crate::config::Config;
 use crate::logs::{log, LogErr};
-use crate::scratchpad::Scratchpad;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -154,17 +153,15 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .map(|x| x.initial_title)
         .collect();
 
-    let auto_spawn_scratchpads: Vec<Scratchpad> = config
+    config
         .scratchpads
         .clone()
         .into_iter()
         .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
-        .collect();
-
-    auto_spawn_scratchpads.into_iter().for_each(|sc| {
-        let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);
-        hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
-    });
+        .for_each(|sc| {
+            let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
+        });
 
     Ok(())
 }
