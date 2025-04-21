@@ -12,32 +12,14 @@ use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::*;
+use std::time::Duration;
 
-struct DaemonState {
-    cycle_index: usize,
-    prev_titles: [String; 2],
-    eager: bool,
-}
+type ConfigMutex = Arc<Mutex<Config>>;
 
-impl DaemonState {
-    fn new(args: &str) -> DaemonState {
-        DaemonState {
-            cycle_index: 0,
-            prev_titles: [String::new(), String::new()],
-            eager: args.contains("eager"),
-        }
-    }
-
-    fn update_prev_titles(&mut self, new_title: &str) {
-        if new_title != self.prev_titles[0] {
-            self.prev_titles[1] = self.prev_titles[0].clone();
-            self.prev_titles[0] = new_title.to_string();
-        }
-    }
-}
-
+#[derive(Clone, Copy)]
 struct DaemonOptions {
+    eager: bool,
     clean: bool,
     spotless: bool,
     auto_reload: bool,
@@ -46,9 +28,33 @@ struct DaemonOptions {
 impl DaemonOptions {
     fn new(opts: &str) -> DaemonOptions {
         DaemonOptions {
+            eager: opts.contains("eager"),
             clean: opts.contains("clean"),
             spotless: opts.contains("spotless"),
             auto_reload: !opts.contains("no-auto-reload"),
+        }
+    }
+}
+
+struct DaemonState {
+    cycle_index: usize,
+    prev_titles: [String; 2],
+    options: Arc<DaemonOptions>,
+}
+
+impl DaemonState {
+    fn new(args: &str) -> DaemonState {
+        DaemonState {
+            cycle_index: 0,
+            prev_titles: [String::new(), String::new()],
+            options: Arc::new(DaemonOptions::new(args)),
+        }
+    }
+
+    fn update_prev_titles(&mut self, new_title: &str) {
+        if new_title != self.prev_titles[0] {
+            self.prev_titles[1] = self.prev_titles[0].clone();
+            self.prev_titles[0] = new_title.to_string();
         }
     }
 }
@@ -173,7 +179,7 @@ fn get_config_path(msg: &str) -> Option<String> {
 
 fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     config.reload(get_config_path(msg))?;
-    if state.eager {
+    if state.options.eager {
         autospawn(config)?;
     }
 
@@ -231,7 +237,7 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn add_pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
     let should_move = |opts: &ScratchpadOptions| -> bool {
         if opts.special {
             return false;
@@ -280,7 +286,7 @@ fn add_pin(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     ev.add_active_monitor_changed_handler(move |_| follow());
 }
 
-fn add_clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
         let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
@@ -294,7 +300,7 @@ fn add_clean(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     });
 }
 
-fn add_spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             let (f, l) = (file!(), line!());
@@ -307,35 +313,41 @@ fn add_spotless(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
     });
 }
 
-fn add_auto_reload(ev: &mut EventListener, config: Arc<Mutex<Config>>) {
+fn add_auto_reload(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_config_reloaded_handler(move || {
         let (f, l) = (file!(), line!());
         config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
     });
 }
 
-fn start_event_listeners(options: DaemonOptions, config: Arc<Mutex<Config>>) -> Result<()> {
+fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> {
     let mut ev = EventListener::new();
 
     if options.auto_reload {
-        let config_clone = config.clone();
-        add_auto_reload(&mut ev, config_clone);
+        add_auto_reload(&mut ev, config.clone());
     }
 
     if options.clean {
-        let config_clone = config.clone();
-        add_clean(&mut ev, config_clone);
+        add_clean(&mut ev, config.clone());
     }
 
     if options.spotless {
-        let config_clone = config.clone();
-        add_spotless(&mut ev, config_clone);
+        add_spotless(&mut ev, config.clone());
     }
 
-    let config_clone = config.clone();
-    add_pin(&mut ev, config_clone);
-
+    add_pin(&mut ev, config.clone());
     ev.start_listener()
+}
+
+fn keep_alive(handle: &mut JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
+    loop {
+        sleep(Duration::from_millis(200));
+        if handle.is_finished() {
+            let config = config.clone();
+            let options = options.clone();
+            *handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
+        }
+    }
 }
 
 fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
@@ -354,18 +366,16 @@ fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
 fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
-    config: Arc<Mutex<Config>>,
+    config: ConfigMutex,
 ) -> Result<()> {
-    let path_to_sock = get_path_to_sock(socket_path);
-    if path_to_sock.exists() {
-        remove_file(path_to_sock)?;
+    let sock = get_path_to_sock(socket_path);
+    if sock.exists() {
+        remove_file(sock)?;
     }
 
-    let listener = UnixListener::bind(path_to_sock)?;
-    log(
-        format!("Daemon started successfully, listening on {path_to_sock:?}",),
-        "INFO",
-    )?;
+    let listener = UnixListener::bind(sock)?;
+    let msg = format!("Daemon started successfully, listening on {sock:?}",);
+    log(msg, "INFO")?;
 
     for stream in listener.incoming() {
         match stream {
@@ -386,10 +396,8 @@ fn start_unix_listener(
                     "manual" => handle_manual(msg, conf, state),
                     "cycle" => handle_cycle(msg, conf, state),
                     "kill" => {
-                        log(
-                            "Recieved 'kill' request, terminating listener".into(),
-                            "INFO",
-                        )?;
+                        let msg = "Recieved 'kill' request, terminating listener".into();
+                        log(msg, "INFO")?;
                         break;
                     }
                     _ => log(format!("Unknown request: {buf}"), "WARN"),
@@ -411,17 +419,19 @@ fn start_unix_listener(
 pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path: Option<&str>) {
     let _ = send(socket_path, "kill", "");
 
-    let config = Arc::new(Mutex::new(
-        Config::new(config_path.clone()).unwrap_log(file!(), line!()),
-    ));
-
-    let options = DaemonOptions::new(&args);
-    let config_clone = Arc::clone(&config);
-    thread::spawn(move || start_event_listeners(options, config_clone).log_err(file!(), line!()));
-
+    let (f, l) = (file!(), line!());
     let mut state = DaemonState::new(&args);
-    if state.eager {
-        let (f, l) = (file!(), line!());
+    let config = Arc::new(Mutex::new(Config::new(config_path).unwrap_log(f, l)));
+
+    let config_c = config.clone();
+    let options = state.options.clone();
+    let mut handle = spawn(move || start_events(options, config_c).log_err(f, l));
+
+    let config_c = config.clone();
+    let options = state.options.clone();
+    spawn(move || keep_alive(&mut handle, options, config_c));
+
+    if state.options.eager {
         autospawn(&mut config.lock().unwrap_log(f, l)).log_err(f, l);
     }
 
