@@ -304,9 +304,9 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
         if let Ok(Some(cl)) = Client::get_active() {
             let (f, l) = (file!(), line!());
             let conf = &config.lock().unwrap_log(f, l);
+
             if !is_known(&conf.normal_titles, &cl) {
-                let dirty_titles = &conf.dirty_titles;
-                move_floating(dirty_titles).log_err(f, l);
+                move_floating(&conf.dirty_titles).log_err(f, l);
             }
         }
     });
@@ -521,7 +521,7 @@ mod tests {
             .commands
             .clone()
             .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
-        sleep(Duration::from_millis(2000));
+        sleep(Duration::from_millis(1000));
     }
 
     fn verify_test(resources: &TestResources) {

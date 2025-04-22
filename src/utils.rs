@@ -191,7 +191,7 @@ mod tests {
                 .for_each(|(title, _)| {
                     hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
                 });
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(500));
         }
     }
 
@@ -227,7 +227,7 @@ mod tests {
             .commands
             .clone()
             .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
-        sleep(Duration::from_millis(2000));
+        sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();
         resources
@@ -240,7 +240,7 @@ mod tests {
             "test_scratchpad_move".to_owned(),
         ])
         .unwrap();
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
 
         clients = Clients::get().unwrap().into_iter();
         resources
@@ -258,7 +258,7 @@ mod tests {
                 assert_eq!(&clients_with_title[0].workspace.name, workspace);
             });
 
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(500));
     }
 
     #[test]
@@ -314,7 +314,7 @@ mod tests {
         };
 
         autospawn(&mut config).unwrap();
-        sleep(Duration::from_millis(2000));
+        sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();
         resources
