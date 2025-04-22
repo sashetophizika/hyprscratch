@@ -13,7 +13,6 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::*;
-use std::time::Duration;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
@@ -339,15 +338,23 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
     ev.start_listener()
 }
 
-fn keep_alive(handle: &mut JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
+fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
     loop {
-        sleep(Duration::from_millis(200));
-        if handle.is_finished() {
-            let config = config.clone();
-            let options = options.clone();
-            *handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
-        }
+        let _ = handle.join();
+        let config = config.clone();
+        let options = options.clone();
+        handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
     }
+}
+
+fn start_event_listeners(config: &ConfigMutex, state: &mut DaemonState) {
+    let config_c = config.clone();
+    let options = state.options.clone();
+    let handle = spawn(move || start_events(options, config_c).log_err(file!(), line!()));
+
+    let config_c = config.clone();
+    let options = state.options.clone();
+    spawn(move || keep_alive(handle, options, config_c));
 }
 
 fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
@@ -422,14 +429,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
     let (f, l) = (file!(), line!());
     let mut state = DaemonState::new(&args);
     let config = Arc::new(Mutex::new(Config::new(config_path).unwrap_log(f, l)));
-
-    let config_c = config.clone();
-    let options = state.options.clone();
-    let mut handle = spawn(move || start_events(options, config_c).log_err(f, l));
-
-    let config_c = config.clone();
-    let options = state.options.clone();
-    spawn(move || keep_alive(&mut handle, options, config_c));
+    start_event_listeners(&config, &mut state);
 
     if state.options.eager {
         autospawn(&mut config.lock().unwrap_log(f, l)).log_err(f, l);
