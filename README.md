@@ -121,8 +121,10 @@ bind = $mainMod, h, hyprscratch hide name
 ## Other Relevant Information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned every time.
 
-To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
-
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-If there are multiple scratchpads with the same title, the program just grabs the first one it finds.
+Multiple commands can be bound to a single scratchpad by separating them with `?`(e.g. `hyprscratch title "[rules2] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
+
+To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
+
+If there are multiple clients with the same title, the program just grabs the first one it finds. This usually results in cycling between them.
