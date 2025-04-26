@@ -7,6 +7,8 @@ description = "Improved scratchpad functionality for Hyprland"
 homepage = "https://github.com/sashetophizika/hyprscratch"
 repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
+keywords = ["hyprland", "scratchpad"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 chrono = "0.4.38"
