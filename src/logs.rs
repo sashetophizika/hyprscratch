@@ -1,9 +1,9 @@
 use chrono::Local;
-use core::panic;
 use std::env::VarError;
 use std::fs::{create_dir, File};
 use std::io::Write;
 use std::path::Path;
+use std::process::exit;
 use std::sync::LockResult;
 
 pub trait LogErr<T> {
@@ -11,93 +11,45 @@ pub trait LogErr<T> {
     fn log_err(self, file: &str, line: u32);
 }
 
-impl<T> LogErr<T> for hyprland::Result<T> {
-    fn unwrap_log(self, file: &str, line: u32) -> T {
-        match self {
-            Ok(t) => t,
-            Err(err) => {
-                let msg = format!("{} at {}:{}", err, file, line);
-                log(msg, "ERROR").unwrap();
-                panic!()
+macro_rules! impl_logerr {
+    ($($t:ty),+) => {
+        $(impl<T> LogErr<T> for $t {
+            fn unwrap_log(self, file: &str, line: u32) -> T {
+                match self {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let _ = log(format!("{e} at {file}:{line}"), "ERROR");
+                        exit(0)
+                    }
+                }
             }
-        }
-    }
-    fn log_err(self, file: &str, line: u32) {
-        if let Err(e) = self {
-            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
-        }
+
+            fn log_err(self, file: &str, line: u32) {
+                if let Err(e) = self {
+                    let _ = log(format!("{e} at {file}:{line}"), "WARN");
+                }
+            }
+        })+
     }
 }
 
-impl<T> LogErr<T> for std::io::Result<T> {
-    fn unwrap_log(self, file: &str, line: u32) -> T {
-        match self {
-            Ok(t) => t,
-            Err(err) => {
-                let msg = format!("{} at {}:{}", err, file, line);
-                log(msg, "ERROR").unwrap();
-                panic!()
-            }
-        }
-    }
-    fn log_err(self, file: &str, line: u32) {
-        if let Err(e) = self {
-            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
-        }
-    }
-}
-
-impl<T> LogErr<T> for Result<T, VarError> {
-    fn unwrap_log(self, file: &str, line: u32) -> T {
-        match self {
-            Ok(t) => t,
-            Err(err) => {
-                let msg = format!("{} at {}:{}", err, file, line);
-                log(msg, "ERROR").unwrap();
-                panic!()
-            }
-        }
-    }
-    fn log_err(self, file: &str, line: u32) {
-        if let Err(e) = self {
-            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
-        }
-    }
-}
-
-impl<T> LogErr<T> for LockResult<T> {
-    fn unwrap_log(self, file: &str, line: u32) -> T {
-        match self {
-            Ok(t) => t,
-            Err(err) => {
-                let msg = format!("{} at {}:{}", err, file, line);
-                log(msg, "ERROR").unwrap();
-                panic!()
-            }
-        }
-    }
-    fn log_err(self, file: &str, line: u32) {
-        if let Err(e) = self {
-            let _ = log(format!("{e} at {}:{}", file, line), "WARN");
-        }
-    }
-}
+impl_logerr!(hyprland::Result<T>, std::io::Result<T>, 
+    Result<T, VarError>, LockResult<T>);
 
 impl<T> LogErr<T> for Option<T> {
     fn unwrap_log(self, file: &str, line: u32) -> T {
         match self {
             Some(t) => t,
             None => {
-                let msg = format!("Function returned None in {} at line:{}", file, line);
-                log(msg, "ERROR").unwrap();
-                panic!()
+                let _ = log(format!("Function returned None at {file}:{line}"), "ERROR");
+                exit(0)
             }
         }
     }
 
     fn log_err(self, file: &str, line: u32) {
         if self.is_none() {
-            let _ = log(format!("Recieved None at {}:{}", file, line), "WARN");
+            let _ = log(format!("Recieved None at {file}:{line}"), "WARN");
         }
     }
 }
@@ -122,10 +74,13 @@ pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
         .as_bytes(),
     )?;
 
+    println!("{msg}");
     if level == "ERROR" {
-        panic!("{msg}");
-    } else {
-        println!("{msg}");
+        if cfg!(debug_assertions) {
+            panic!("Fatal");
+        } else {
+            exit(0);
+        }
     }
 
     Ok(())
