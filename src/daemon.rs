@@ -196,7 +196,8 @@ fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
     };
 
     let config = format!(
-        "{}?{}?{}",
+        "{}#{}?{}?{}",
+        conf.config_file,
         map_format(&|x| x.title.clone()),
         map_format(&|x| x.command.clone()),
         map_format(&|x| x.options.clone().get_string()),

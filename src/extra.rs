@@ -4,6 +4,8 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
+use crate::logs::log;
+
 pub fn get_config(socket: Option<&str>) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
     stream.write_all("get-config?".as_bytes())?;
@@ -12,7 +14,12 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
 
-    let [titles, commands, options]: [Vec<&str>; 3] = buf
+    let Some((conf, data)) = buf.split_once('#') else {
+        log("Could not get configuration data".into(), "ERROR")?;
+        return Ok(());
+    };
+
+    let [titles, commands, options]: [Vec<&str>; 3] = data
         .splitn(3, '?')
         .map(|x| x.split('^').collect::<Vec<_>>())
         .collect::<Vec<_>>()
@@ -31,9 +38,9 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     let color_pad = |x: usize, y: &str| {
         y.to_string()
             .replace(";", "?")
-            .replace("[", "[\x1b[0;34m")
+            .replace("[", "[\x1b[0;36m")
             .replace("]", "\x1b[0;0m]")
-            .replace("?", "\x1b[0;0m;\x1b[0;34m")
+            .replace("?", "\x1b[0;0m;\x1b[0;36m")
             + &" ".repeat(x - y.chars().count())
     };
 
@@ -60,9 +67,20 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         }
     };
 
-    print_border("┌", "┬", "┐");
+    let table_width = max_titles + max_commands + max_options + 6;
+    let center_conf = format!(
+        "{}\x1b[0;35m{}\x1b[0;0m{}",
+        " ".repeat(table_width / 2 - conf.len() / 2),
+        conf,
+        " ".repeat(table_width / 2 - (conf.len() + 1) / 2)
+    );
+
+    print_border("┌", "─", "┐");
+    println!("│ {} │", center_conf);
+
+    print_border("├", "┬", "┤");
     println!(
-        "│ \x1b[0;31m{}\x1b[0;0m │ \x1b[0;31m{}\x1b[0;0m │ \x1b[0;31m{}\x1b[0;0m │",
+        "│ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │",
         color_pad(max_titles, "Titles"),
         color_pad(max_commands, "Commands"),
         color_pad(max_options, "Options")
