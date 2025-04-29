@@ -1,4 +1,5 @@
 use hyprland::Result;
+use std::fs::File;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -103,14 +104,11 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
 pub fn print_logs() -> Result<()> {
     let path = Path::new("/tmp/hyprscratch/hyprscratch.log");
     if path.exists() {
-        let mut file = std::fs::File::open(path)?;
+        let mut file = File::open(path)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
 
         let log_str = buf
-            .replacen("[", "[\x1b[0;34m", 1)
-            .replace("\n[", "\n[\x1b[0;34m")
-            .replace("] [", "\x1b[0;0m] [")
             .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
             .replace("DEBUG", "\x1b[0;32mDEBUG\x1b[0;0m")
             .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")
