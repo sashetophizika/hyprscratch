@@ -68,7 +68,7 @@ pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
 
     file.write_all(
         format!(
-            "[{}] [{level}] {msg}\n",
+            "{} {level} {msg}\n",
             Local::now().format("%d.%m.%Y %H:%M:%S")
         )
         .as_bytes(),
