@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "Improved scratchpad functionality for Hyprland"
 homepage = "https://github.com/sashetophizika/hyprscratch"
+documentation = "https://docs.rs/crate/hyprscratch"
 repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
 keywords = ["hyprland", "scratchpad"]
