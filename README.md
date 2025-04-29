@@ -1,5 +1,5 @@
 # Hyprscratch
-A simple tool for Qtile-like scratchpads in Hyprland or simplifying usage of the built-in functionality, that can be configured entirely inside of `hyprland.conf`.
+A simple tool for Qtile-like scratchpads in Hyprland or improving the experience of the built-in functionality, configured entirely inside `hyprland.conf`.
 
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
@@ -13,23 +13,52 @@ paru -S hyprscratch
 ```
 
 ## Usage
+
+### Basic
 In `hyprland.conf`:
 
 ```hyprlang
-#Start the hyprscratch daemon
+# Start the hyprscratch daemon
 exec-once = hyprscratch init [DAEMON_OPTIONS]
 
-#Configure scratchpads
+# Configure scratchpads
 bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
 ```
 
 Example scratchpad:
 
 ```hyprlang
-bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" eager
+bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" lazy
 ```
 
-## Configuration
+### Optional Configuration File
+If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
+
+```hyprlang
+name {
+    # Mandatory fields
+    title = title                        
+    command = command
+
+    # Optional fields
+    options = option1 option2 option3
+    rules = rule1;rule2;rule3
+}
+```
+
+And in `hyprland.conf`:
+
+```hyprlang
+exec-once = hyprscratch init 
+
+bind = $mainMod, t, hyprscratch toggle name
+bind = $mainMod, s, hyprscratch show name
+bind = $mainMod, h, hyprscratch hide name
+```
+
+Using a configuration file can be combined with normally configured scratchpads.
+
+## Options:
 
 ### Daemon options:
 
@@ -93,30 +122,6 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 
 * `logs`: shows logs.
 
-### Optional Configuration File
-If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
-
-```hyprlang
-name {
-#Mandatory fields
-title = title                        
-command = command
-
-#Optional fields
-options = option1 option2 option3
-rules = rule1;rule2;rule3
-}
-```
-
-And in `hyprland.conf`:
-
-```hyprlang
-exec-once = hyprscratch init
-
-bind = $mainMod, t, hyprscratch toggle name
-bind = $mainMod, s, hyprscratch show name
-bind = $mainMod, h, hyprscratch hide name
-```
 
 ## Other Relevant Information
 To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned every time.
@@ -127,4 +132,4 @@ Multiple commands can be bound to a single scratchpad by separating them with `?
 
 To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
 
-If there are multiple clients with the same title, the program just grabs the first one it finds. This usually results in cycling between them.
+If there are multiple clients with the same title, the program just grabs the first one it finds. This usually results in cycling between them, every time one is shown.
