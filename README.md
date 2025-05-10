@@ -25,7 +25,7 @@ paru -S hyprscratch
 ### Basic
 In `hyprland.conf`:
 
-```hyprlang
+```bash
 # Start the hyprscratch daemon
 exec-once = hyprscratch init [DAEMON_OPTIONS]
 
@@ -35,14 +35,14 @@ bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCR
 
 Example scratchpad:
 
-```hyprlang
+```bash
 bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" lazy
 ```
 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
-```hyprlang
+```python
 name {
     # Mandatory fields
     title = title                        
@@ -56,7 +56,7 @@ name {
 
 And in `hyprland.conf`:
 
-```hyprlang
+```bash
 exec-once = hyprscratch init 
 
 bind = $mainMod, t, hyprscratch toggle name
@@ -136,7 +136,7 @@ To find the title needed for a scratchpad, run `hyprctl clients` and check the `
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-Multiple commands can be bound to a single scratchpad by separating them with `?`(e.g. `hyprscratch title "[rules2] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
+Multiple commands can be bound to a single scratchpad by separating them with `?`(e.g. `hyprscratch title "[rules1] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
 
 To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
 
