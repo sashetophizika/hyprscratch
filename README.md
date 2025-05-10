@@ -1,6 +1,6 @@
 # Hyprscratch
 [![Static Badge](https://img.shields.io/badge/Hyprland-grey?style=for-the-badge&logo=hyprland&logoSize=auto)](https://github.com/hyprwm/Hyprland)
-[![GitHub top language](https://img.shields.io/github/languages/top/sashetophizika/hyprscratch?style=for-the-badge&logo=rust&logoSize=auto&color=)](https://www.rust-lang.org/)
+[![GitHub top language](https://img.shields.io/github/languages/top/sashetophizika/hyprscratch?style=for-the-badge&logo=rust&logoSize=auto&logoColor=black&color=brightgreen)](https://www.rust-lang.org/)
 [![Crates.io Version](https://img.shields.io/crates/v/hyprscratch?style=for-the-badge&color=orange)](https://crates.io/crates/hyprscratch)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/hyprscratch?style=for-the-badge&color=orange)](https://crates.io/crates/hyprscratch)
 [![AUR Version](https://img.shields.io/aur/version/hyprscratch?style=for-the-badge&color=blue)](https://aur.archlinux.org/packages/hyprscratch)
