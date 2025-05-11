@@ -73,7 +73,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         "{}\x1b[0;35m{}\x1b[0;0m{}",
         " ".repeat(table_width / 2 - conf.len() / 2),
         conf,
-        " ".repeat(table_width / 2 - (conf.len() + 1) / 2)
+        " ".repeat(table_width / 2 - (conf.len() - 1) / 2)
     );
 
     print_border("┌", "─", "┐");
