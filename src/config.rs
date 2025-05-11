@@ -3,6 +3,7 @@ use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use crate::utils::dequote;
 use hyprland::Result;
 use std::env::var;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -64,7 +65,7 @@ impl Config {
     fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
         let mut scratchpads: Vec<Scratchpad> = vec![];
         for config in config_files {
-            let ext = Path::new(&config).extension().unwrap_log(file!(), line!());
+            let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
             let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
                 parse_config(config)?
             } else if ext == "toml" {
@@ -351,7 +352,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
             let cmd = if rules.is_empty() {
                 command.clone()
             } else {
-                format!("[{rules}] {command}")
+                format!("[{}] {command}", rules.replace(",", ";"))
             };
 
             scratchpads.push(Scratchpad::new(&name, &title, &cmd, &options))
