@@ -203,7 +203,7 @@ impl Scratchpad {
             .filter(|x| !self.is_on_workspace(x, state))
         {
             hyprland::dispatch!(
-                MoveToWorkspace,
+                MoveToWorkspaceSilent,
                 WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
                 Some(WindowIdentifier::Address(client.address.clone()))
             )?;
@@ -320,6 +320,7 @@ impl Scratchpad {
         Ok(())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
