@@ -197,17 +197,38 @@ impl Scratchpad {
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
+        let show = |client: &Client| -> Result<()> {
+            let active_is_special = if let Some(ac) = &state.active_client {
+                if ac.workspace.id < 0 {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if active_is_special {
+                hyprland::dispatch!(
+                    MoveToWorkspace,
+                    WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
+                    Some(WindowIdentifier::Address(client.address.clone()))
+                )
+            } else {
+                hyprland::dispatch!(
+                    MoveToWorkspaceSilent,
+                    WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
+                    Some(WindowIdentifier::Address(client.address.clone()))
+                )
+            }
+        };
+
         for client in state
             .clients_with_title
             .iter()
             .filter(|x| !self.is_on_workspace(x, state))
         {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
-                Some(WindowIdentifier::Address(client.address.clone()))
-            )?;
-
+            show(client)?;
             if !self.options.poly {
                 break;
             }
