@@ -102,8 +102,8 @@ impl ScratchpadOptions {
         };
     }
 
-    pub fn get_string(&self) -> String {
-        self.options_string.clone()
+    pub fn as_str(&self) -> &str {
+        &self.options_string
     }
 }
 
@@ -288,8 +288,7 @@ impl Scratchpad {
     fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
         let mut client_on_active = state
             .clients_with_title
-            .clone()
-            .into_iter()
+            .iter()
             .filter(|cl| self.is_on_workspace(cl, state))
             .peekable();
 

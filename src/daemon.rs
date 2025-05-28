@@ -63,19 +63,17 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
         return Ok(());
     }
 
-    let title = config.scratchpads[index].title.clone();
+    let title = &config.scratchpads[index].title;
     state.update_prev_titles(&title);
     config.scratchpads[index].trigger(&config.fickle_titles)?;
     Ok(())
 }
 
 fn get_mode(msg: &str) -> Option<bool> {
-    if msg.contains("special") {
-        Some(true)
-    } else if msg.contains("normal") {
-        Some(false)
-    } else {
-        None
+    match msg {
+        m if m.contains("special") => Some(true),
+        m if m.contains("normal") => Some(false),
+        _ => None,
     }
 }
 
@@ -118,8 +116,7 @@ fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -
 
     config
         .scratchpads
-        .clone()
-        .into_iter()
+        .iter()
         .position(|x| x.title == state.prev_titles[prev_active])
 }
 
@@ -145,11 +142,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         return log(format!("No scratchpad title given to '{req}'"), "WARN");
     }
 
-    let index = config
-        .scratchpads
-        .clone()
-        .into_iter()
-        .position(|x| x.name == msg);
+    let index = config.scratchpads.iter().position(|x| x.name == msg);
 
     if let Some(i) = index {
         config.scratchpads[i].options.toggle(req);
@@ -187,7 +180,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
 }
 
 fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
-    let map_format = |field: &dyn Fn(&Scratchpad) -> String| {
+    let map_format = |field: &dyn Fn(&Scratchpad) -> &str| {
         conf.scratchpads
             .iter()
             .map(field)
@@ -198,9 +191,9 @@ fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
     let config = format!(
         "{}#{}?{}?{}",
         conf.config_file,
-        map_format(&|x| x.title.clone()),
-        map_format(&|x| x.command.clone()),
-        map_format(&|x| x.options.clone().get_string()),
+        map_format(&|x| &x.title),
+        map_format(&|x| &x.command),
+        map_format(&|x| x.options.as_str()),
     );
 
     stream.write_all(config.as_bytes())?;
@@ -340,10 +333,20 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
 }
 
 fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
+    let max_restartx = 50;
+    let mut restarts = 0;
+
     loop {
         let _ = handle.join();
         let config = config.clone();
         let options = options.clone();
+
+        restarts += 1;
+        if restarts >= max_restartx {
+            let _ = log("Event listener repeated panic".to_string(), "WARN");
+            break;
+        }
+
         handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
     }
 }
@@ -504,7 +507,7 @@ mod tests {
 
     impl Drop for TestResources {
         fn drop(&mut self) {
-            self.titles.clone().into_iter().for_each(|title| {
+            self.titles.iter().for_each(|title| {
                 hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
             });
             sleep(Duration::from_millis(500));

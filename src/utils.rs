@@ -155,8 +155,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
 
     config
         .scratchpads
-        .clone()
-        .into_iter()
+        .iter()
         .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
         .for_each(|sc| {
             let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);

@@ -306,6 +306,10 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
     };
 
     for line in buf.lines() {
+        if line.starts_with("#") {
+            continue;
+        }
+
         if line.split_whitespace().any(|x| x == "{") {
             if in_scope {
                 warn_syntax_err(SyntaxErr::Unclosed)?;
