@@ -175,7 +175,7 @@ impl Scratchpad {
     fn get_workspace_id(&self, state: &HyprlandState) -> i32 {
         if let Some(m) = &self.options.monitor {
             state.monitors.get(m).copied().unwrap_or_else(|| {
-                let _ = log(format!("Monitor {m} not found"), LogLevel::WARN);
+                let _ = log(format!("Monitor {m} not found"), LogLevel::Warn);
                 state.active_workspace_id
             })
         } else {
@@ -197,11 +197,7 @@ impl Scratchpad {
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
         let show = |client: &Client| -> Result<()> {
             let active_is_special = if let Some(ac) = &state.active_client {
-                if ac.workspace.id < 0 {
-                    true
-                } else {
-                    false
-                }
+                ac.workspace.id < 0
             } else {
                 false
             };
@@ -315,7 +311,7 @@ impl Scratchpad {
             self.hide_active(titles, state)?;
         } else if should_hide {
             client_on_active.for_each(|cl| {
-                move_to_special(&cl).log_err(file!(), line!());
+                move_to_special(cl).log_err(file!(), line!());
             });
         } else {
             focus(&client_on_active.peek().unwrap().address);

@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::logs::*;
+use crate::{logs::*, DEFAULT_SOCKET};
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -11,7 +11,7 @@ use std::os::unix::net::UnixStream;
 pub fn warn_deprecated(feature: &str) -> Result<()> {
     log(
         format!("The '{feature}' feature is deprecated."),
-        LogLevel::WARN,
+        LogLevel::Warn,
     )?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
@@ -86,7 +86,7 @@ pub fn dequote(s: &str) -> String {
 }
 
 pub fn send(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
-    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
+    let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all(format!("{request}?{message}").as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
     Ok(())
@@ -99,7 +99,7 @@ pub fn move_to_special(client: &Client) -> Result<()> {
         Some(WindowIdentifier::Address(client.address.clone()))
     )
     .unwrap_or_else(|_| {
-        log("MoveToSpecial returned Err".into(), LogLevel::DEBUG).unwrap();
+        log("MoveToSpecial returned Err".into(), LogLevel::Debug).unwrap();
     });
     Ok(())
 }

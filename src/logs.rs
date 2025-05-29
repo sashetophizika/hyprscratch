@@ -5,22 +5,24 @@ use std::io::Write;
 use std::path::Path;
 use std::process::exit;
 use std::sync::LockResult;
+use crate::{DEFAULT_LOGFILE, HYPRSCRATCH_DIR};
+
 
 #[derive(PartialEq)]
 pub enum LogLevel {
-    INFO,
-    WARN,
-    ERROR,
-    DEBUG,
+    Info,
+    Warn,
+    Error,
+    Debug,
 }
 
 impl LogLevel {
     fn as_str<'a>(&self) -> &'a str {
         match self {
-            Self::INFO => "INFO",
-            Self::WARN => "WARN",
-            Self::ERROR => "ERROR",
-            Self::DEBUG => "DEBUG",
+            Self::Info => "INFO",
+            Self::Warn => "WARN",
+            Self::Error => "ERROR",
+            Self::Debug => "DEBUG",
         }
     }
 }
@@ -37,7 +39,7 @@ macro_rules! impl_logerr {
                 match self {
                     Ok(t) => t,
                     Err(e) => {
-                        let _ = log(format!("{e} at {file}:{line}"), LogLevel::ERROR);
+                        let _ = log(format!("{e} at {file}:{line}"), LogLevel::Error);
                         exit(1)
                     }
                 }
@@ -45,7 +47,7 @@ macro_rules! impl_logerr {
 
             fn log_err(self, file: &str, line: u32) {
                 if let Err(e) = self {
-                    let _ = log(format!("{e} at {file}:{line}"), LogLevel::WARN);
+                    let _ = log(format!("{e} at {file}:{line}"), LogLevel::Warn);
                 }
             }
         })+
@@ -62,7 +64,7 @@ impl<T> LogErr<T> for Option<T> {
             None => {
                 let _ = log(
                     format!("Function returned None at {file}:{line}"),
-                    LogLevel::ERROR,
+                    LogLevel::Error,
                 );
                 exit(1)
             }
@@ -71,13 +73,13 @@ impl<T> LogErr<T> for Option<T> {
 
     fn log_err(self, file: &str, line: u32) {
         if self.is_none() {
-            let _ = log(format!("Received None at {file}:{line}"), LogLevel::WARN);
+            let _ = log(format!("Received None at {file}:{line}"), LogLevel::Warn);
         }
     }
 }
 
 pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
-    let temp_dir = Path::new("/tmp/hyprscratch/");
+    let temp_dir = Path::new(HYPRSCRATCH_DIR);
     if !temp_dir.exists() {
         create_dir(temp_dir)?;
     }
@@ -86,7 +88,7 @@ pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
         .create(true)
         .read(true)
         .append(true)
-        .open("/tmp/hyprscratch/hyprscratch.log")?;
+        .open(DEFAULT_LOGFILE)?;
 
     file.write_all(
         format!(
@@ -98,7 +100,7 @@ pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
     )?;
 
     println!("{msg}");
-    if level == LogLevel::ERROR {
+    if level == LogLevel::Error {
         if cfg!(debug_assertions) {
             panic!("Fatal");
         } else {

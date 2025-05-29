@@ -3,6 +3,8 @@ use crate::event::*;
 use crate::logs::*;
 use crate::scratchpad::*;
 use crate::utils::*;
+use crate::DEFAULT_SOCKET;
+use crate::HYPRSCRATCH_DIR;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -64,7 +66,7 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     }
 
     let title = &config.scratchpads[index].title;
-    state.update_prev_titles(&title);
+    state.update_prev_titles(title);
     config.scratchpads[index].trigger(&config.fickle_titles)?;
     Ok(())
 }
@@ -81,7 +83,7 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
     let mut current_index = state.cycle_index % config.scratchpads.len();
     if let Some(m) = get_mode(msg) {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            let _ = log(format!("No {msg} scratchpads found"), LogLevel::WARN);
+            let _ = log(format!("No {msg} scratchpads found"), LogLevel::Warn);
             return None;
         }
 
@@ -99,7 +101,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
     if config.scratchpads.is_empty() {
         return log(
             "No scratchpads configured for 'cycle'".into(),
-            LogLevel::WARN,
+            LogLevel::Warn,
         );
     }
 
@@ -113,7 +115,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let prev_active = (title == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
-        let _ = log("No previous scratchpad found".into(), LogLevel::WARN);
+        let _ = log("No previous scratchpad found".into(), LogLevel::Warn);
         return None;
     }
 
@@ -125,7 +127,7 @@ fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -
 
 fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if state.prev_titles[0].is_empty() {
-        return log("No previous scratchpads exist".into(), LogLevel::WARN);
+        return log("No previous scratchpads exist".into(), LogLevel::Warn);
     }
 
     let active_title = if let Ok(Some(ac)) = Client::get_active() {
@@ -144,7 +146,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     if msg.is_empty() {
         return log(
             format!("No scratchpad title given to '{req}'"),
-            LogLevel::WARN,
+            LogLevel::Warn,
         );
     }
 
@@ -155,7 +157,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         handle_scratchpad(config, state, i)?;
         config.scratchpads[i].options.toggle(req);
     } else {
-        let _ = log(format!("Scratchpad '{msg}' not found"), LogLevel::WARN);
+        let _ = log(format!("Scratchpad '{msg}' not found"), LogLevel::Warn);
     }
 
     Ok(())
@@ -181,7 +183,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
         autospawn(config)?;
     }
 
-    log("Configuration reloaded".to_string(), LogLevel::INFO)?;
+    log("Configuration reloaded".to_string(), LogLevel::Info)?;
     Ok(())
 }
 
@@ -218,7 +220,7 @@ fn handle_killall(config: &Config) -> Result<()> {
     let kill = |cl: Client| {
         let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));
         if let Err(e) = res {
-            let _ = log(format!("{e} in {} at {}", file!(), line!()), LogLevel::WARN);
+            let _ = log(format!("{e} in {} at {}", file!(), line!()), LogLevel::Warn);
         }
     };
 
@@ -254,21 +256,21 @@ fn handle_request(
         "cycle" => handle_cycle(msg, config, state),
         "kill" => {
             let msg = "Recieved 'kill' request, terminating listener".into();
-            log(msg, LogLevel::INFO)?;
+            log(msg, LogLevel::Info)?;
             Err(HyprError::Other("kill".into()))
         }
-        _ => log(format!("Unknown request: {req}?{msg}"), LogLevel::WARN),
+        _ => log(format!("Unknown request: {req}?{msg}"), LogLevel::Warn),
     }
 }
 fn get_sock(socket_path: Option<&str>) -> &Path {
     match socket_path {
         Some(sp) => Path::new(sp),
         None => {
-            let temp_dir = Path::new("/tmp/hyprscratch/");
+            let temp_dir = Path::new(HYPRSCRATCH_DIR);
             if !temp_dir.exists() {
                 create_dir(temp_dir).log_err(file!(), line!());
             }
-            Path::new("/tmp/hyprscratch/hyprscratch.sock")
+            Path::new(DEFAULT_SOCKET)
         }
     }
 }
@@ -281,7 +283,7 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
 
     let listener = UnixListener::bind(sock)?;
     let msg = format!("Daemon started successfully, listening on {sock:?}",);
-    log(msg, LogLevel::INFO)?;
+    log(msg, LogLevel::Info)?;
     Ok(listener)
 }
 
@@ -303,7 +305,7 @@ fn start_unix_listener(
                 match handle_request(request, &mut stream, state, conf) {
                     Ok(()) => (),
                     Err(HyprError::Other(_)) => break,
-                    Err(e) => log(format!("{e} in {buf}"), LogLevel::WARN)?,
+                    Err(e) => log(format!("{e} in {buf}"), LogLevel::Warn)?,
                 }
             }
             Err(_) => {

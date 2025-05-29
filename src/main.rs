@@ -13,6 +13,10 @@ use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
 
+const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
+const DEFAULT_LOGFILE: &str = "/tmp/hyprscratch/hyprscratch.log";
+const DEFAULT_SOCKET: &str = "/tmp/hyprscratch/hyprscratch.sock";
+
 fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) -> bool {
     let known_flags = [
         "get-config",
@@ -40,7 +44,7 @@ fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) 
             }
             return true;
         } else if arg.starts_with("-") {
-            let _ = log(format!("Unknown flag: {arg}"), LogLevel::WARN);
+            let _ = log(format!("Unknown flag: {arg}"), LogLevel::Warn);
         }
     }
     false
@@ -52,7 +56,7 @@ fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
             "Unknown command or not enough arguments for scratchpad in '{}'",
             args[1..].join(" ")
         );
-        log(msg, LogLevel::WARN)?;
+        log(msg, LogLevel::Warn)?;
         return Ok(());
     }
     send(socket, "manual", &args[1..].join("^"))
@@ -99,14 +103,14 @@ fn main() {
             if e.to_string() == "Connection refused (os error 111)" {
                 let _ = log(
                     "Could not connect to daemon. Is it running?".into(),
-                    LogLevel::WARN,
+                    LogLevel::Warn,
                 );
             }
         } else {
             {
                 let _ = log(
                     format!("{}, command: '{}'.", err, args[1..].join(" ")),
-                    LogLevel::WARN,
+                    LogLevel::Warn,
                 );
             }
         }

@@ -45,13 +45,13 @@ impl Config {
     fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
         let default_configs = Self::find_config_files();
         if default_configs.is_empty() {
-            log("No configuration files found".into(), LogLevel::ERROR)?;
+            log("No configuration files found".into(), LogLevel::Error)?;
         }
 
         let config_files = if let Some(conf) = config_path {
             if !default_configs.contains(&conf) {
                 if !Path::new(&conf).exists() {
-                    log(format!("Config file not found: {conf}"), LogLevel::ERROR)?;
+                    log(format!("Config file not found: {conf}"), LogLevel::Error)?;
                 }
                 vec![conf]
             } else {
@@ -89,7 +89,7 @@ impl Config {
                 "Configuration parsed successfully, config is {:?}",
                 config_files[0]
             ),
-            LogLevel::INFO,
+            LogLevel::Info,
         )?;
 
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
@@ -194,7 +194,7 @@ fn warn_unknown_option(opt: &str) {
     if !known_options.contains(&opt) {
         let _ = log(
             "Unknown scratchpad option: ".to_string() + opt,
-            LogLevel::WARN,
+            LogLevel::Warn,
         );
     }
 }
@@ -244,7 +244,7 @@ fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
                     _ => {
                         log(
                             "Unknown command or no command after title: ".to_string() + &args[1],
-                            LogLevel::WARN,
+                            LogLevel::Warn,
                         )?;
                         continue;
                     }
@@ -278,7 +278,7 @@ fn warn_syntax_err(err: SyntaxErr) {
     };
     let _ = log(
         format!("Syntax error in configuration: {msg}"),
-        LogLevel::WARN,
+        LogLevel::Warn,
     );
 }
 
@@ -376,7 +376,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
 fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
-        LogLevel::WARN,
+        LogLevel::Warn,
     )?;
 
     let mut buf = String::new();

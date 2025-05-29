@@ -1,4 +1,5 @@
 use crate::logs::*;
+use crate::{DEFAULT_LOGFILE, DEFAULT_SOCKET};
 use hyprland::Result;
 use std::fs::File;
 use std::io::prelude::*;
@@ -7,7 +8,7 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 
 pub fn get_config(socket: Option<&str>) -> Result<()> {
-    let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
+    let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all("get-config?".as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
 
@@ -15,7 +16,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     stream.read_to_string(&mut buf)?;
 
     let Some((conf, data)) = buf.split_once('#') else {
-        log("Could not get configuration data".into(), LogLevel::ERROR)?;
+        log("Could not get configuration data".into(), LogLevel::Error)?;
         return Ok(());
     };
 
@@ -24,7 +25,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         .map(|x| x.split('^').collect::<Vec<_>>())
         .collect::<Vec<_>>()[0..3]
     else {
-        log("Config data could not be parsed".into(), LogLevel::ERROR)?;
+        log("Config data could not be parsed".into(), LogLevel::Error)?;
         return Ok(());
     };
 
@@ -38,9 +39,9 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     };
 
     let max_chars = 80;
-    let max_titles = max_len(&titles, 6, max_chars);
-    let max_commands = max_len(&commands, 8, max_chars);
-    let max_options = max_len(&options, 7, max_chars);
+    let max_titles = max_len(titles, 6, max_chars);
+    let max_commands = max_len(commands, 8, max_chars);
+    let max_options = max_len(options, 7, max_chars);
 
     let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
         println!(
@@ -105,7 +106,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
 }
 
 pub fn print_logs() -> Result<()> {
-    let path = Path::new("/tmp/hyprscratch/hyprscratch.log");
+    let path = Path::new(DEFAULT_LOGFILE);
     if path.exists() {
         let mut file = File::open(path)?;
         let mut buf = String::new();

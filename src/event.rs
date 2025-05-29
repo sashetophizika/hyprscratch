@@ -127,7 +127,7 @@ fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: C
 
         restarts += 1;
         if restarts >= max_restartx {
-            let _ = log("Event listener repeated panic".to_string(), LogLevel::WARN);
+            let _ = log("Event listener repeated panic".to_string(), LogLevel::Warn);
             break;
         }
 
