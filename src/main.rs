@@ -1,5 +1,6 @@
 mod config;
 mod daemon;
+mod event;
 mod extra;
 mod logs;
 mod scratchpad;
@@ -12,7 +13,7 @@ use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
 
-fn cli_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> bool {
+fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) -> bool {
     let known_flags = [
         "get-config",
         "version",
@@ -33,30 +34,28 @@ fn cli_commands(args: &[String], config: Option<String>, socket: Option<&str>) -
                 "help" => print_help(),
                 "logs" => print_logs().log_err(file!(), line!()),
                 "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
-                "reload" => {
-                    send(socket, "reload", &config.unwrap_or("".into())).log_err(file!(), line!())
-                }
+                "reload" => send(socket, "reload", &config.clone().unwrap_or("".into()))
+                    .log_err(file!(), line!()),
                 _ => (),
             }
             return true;
         } else if arg.starts_with("-") {
-            let _ = log(format!("Unknown flag: {arg}"), "WARN");
+            let _ = log(format!("Unknown flag: {arg}"), LogLevel::WARN);
         }
     }
     false
 }
 
 fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
-    if args[2..].is_empty() {
+    if args.len() < 3 {
         let msg = format!(
             "Unknown command or not enough arguments for scratchpad in '{}'",
             args[1..].join(" ")
         );
-        log(msg, "WARN")?;
-    } else {
-        send(socket, "manual", &args[1..].join("^"))?
+        log(msg, LogLevel::WARN)?;
+        return Ok(());
     }
-    Ok(())
+    send(socket, "manual", &args[1..].join("^"))
 }
 
 fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
@@ -74,7 +73,7 @@ fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) 
 }
 
 fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
-    if cli_commands(args, config.clone(), socket) {
+    if cli_commands(args, &config, socket) {
         return Ok(());
     }
     main_commands(args, config, socket)
@@ -98,13 +97,16 @@ fn main() {
     let log_err = |err: HyprError| {
         if let HyprError::IoError(e) = err {
             if e.to_string() == "Connection refused (os error 111)" {
-                let _ = log("Could not connect to daemon. Is it running?".into(), "WARN");
+                let _ = log(
+                    "Could not connect to daemon. Is it running?".into(),
+                    LogLevel::WARN,
+                );
             }
         } else {
             {
                 let _ = log(
                     format!("{}, command: '{}'.", err, args[1..].join(" ")),
-                    "WARN",
+                    LogLevel::WARN,
                 );
             }
         }

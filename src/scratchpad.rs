@@ -174,12 +174,10 @@ impl Scratchpad {
 
     fn get_workspace_id(&self, state: &HyprlandState) -> i32 {
         if let Some(m) = &self.options.monitor {
-            if let Some(id) = state.monitors.get(m) {
-                *id
-            } else {
-                let _ = log(format!("Monitor {m} not found"), "WARN");
+            state.monitors.get(m).copied().unwrap_or_else(|| {
+                let _ = log(format!("Monitor {m} not found"), LogLevel::WARN);
                 state.active_workspace_id
-            }
+            })
         } else {
             state.active_workspace_id
         }
@@ -286,16 +284,16 @@ impl Scratchpad {
     }
 
     fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
+        let focus = |adr: &Address| {
+            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(adr.clone()))
+                .log_err(file!(), line!());
+        };
+
         let mut client_on_active = state
             .clients_with_title
             .iter()
             .filter(|cl| self.is_on_workspace(cl, state))
             .peekable();
-
-        let focus = |adr: &Address| {
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(adr.clone()))
-                .log_err(file!(), line!());
-        };
 
         let should_refocus = client_on_active.peek().is_some()
             && !self.options.special

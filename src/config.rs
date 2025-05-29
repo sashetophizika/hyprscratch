@@ -1,7 +1,8 @@
-use crate::logs::{log, LogErr};
+use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use crate::utils::dequote;
 use hyprland::Result;
+use std::collections::HashMap;
 use std::env::var;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -44,13 +45,13 @@ impl Config {
     fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
         let default_configs = Self::find_config_files();
         if default_configs.is_empty() {
-            log("No configuration files found".into(), "ERROR")?;
+            log("No configuration files found".into(), LogLevel::ERROR)?;
         }
 
         let config_files = if let Some(conf) = config_path {
             if !default_configs.contains(&conf) {
                 if !Path::new(&conf).exists() {
-                    log(format!("Config file not found: {conf}"), "ERROR")?;
+                    log(format!("Config file not found: {conf}"), LogLevel::ERROR)?;
                 }
                 vec![conf]
             } else {
@@ -88,7 +89,7 @@ impl Config {
                 "Configuration parsed successfully, config is {:?}",
                 config_files[0]
             ),
-            "INFO",
+            LogLevel::INFO,
         )?;
 
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
@@ -191,11 +192,14 @@ fn warn_unknown_option(opt: &str) {
         "special",
     ];
     if !known_options.contains(&opt) {
-        log("Unknown scratchpad option: ".to_string() + opt, "WARN").unwrap();
+        let _ = log(
+            "Unknown scratchpad option: ".to_string() + opt,
+            LogLevel::WARN,
+        );
     }
 }
 
-fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
+fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
     let known_commands = [
         "no-auto-reload",
         "get-config",
@@ -223,33 +227,28 @@ fn parse_config(config_file: &String) -> Result<Vec<Scratchpad>> {
 
     let mut scratchpads: Vec<Scratchpad> = vec![];
     for line in lines {
-        let parsed_args = split_args(line);
-
-        if parsed_args.len() <= 1 {
+        let args = split_args(line);
+        if args.len() <= 1 {
             continue;
         }
 
-        match parsed_args[1].as_str() {
+        match args[1].as_str() {
             cmd if known_commands.contains(&cmd) => continue,
             _ => {
-                let [title, command, opts];
-                if parsed_args.len() > 2 {
-                    title = dequote(&parsed_args[1]);
-                    command = dequote(&parsed_args[2]);
-                } else {
-                    log(
-                        "Unknown command or no command after title: ".to_string() + &parsed_args[1],
-                        "WARN",
-                    )?;
-                    continue;
-                }
-
-                if parsed_args.len() > 3 {
-                    parsed_args[3..].iter().for_each(|x| warn_unknown_option(x));
-                    opts = parsed_args[3..].join(" ");
-                } else {
-                    opts = "".into();
-                }
+                let [title, command, opts] = match args.len() {
+                    2 => [dequote(&args[1]), dequote(&args[2]), "".into()],
+                    3.. => {
+                        args[3..].iter().for_each(|x| warn_unknown_option(x));
+                        [dequote(&args[1]), dequote(&args[2]), args[3..].join(" ")]
+                    }
+                    _ => {
+                        log(
+                            "Unknown command or no command after title: ".to_string() + &args[1],
+                            LogLevel::WARN,
+                        )?;
+                        continue;
+                    }
+                };
 
                 scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
             }
@@ -268,7 +267,7 @@ enum SyntaxErr<'a> {
     Nameless,
 }
 
-fn warn_syntax_err(err: SyntaxErr) -> Result<()> {
+fn warn_syntax_err(err: SyntaxErr) {
     let msg = match err {
         SyntaxErr::MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
         SyntaxErr::UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
@@ -277,89 +276,97 @@ fn warn_syntax_err(err: SyntaxErr) -> Result<()> {
         SyntaxErr::Unopened => "Unopened '}'",
         SyntaxErr::Nameless => "Scratchpad with no name",
     };
-    log(format!("Syntax error in configuration: {msg}"), "WARN")
+    let _ = log(
+        format!("Syntax error in configuration: {msg}"),
+        LogLevel::WARN,
+    );
 }
 
-fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
-    let mut buf = String::new();
-    File::open(config_file)?.read_to_string(&mut buf)?;
+fn open_scope(scd: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) {
+    if *in_scope {
+        warn_syntax_err(SyntaxErr::Unclosed);
+        return;
+    }
 
-    let mut name: String = String::new();
-    let mut title: String = String::new();
-    let mut command: String = String::new();
-    let mut rules: String = String::new();
-    let mut options: String = String::new();
+    if let Some(n) = line.split_whitespace().next() {
+        if n == "{" {
+            warn_syntax_err(SyntaxErr::Nameless);
+        } else {
+            *in_scope = true;
+            scd.insert("name", n.into());
+            for f in ["title", "command", "rules", "options"] {
+                scd.insert(f, String::new());
+            }
+        }
+    }
+}
 
-    let mut scratchpads = vec![];
-    let mut in_scope = false;
-
-    let escape = |s: &str| -> String {
-        dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
-    };
+fn close_scope(scd: &HashMap<&str, String>, in_scope: &mut bool) -> Option<Scratchpad> {
+    if !*in_scope {
+        warn_syntax_err(SyntaxErr::Unopened);
+        return None;
+    }
 
     let warn_empty = |field: &str, name: &str| -> bool {
         if field.is_empty() {
-            warn_syntax_err(SyntaxErr::MissingField(field, name)).unwrap_log(file!(), line!());
+            warn_syntax_err(SyntaxErr::MissingField(field, name));
             return true;
         }
         false
     };
 
-    for line in buf.lines() {
+    if warn_empty(&scd["title"], &scd["name"]) || warn_empty(&scd["command"], &scd["name"]) {
+        return None;
+    }
+
+    *in_scope = false;
+    let c = if scd["rules"].is_empty() {
+        scd["command"].clone()
+    } else {
+        format!("[{}] {}", scd["rules"].replace(",", ";"), scd["command"])
+    };
+
+    let [n, t, o] = [&scd["name"], &scd["title"], &scd["options"]];
+    Some(Scratchpad::new(n, t, &c, o))
+}
+
+fn set_field<'a>(scd: &mut HashMap<&'a str, String>, in_scope: bool, split: (&'a str, &'a str)) {
+    if !in_scope {
+        warn_syntax_err(SyntaxErr::NotInScope);
+        return;
+    }
+
+    let es = |s: &str| -> String {
+        dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
+    };
+
+    let k = split.0.trim();
+    if scd.contains_key(k) {
+        scd.insert(k, es(split.1));
+    } else {
+        warn_syntax_err(SyntaxErr::UnknownField(k));
+    }
+}
+
+fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
+    let mut conf = String::new();
+    File::open(config_file)?.read_to_string(&mut conf)?;
+
+    let mut scd: HashMap<&str, String> = HashMap::new();
+    let mut scratchpads = vec![];
+    let mut in_scope = false;
+
+    for line in conf.lines() {
         if line.starts_with("#") {
             continue;
-        }
-
-        if line.split_whitespace().any(|x| x == "{") {
-            if in_scope {
-                warn_syntax_err(SyntaxErr::Unclosed)?;
-                continue;
-            }
-
-            if let Some(n) = line.split_whitespace().next() {
-                if n == "{" {
-                    warn_syntax_err(SyntaxErr::Nameless)?;
-                } else {
-                    name = n.into();
-                }
-            }
-
-            in_scope = true;
-            title = String::new();
-            command = String::new();
-            rules = String::new();
-            options = String::new();
+        } else if line.split_whitespace().any(|s| s == "{") {
+            open_scope(&mut scd, &mut in_scope, line)
         } else if let Some(split) = line.split_once("=") {
-            if !in_scope {
-                warn_syntax_err(SyntaxErr::NotInScope)?;
-                continue;
-            }
-
-            match split.0.trim() {
-                "title" => title = escape(split.1),
-                "command" => command = escape(split.1),
-                "rules" => rules = escape(split.1),
-                "options" => options = escape(split.1),
-                f => warn_syntax_err(SyntaxErr::UnknownField(f))?,
-            }
+            set_field(&mut scd, in_scope, split);
         } else if line.trim() == "}" {
-            if !in_scope {
-                warn_syntax_err(SyntaxErr::Unopened)?;
-                continue;
+            if let Some(sc) = close_scope(&scd, &mut in_scope) {
+                scratchpads.push(sc);
             }
-            in_scope = false;
-
-            if warn_empty(&title, &name) || warn_empty(&command, &name) {
-                continue;
-            }
-
-            let cmd = if rules.is_empty() {
-                command.clone()
-            } else {
-                format!("[{}] {command}", rules.replace(",", ";"))
-            };
-
-            scratchpads.push(Scratchpad::new(&name, &title, &cmd, &options))
         }
     }
 
@@ -369,7 +376,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
 fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
-        "WARN",
+        LogLevel::WARN,
     )?;
 
     let mut buf = String::new();

@@ -6,6 +6,25 @@ use std::path::Path;
 use std::process::exit;
 use std::sync::LockResult;
 
+#[derive(PartialEq)]
+pub enum LogLevel {
+    INFO,
+    WARN,
+    ERROR,
+    DEBUG,
+}
+
+impl LogLevel {
+    fn as_str<'a>(&self) -> &'a str {
+        match self {
+            Self::INFO => "INFO",
+            Self::WARN => "WARN",
+            Self::ERROR => "ERROR",
+            Self::DEBUG => "DEBUG",
+        }
+    }
+}
+
 pub trait LogErr<T> {
     fn unwrap_log(self, file: &str, line: u32) -> T;
     fn log_err(self, file: &str, line: u32);
@@ -18,15 +37,15 @@ macro_rules! impl_logerr {
                 match self {
                     Ok(t) => t,
                     Err(e) => {
-                        let _ = log(format!("{e} at {file}:{line}"), "ERROR");
-                        exit(0)
+                        let _ = log(format!("{e} at {file}:{line}"), LogLevel::ERROR);
+                        exit(1)
                     }
                 }
             }
 
             fn log_err(self, file: &str, line: u32) {
                 if let Err(e) = self {
-                    let _ = log(format!("{e} at {file}:{line}"), "WARN");
+                    let _ = log(format!("{e} at {file}:{line}"), LogLevel::WARN);
                 }
             }
         })+
@@ -41,20 +60,23 @@ impl<T> LogErr<T> for Option<T> {
         match self {
             Some(t) => t,
             None => {
-                let _ = log(format!("Function returned None at {file}:{line}"), "ERROR");
-                exit(0)
+                let _ = log(
+                    format!("Function returned None at {file}:{line}"),
+                    LogLevel::ERROR,
+                );
+                exit(1)
             }
         }
     }
 
     fn log_err(self, file: &str, line: u32) {
         if self.is_none() {
-            let _ = log(format!("Recieved None at {file}:{line}"), "WARN");
+            let _ = log(format!("Received None at {file}:{line}"), LogLevel::WARN);
         }
     }
 }
 
-pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
+pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
     let temp_dir = Path::new("/tmp/hyprscratch/");
     if !temp_dir.exists() {
         create_dir(temp_dir)?;
@@ -68,18 +90,19 @@ pub fn log(msg: String, level: &str) -> hyprland::Result<()> {
 
     file.write_all(
         format!(
-            "{} {level} {msg}\n",
-            Local::now().format("%d.%m.%Y %H:%M:%S")
+            "{} {} {msg}\n",
+            Local::now().format("%d.%m.%Y %H:%M:%S"),
+            level.as_str()
         )
         .as_bytes(),
     )?;
 
     println!("{msg}");
-    if level == "ERROR" {
+    if level == LogLevel::ERROR {
         if cfg!(debug_assertions) {
             panic!("Fatal");
         } else {
-            exit(0);
+            exit(1);
         }
     }
 

@@ -1,27 +1,27 @@
-use crate::config::Config;
+use crate::config::*;
+use crate::event::*;
 use crate::logs::*;
 use crate::scratchpad::*;
 use crate::utils::*;
-use hyprland::data::{Client, Clients, Monitor};
+use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
-use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
+use hyprland::shared::HyprError;
 use hyprland::Result;
 use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread::*;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
 #[derive(Clone, Copy)]
-struct DaemonOptions {
-    eager: bool,
-    clean: bool,
-    spotless: bool,
-    auto_reload: bool,
+pub struct DaemonOptions {
+    pub eager: bool,
+    pub clean: bool,
+    pub spotless: bool,
+    pub auto_reload: bool,
 }
 
 impl DaemonOptions {
@@ -35,10 +35,10 @@ impl DaemonOptions {
     }
 }
 
-struct DaemonState {
-    cycle_index: usize,
-    prev_titles: [String; 2],
-    options: Arc<DaemonOptions>,
+pub struct DaemonState {
+    pub cycle_index: usize,
+    pub prev_titles: [String; 2],
+    pub options: Arc<DaemonOptions>,
 }
 
 impl DaemonState {
@@ -81,7 +81,7 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
     let mut current_index = state.cycle_index % config.scratchpads.len();
     if let Some(m) = get_mode(msg) {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            let _ = log(format!("No {msg} scratchpads found"), "WARN");
+            let _ = log(format!("No {msg} scratchpads found"), LogLevel::WARN);
             return None;
         }
 
@@ -97,7 +97,10 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if config.scratchpads.is_empty() {
-        return log("No scratchpads configured for 'cycle'".into(), "WARN");
+        return log(
+            "No scratchpads configured for 'cycle'".into(),
+            LogLevel::WARN,
+        );
     }
 
     if let Some(i) = get_cycle_index(msg, config, state) {
@@ -110,7 +113,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let prev_active = (title == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
-        let _ = log("No previous scratchpad found".into(), "WARN");
+        let _ = log("No previous scratchpad found".into(), LogLevel::WARN);
         return None;
     }
 
@@ -122,7 +125,7 @@ fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -
 
 fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if state.prev_titles[0].is_empty() {
-        return log("No previous scratchpads exist".into(), "WARN");
+        return log("No previous scratchpads exist".into(), LogLevel::WARN);
     }
 
     let active_title = if let Ok(Some(ac)) = Client::get_active() {
@@ -139,7 +142,10 @@ fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
 
 fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if msg.is_empty() {
-        return log(format!("No scratchpad title given to '{req}'"), "WARN");
+        return log(
+            format!("No scratchpad title given to '{req}'"),
+            LogLevel::WARN,
+        );
     }
 
     let index = config.scratchpads.iter().position(|x| x.name == msg);
@@ -149,7 +155,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         handle_scratchpad(config, state, i)?;
         config.scratchpads[i].options.toggle(req);
     } else {
-        log(format!("Scratchpad '{msg}' not found"), "WARN")?;
+        let _ = log(format!("Scratchpad '{msg}' not found"), LogLevel::WARN);
     }
 
     Ok(())
@@ -175,13 +181,14 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
         autospawn(config)?;
     }
 
-    log("Configuration reloaded".to_string(), "INFO")?;
+    log("Configuration reloaded".to_string(), LogLevel::INFO)?;
     Ok(())
 }
 
-fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
+fn handle_get_config(stream: &mut UnixStream, config: &Config) -> Result<()> {
     let map_format = |field: &dyn Fn(&Scratchpad) -> &str| {
-        conf.scratchpads
+        config
+            .scratchpads
             .iter()
             .map(field)
             .collect::<Vec<_>>()
@@ -190,7 +197,7 @@ fn handle_get_config(stream: &mut UnixStream, conf: &Config) -> Result<()> {
 
     let config = format!(
         "{}#{}?{}?{}",
-        conf.config_file,
+        config.config_file,
         map_format(&|x| &x.title),
         map_format(&|x| &x.command),
         map_format(&|x| x.options.as_str()),
@@ -211,7 +218,7 @@ fn handle_killall(config: &Config) -> Result<()> {
     let kill = |cl: Client| {
         let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));
         if let Err(e) = res {
-            let _ = log(format!("{e} in {} at {}", file!(), line!()), "WARN");
+            let _ = log(format!("{e} in {} at {}", file!(), line!()), LogLevel::WARN);
         }
     };
 
@@ -230,138 +237,30 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
-    let should_move = |opts: &ScratchpadOptions| -> bool {
-        if opts.special {
-            return false;
+fn handle_request(
+    (req, msg): (&str, &str),
+    stream: &mut UnixStream,
+    state: &mut DaemonState,
+    config: &mut Config,
+) -> Result<()> {
+    match req {
+        "toggle" | "summon" | "show" | "hide" => handle_call(msg, req, config, state),
+        "get-config" => handle_get_config(stream, config),
+        "previous" => handle_previous(config, state),
+        "kill-all" => handle_killall(config),
+        "hide-all" => handle_hideall(config),
+        "reload" => handle_reload(msg, config, state),
+        "manual" => handle_manual(msg, config, state),
+        "cycle" => handle_cycle(msg, config, state),
+        "kill" => {
+            let msg = "Recieved 'kill' request, terminating listener".into();
+            log(msg, LogLevel::INFO)?;
+            Err(HyprError::Other("kill".into()))
         }
-
-        if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
-            if active.name != *monitor && active.id.to_string() != *monitor {
-                return false;
-            }
-        }
-        true
-    };
-
-    let follow = move || {
-        let (f, l) = (file!(), line!());
-        let conf = &config.lock().unwrap_log(f, l);
-        let move_to_current = |cl: Client| {
-            let idx = conf
-                .scratchpads
-                .iter()
-                .position(|x| x.title == cl.initial_title)
-                .unwrap_log(f, l);
-
-            if !should_move(&conf.scratchpads[idx].options) {
-                return;
-            }
-
-            hyprland::dispatch!(
-                MoveToWorkspace,
-                WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::Address(cl.address))
-            )
-            .log_err(f, l)
-        };
-
-        if let Ok(clients) = Clients::get() {
-            clients
-                .into_iter()
-                .filter(|cl| !is_on_special(cl) && is_known(&conf.pinned_titles, cl))
-                .for_each(move_to_current);
-        }
-    };
-
-    let follow_clone = follow.clone();
-    ev.add_workspace_changed_handler(move |_| follow_clone());
-    ev.add_active_monitor_changed_handler(move |_| follow());
-}
-
-fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_workspace_changed_handler(move |_| {
-        let (f, l) = (file!(), line!());
-        let slick_titles = &config.lock().unwrap_log(f, l).slick_titles;
-        move_floating(slick_titles).log_err(f, l);
-
-        if let Ok(Some(ac)) = Client::get_active() {
-            if is_known(slick_titles, &ac) {
-                hide_special(&ac);
-            }
-        }
-    });
-}
-
-fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_active_window_changed_handler(move |_| {
-        if let Ok(Some(cl)) = Client::get_active() {
-            let (f, l) = (file!(), line!());
-            let conf = &config.lock().unwrap_log(f, l);
-
-            if !is_known(&conf.normal_titles, &cl) {
-                move_floating(&conf.dirty_titles).log_err(f, l);
-            }
-        }
-    });
-}
-
-fn add_auto_reload(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_config_reloaded_handler(move || {
-        let (f, l) = (file!(), line!());
-        config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
-    });
-}
-
-fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> {
-    let mut ev = EventListener::new();
-
-    if options.auto_reload {
-        add_auto_reload(&mut ev, config.clone());
-    }
-
-    if options.clean {
-        add_clean(&mut ev, config.clone());
-    }
-
-    if options.spotless {
-        add_spotless(&mut ev, config.clone());
-    }
-
-    add_pin(&mut ev, config.clone());
-    ev.start_listener()
-}
-
-fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
-    let max_restartx = 50;
-    let mut restarts = 0;
-
-    loop {
-        let _ = handle.join();
-        let config = config.clone();
-        let options = options.clone();
-
-        restarts += 1;
-        if restarts >= max_restartx {
-            let _ = log("Event listener repeated panic".to_string(), "WARN");
-            break;
-        }
-
-        handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
+        _ => log(format!("Unknown request: {req}?{msg}"), LogLevel::WARN),
     }
 }
-
-fn start_event_listeners(config: &ConfigMutex, state: &mut DaemonState) {
-    let config_c = config.clone();
-    let options = state.options.clone();
-    let handle = spawn(move || start_events(options, config_c).log_err(file!(), line!()));
-
-    let config_c = config.clone();
-    let options = state.options.clone();
-    spawn(move || keep_alive(handle, options, config_c));
-}
-
-fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
+fn get_sock(socket_path: Option<&str>) -> &Path {
     match socket_path {
         Some(sp) => Path::new(sp),
         None => {
@@ -374,48 +273,37 @@ fn get_path_to_sock(socket_path: Option<&str>) -> &Path {
     }
 }
 
-fn start_unix_listener(
-    socket_path: Option<&str>,
-    state: &mut DaemonState,
-    config: ConfigMutex,
-) -> Result<()> {
-    let sock = get_path_to_sock(socket_path);
+fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
+    let sock = get_sock(socket_path);
     if sock.exists() {
         remove_file(sock)?;
     }
 
     let listener = UnixListener::bind(sock)?;
     let msg = format!("Daemon started successfully, listening on {sock:?}",);
-    log(msg, "INFO")?;
+    log(msg, LogLevel::INFO)?;
+    Ok(listener)
+}
 
+fn start_unix_listener(
+    socket_path: Option<&str>,
+    state: &mut DaemonState,
+    config: ConfigMutex,
+) -> Result<()> {
+    let listener = get_listener(socket_path)?;
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf)?;
 
+                let request = buf.split_once("?").unwrap_log(file!(), line!());
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
-                let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
 
-                let res = match req {
-                    "toggle" | "summon" | "show" | "hide" => handle_call(msg, req, conf, state),
-                    "get-config" => handle_get_config(&mut stream, conf),
-                    "previous" => handle_previous(conf, state),
-                    "kill-all" => handle_killall(conf),
-                    "hide-all" => handle_hideall(conf),
-                    "reload" => handle_reload(msg, conf, state),
-                    "manual" => handle_manual(msg, conf, state),
-                    "cycle" => handle_cycle(msg, conf, state),
-                    "kill" => {
-                        let msg = "Recieved 'kill' request, terminating listener".into();
-                        log(msg, "INFO")?;
-                        break;
-                    }
-                    _ => log(format!("Unknown request: {buf}"), "WARN"),
-                };
-
-                if let Err(e) = res {
-                    log(format!("{e} in {req}:{msg}"), "WARN")?;
+                match handle_request(request, &mut stream, state, conf) {
+                    Ok(()) => (),
+                    Err(HyprError::Other(_)) => break,
+                    Err(e) => log(format!("{e} in {buf}"), LogLevel::WARN)?,
                 }
             }
             Err(_) => {

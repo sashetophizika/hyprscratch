@@ -1,11 +1,10 @@
+use crate::logs::*;
 use hyprland::Result;
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-
-use crate::logs::log;
 
 pub fn get_config(socket: Option<&str>) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or("/tmp/hyprscratch/hyprscratch.sock"))?;
@@ -16,16 +15,18 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     stream.read_to_string(&mut buf)?;
 
     let Some((conf, data)) = buf.split_once('#') else {
-        log("Could not get configuration data".into(), "ERROR")?;
+        log("Could not get configuration data".into(), LogLevel::ERROR)?;
         return Ok(());
     };
 
-    let [titles, commands, options]: [Vec<&str>; 3] = data
+    let [titles, commands, options] = &data
         .splitn(3, '?')
         .map(|x| x.split('^').collect::<Vec<_>>())
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
+        .collect::<Vec<_>>()[0..3]
+    else {
+        log("Config data could not be parsed".into(), LogLevel::ERROR)?;
+        return Ok(());
+    };
 
     let max_len = |xs: &Vec<&str>, min: usize, max: usize| {
         xs.iter()
@@ -36,16 +37,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
             .min(max)
     };
 
-    let color_pad = |x: usize, y: &str| {
-        y.to_string()
-            .replace(";", "?")
-            .replace("[", "[\x1b[0;36m")
-            .replace("]", "\x1b[0;0m]")
-            .replace("?", "\x1b[0;0m;\x1b[0;36m")
-            + &" ".repeat(x - y.chars().count())
-    };
-
-    let max_chars = 100;
+    let max_chars = 80;
     let max_titles = max_len(&titles, 6, max_chars);
     let max_commands = max_len(&commands, 8, max_chars);
     let max_options = max_len(&options, 7, max_chars);
@@ -60,12 +52,23 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         );
     };
 
-    let truncate = |str: &str| -> String {
+    let pad = |x: usize, str: &str| {
+        str.to_string() + &" ".repeat(if x < str.len() { 0 } else { x - str.len() })
+    };
+
+    let truncate = |str: &str| {
         if str.len() < max_chars {
             str.into()
         } else {
             str[..max_chars - 3].to_string() + "..."
         }
+    };
+
+    let color = |str: String| {
+        str.replace(";", "?")
+            .replace("[", "[\x1b[0;36m")
+            .replace("]", "\x1b[0;0m]")
+            .replace("?", "\x1b[0;0m;\x1b[0;36m")
     };
 
     let table_width = max_titles + max_commands + max_options + 6;
@@ -82,18 +85,18 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     print_border("├", "┬", "┤");
     println!(
         "│ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │",
-        color_pad(max_titles, "Titles"),
-        color_pad(max_commands, "Commands"),
-        color_pad(max_options, "Options")
+        pad(max_titles, "Titles"),
+        pad(max_commands, "Commands"),
+        pad(max_options, "Options")
     );
 
     print_border("├", "┼", "┤");
-    for i in 0..titles.len() {
+    for ((title, command), option) in titles.iter().zip(commands).zip(options) {
         println!(
             "│ {} │ {} │ {} │",
-            color_pad(max_titles, titles[i]),
-            color_pad(max_commands, &truncate(commands[i])),
-            color_pad(max_options, options[i])
+            pad(max_titles, &truncate(title)),
+            color(pad(max_commands, &(truncate(command)))),
+            pad(max_options, &truncate(option))
         )
     }
 

@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::logs::{log, LogErr};
+use crate::logs::*;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
@@ -9,7 +9,10 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
 pub fn warn_deprecated(feature: &str) -> Result<()> {
-    log(format!("The '{feature}' feature is deprecated."), "WARN")?;
+    log(
+        format!("The '{feature}' feature is deprecated."),
+        LogLevel::WARN,
+    )?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
 }
@@ -73,7 +76,7 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
 pub fn dequote(s: &str) -> String {
     let tr = s.trim();
     if tr.is_empty() {
-        return String::new();
+        return "".into();
     }
 
     match &tr[..1] {
@@ -96,7 +99,7 @@ pub fn move_to_special(client: &Client) -> Result<()> {
         Some(WindowIdentifier::Address(client.address.clone()))
     )
     .unwrap_or_else(|_| {
-        log("MoveToSpecial returned Err".into(), "DEBUG").unwrap();
+        log("MoveToSpecial returned Err".into(), LogLevel::DEBUG).unwrap();
     });
     Ok(())
 }
@@ -124,12 +127,7 @@ pub fn move_floating(titles: &[String]) -> Result<()> {
     Ok(())
 }
 
-pub fn prepend_rules(
-    command: &str,
-    workspace: Option<&String>,
-    silent: bool,
-    float: bool,
-) -> String {
+pub fn prepend_rules(command: &str, workspace: Option<&str>, silent: bool, float: bool) -> String {
     let mut rules = String::from("[");
     if let Some(workspace) = workspace {
         let silent = if silent { "silent" } else { "" };
