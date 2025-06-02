@@ -16,7 +16,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     stream.read_to_string(&mut buf)?;
 
     let Some((conf, data)) = buf.split_once('#') else {
-        log("Could not get configuration data".into(), LogLevel::Error)?;
+        log("Could not get configuration data".into(), Error)?;
         return Ok(());
     };
 
@@ -25,7 +25,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         .map(|x| x.split('^').collect::<Vec<_>>())
         .collect::<Vec<_>>()[0..3]
     else {
-        log("Config data could not be parsed".into(), LogLevel::Error)?;
+        log("Config data could not be parsed".into(), Error)?;
         return Ok(());
     };
 

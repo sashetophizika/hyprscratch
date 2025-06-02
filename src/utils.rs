@@ -11,7 +11,7 @@ use std::os::unix::net::UnixStream;
 pub fn warn_deprecated(feature: &str) -> Result<()> {
     log(
         format!("The '{feature}' feature is deprecated."),
-        LogLevel::Warn,
+        Warn,
     )?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
@@ -99,7 +99,7 @@ pub fn move_to_special(client: &Client) -> Result<()> {
         Some(WindowIdentifier::Address(client.address.clone()))
     )
     .unwrap_or_else(|_| {
-        log("MoveToSpecial returned Err".into(), LogLevel::Debug).unwrap();
+        log("MoveToSpecial returned Err".into(), Debug).unwrap();
     });
     Ok(())
 }

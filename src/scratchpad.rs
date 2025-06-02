@@ -175,7 +175,7 @@ impl Scratchpad {
     fn get_workspace_id(&self, state: &HyprlandState) -> i32 {
         if let Some(m) = &self.options.monitor {
             state.monitors.get(m).copied().unwrap_or_else(|| {
-                let _ = log(format!("Monitor {m} not found"), LogLevel::Warn);
+                let _ = log(format!("Monitor {m} not found"), Warn);
                 state.active_workspace_id
             })
         } else {

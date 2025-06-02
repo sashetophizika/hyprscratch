@@ -45,13 +45,13 @@ impl Config {
     fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
         let default_configs = Self::find_config_files();
         if default_configs.is_empty() {
-            log("No configuration files found".into(), LogLevel::Error)?;
+            log("No configuration files found".into(), Error)?;
         }
 
         let config_files = if let Some(conf) = config_path {
             if !default_configs.contains(&conf) {
                 if !Path::new(&conf).exists() {
-                    log(format!("Config file not found: {conf}"), LogLevel::Error)?;
+                    log(format!("Config file not found: {conf}"), Error)?;
                 }
                 vec![conf]
             } else {
@@ -89,7 +89,7 @@ impl Config {
                 "Configuration parsed successfully, config is {:?}",
                 config_files[0]
             ),
-            LogLevel::Info,
+            Info,
         )?;
 
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
@@ -194,7 +194,7 @@ fn warn_unknown_option(opt: &str) {
     if !known_options.contains(&opt) {
         let _ = log(
             "Unknown scratchpad option: ".to_string() + opt,
-            LogLevel::Warn,
+            Warn,
         );
     }
 }
@@ -244,7 +244,7 @@ fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
                     _ => {
                         log(
                             "Unknown command or no command after title: ".to_string() + &args[1],
-                            LogLevel::Warn,
+                            Warn,
                         )?;
                         continue;
                     }
@@ -258,6 +258,7 @@ fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
     Ok(scratchpads)
 }
 
+use SyntaxErr::*;
 enum SyntaxErr<'a> {
     MissingField(&'a str, &'a str),
     UnknownField(&'a str),
@@ -269,28 +270,28 @@ enum SyntaxErr<'a> {
 
 fn warn_syntax_err(err: SyntaxErr) {
     let msg = match err {
-        SyntaxErr::MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
-        SyntaxErr::UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
-        SyntaxErr::NotInScope => "Not in scope",
-        SyntaxErr::Unclosed => "Unclosed '{'",
-        SyntaxErr::Unopened => "Unopened '}'",
-        SyntaxErr::Nameless => "Scratchpad with no name",
+        MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
+        UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
+        NotInScope => "Not in scope",
+        Unclosed => "Unclosed '{'",
+        Unopened => "Unopened '}'",
+        Nameless => "Scratchpad with no name",
     };
     let _ = log(
         format!("Syntax error in configuration: {msg}"),
-        LogLevel::Warn,
+        Warn,
     );
 }
 
 fn open_scope(scd: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) {
     if *in_scope {
-        warn_syntax_err(SyntaxErr::Unclosed);
+        warn_syntax_err(Unclosed);
         return;
     }
 
     if let Some(n) = line.split_whitespace().next() {
         if n == "{" {
-            warn_syntax_err(SyntaxErr::Nameless);
+            warn_syntax_err(Nameless);
         } else {
             *in_scope = true;
             scd.insert("name", n.into());
@@ -303,13 +304,13 @@ fn open_scope(scd: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) 
 
 fn close_scope(scd: &HashMap<&str, String>, in_scope: &mut bool) -> Option<Scratchpad> {
     if !*in_scope {
-        warn_syntax_err(SyntaxErr::Unopened);
+        warn_syntax_err(Unopened);
         return None;
     }
 
     let warn_empty = |field: &str, name: &str| -> bool {
         if field.is_empty() {
-            warn_syntax_err(SyntaxErr::MissingField(field, name));
+            warn_syntax_err(MissingField(field, name));
             return true;
         }
         false
@@ -332,7 +333,7 @@ fn close_scope(scd: &HashMap<&str, String>, in_scope: &mut bool) -> Option<Scrat
 
 fn set_field<'a>(scd: &mut HashMap<&'a str, String>, in_scope: bool, split: (&'a str, &'a str)) {
     if !in_scope {
-        warn_syntax_err(SyntaxErr::NotInScope);
+        warn_syntax_err(NotInScope);
         return;
     }
 
@@ -344,7 +345,7 @@ fn set_field<'a>(scd: &mut HashMap<&'a str, String>, in_scope: bool, split: (&'a
     if scd.contains_key(k) {
         scd.insert(k, es(split.1));
     } else {
-        warn_syntax_err(SyntaxErr::UnknownField(k));
+        warn_syntax_err(UnknownField(k));
     }
 }
 
@@ -376,7 +377,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
 fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
-        LogLevel::Warn,
+        Warn,
     )?;
 
     let mut buf = String::new();

@@ -8,6 +8,7 @@ use std::sync::LockResult;
 use crate::{DEFAULT_LOGFILE, HYPRSCRATCH_DIR};
 
 
+pub use LogLevel::*;
 #[derive(PartialEq)]
 pub enum LogLevel {
     Info,
@@ -19,10 +20,10 @@ pub enum LogLevel {
 impl LogLevel {
     fn as_str<'a>(&self) -> &'a str {
         match self {
-            Self::Info => "INFO",
-            Self::Warn => "WARN",
-            Self::Error => "ERROR",
-            Self::Debug => "DEBUG",
+            Info => "INFO",
+            Warn => "WARN",
+            Error => "ERROR",
+            Debug => "DEBUG",
         }
     }
 }
@@ -39,7 +40,7 @@ macro_rules! impl_logerr {
                 match self {
                     Ok(t) => t,
                     Err(e) => {
-                        let _ = log(format!("{e} at {file}:{line}"), LogLevel::Error);
+                        let _ = log(format!("{e} at {file}:{line}"), Error);
                         exit(1)
                     }
                 }
@@ -47,7 +48,7 @@ macro_rules! impl_logerr {
 
             fn log_err(self, file: &str, line: u32) {
                 if let Err(e) = self {
-                    let _ = log(format!("{e} at {file}:{line}"), LogLevel::Warn);
+                    let _ = log(format!("{e} at {file}:{line}"), Warn);
                 }
             }
         })+
@@ -64,7 +65,7 @@ impl<T> LogErr<T> for Option<T> {
             None => {
                 let _ = log(
                     format!("Function returned None at {file}:{line}"),
-                    LogLevel::Error,
+                    Error,
                 );
                 exit(1)
             }
@@ -73,7 +74,7 @@ impl<T> LogErr<T> for Option<T> {
 
     fn log_err(self, file: &str, line: u32) {
         if self.is_none() {
-            let _ = log(format!("Received None at {file}:{line}"), LogLevel::Warn);
+            let _ = log(format!("Received None at {file}:{line}"), Warn);
         }
     }
 }
@@ -100,7 +101,7 @@ pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
     )?;
 
     println!("{msg}");
-    if level == LogLevel::Error {
+    if level == Error {
         if cfg!(debug_assertions) {
             panic!("Fatal");
         } else {

@@ -44,7 +44,7 @@ fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) 
             }
             return true;
         } else if arg.starts_with("-") {
-            let _ = log(format!("Unknown flag: {arg}"), LogLevel::Warn);
+            let _ = log(format!("Unknown flag: {arg}"), Warn);
         }
     }
     false
@@ -56,7 +56,7 @@ fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
             "Unknown command or not enough arguments for scratchpad in '{}'",
             args[1..].join(" ")
         );
-        log(msg, LogLevel::Warn)?;
+        log(msg, Warn)?;
         return Ok(());
     }
     send(socket, "manual", &args[1..].join("^"))
@@ -101,16 +101,13 @@ fn main() {
     let log_err = |err: HyprError| {
         if let HyprError::IoError(e) = err {
             if e.to_string() == "Connection refused (os error 111)" {
-                let _ = log(
-                    "Could not connect to daemon. Is it running?".into(),
-                    LogLevel::Warn,
-                );
+                let _ = log("Could not connect to daemon. Is it running?".into(), Warn);
             }
         } else {
             {
                 let _ = log(
                     format!("{}, command: '{}'.", err, args[1..].join(" ")),
-                    LogLevel::Warn,
+                    Warn,
                 );
             }
         }

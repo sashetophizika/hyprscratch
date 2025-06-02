@@ -83,7 +83,7 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
     let mut current_index = state.cycle_index % config.scratchpads.len();
     if let Some(m) = get_mode(msg) {
         if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            let _ = log(format!("No {msg} scratchpads found"), LogLevel::Warn);
+            let _ = log(format!("No {msg} scratchpads found"), Warn);
             return None;
         }
 
@@ -99,10 +99,7 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if config.scratchpads.is_empty() {
-        return log(
-            "No scratchpads configured for 'cycle'".into(),
-            LogLevel::Warn,
-        );
+        return log("No scratchpads configured for 'cycle'".into(), Warn);
     }
 
     if let Some(i) = get_cycle_index(msg, config, state) {
@@ -115,7 +112,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
 fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let prev_active = (title == state.prev_titles[0]) as usize;
     if state.prev_titles[prev_active].is_empty() {
-        let _ = log("No previous scratchpad found".into(), LogLevel::Warn);
+        let _ = log("No previous scratchpad found".into(), Warn);
         return None;
     }
 
@@ -127,7 +124,7 @@ fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -
 
 fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if state.prev_titles[0].is_empty() {
-        return log("No previous scratchpads exist".into(), LogLevel::Warn);
+        return log("No previous scratchpads exist".into(), Warn);
     }
 
     let active_title = if let Ok(Some(ac)) = Client::get_active() {
@@ -144,10 +141,7 @@ fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
 
 fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     if msg.is_empty() {
-        return log(
-            format!("No scratchpad title given to '{req}'"),
-            LogLevel::Warn,
-        );
+        return log(format!("No scratchpad title given to '{req}'"), Warn);
     }
 
     let index = config.scratchpads.iter().position(|x| x.name == msg);
@@ -157,7 +151,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         handle_scratchpad(config, state, i)?;
         config.scratchpads[i].options.toggle(req);
     } else {
-        let _ = log(format!("Scratchpad '{msg}' not found"), LogLevel::Warn);
+        let _ = log(format!("Scratchpad '{msg}' not found"), Warn);
     }
 
     Ok(())
@@ -183,7 +177,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
         autospawn(config)?;
     }
 
-    log("Configuration reloaded".to_string(), LogLevel::Info)?;
+    log("Configuration reloaded".to_string(), Info)?;
     Ok(())
 }
 
@@ -220,7 +214,7 @@ fn handle_killall(config: &Config) -> Result<()> {
     let kill = |cl: Client| {
         let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));
         if let Err(e) = res {
-            let _ = log(format!("{e} in {} at {}", file!(), line!()), LogLevel::Warn);
+            let _ = log(format!("{e} in {} at {}", file!(), line!()), Warn);
         }
     };
 
@@ -256,10 +250,10 @@ fn handle_request(
         "cycle" => handle_cycle(msg, config, state),
         "kill" => {
             let msg = "Recieved 'kill' request, terminating listener".into();
-            log(msg, LogLevel::Info)?;
+            log(msg, Info)?;
             Err(HyprError::Other("kill".into()))
         }
-        _ => log(format!("Unknown request: {req}?{msg}"), LogLevel::Warn),
+        _ => log(format!("Unknown request: {req}?{msg}"), Warn),
     }
 }
 fn get_sock(socket_path: Option<&str>) -> &Path {
@@ -283,7 +277,7 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
 
     let listener = UnixListener::bind(sock)?;
     let msg = format!("Daemon started successfully, listening on {sock:?}",);
-    log(msg, LogLevel::Info)?;
+    log(msg, Info)?;
     Ok(listener)
 }
 
@@ -305,7 +299,7 @@ fn start_unix_listener(
                 match handle_request(request, &mut stream, state, conf) {
                     Ok(()) => (),
                     Err(HyprError::Other(_)) => break,
-                    Err(e) => log(format!("{e} in {buf}"), LogLevel::Warn)?,
+                    Err(e) => log(format!("{e} in {buf}"), Warn)?,
                 }
             }
             Err(_) => {
