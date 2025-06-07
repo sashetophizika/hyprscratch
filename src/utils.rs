@@ -9,10 +9,7 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
 pub fn warn_deprecated(feature: &str) -> Result<()> {
-    log(
-        format!("The '{feature}' feature is deprecated."),
-        Warn,
-    )?;
+    log(format!("The '{feature}' feature is deprecated."), Warn)?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
 }
@@ -92,7 +89,7 @@ pub fn send(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn move_to_special(client: &Client) -> Result<()> {
+pub fn move_to_special(client: &Client) {
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
         WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title.clone())),
@@ -101,7 +98,6 @@ pub fn move_to_special(client: &Client) -> Result<()> {
     .unwrap_or_else(|_| {
         log("MoveToSpecial returned Err".into(), Debug).unwrap();
     });
-    Ok(())
 }
 
 pub fn hide_special(cl: &Client) {
@@ -121,9 +117,9 @@ pub fn is_known(titles: &[String], client: &Client) -> bool {
 
 pub fn move_floating(titles: &[String]) -> Result<()> {
     Clients::get()?
-        .into_iter()
+        .iter()
         .filter(|cl| cl.floating && !is_on_special(cl) && is_known(titles, cl))
-        .for_each(|cl| move_to_special(&cl).log_err(file!(), line!()));
+        .for_each(move_to_special);
     Ok(())
 }
 

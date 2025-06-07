@@ -107,6 +107,15 @@ impl ScratchpadOptions {
     }
 }
 
+use TriggerMode::*;
+#[derive(PartialEq)]
+enum TriggerMode<T> {
+    Hide(Vec<T>),
+    Refocus(T),
+    Focus(T),
+    Summon,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scratchpad {
     pub name: String,
@@ -127,7 +136,7 @@ impl Scratchpad {
 
     fn capture_special(&self, state: &HyprlandState) -> Result<()> {
         let first_title = &state.clients_with_title[0];
-        move_to_special(first_title)?;
+        move_to_special(first_title);
 
         if !self.options.hide && first_title.workspace.id == state.active_workspace_id {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
@@ -257,7 +266,7 @@ impl Scratchpad {
             return Ok(());
         }
 
-        let should_hide = |cl: &Client| {
+        let should_hide = |cl: &&Client| {
             is_known(titles, cl)
                 && cl.initial_title != self.title
                 && cl.workspace.id == state.active_workspace_id
@@ -265,9 +274,9 @@ impl Scratchpad {
         };
 
         Clients::get()?
-            .into_iter()
+            .iter()
             .filter(should_hide)
-            .for_each(|cl| move_to_special(&cl).log_err(file!(), line!()));
+            .for_each(move_to_special);
         Ok(())
     }
 
@@ -279,47 +288,51 @@ impl Scratchpad {
         }
     }
 
+    fn get_mode<'a>(&self, state: &'a HyprlandState, active: &Client) -> TriggerMode<&'a Client> {
+        let mut clients_on_active = state
+            .clients_with_title
+            .iter()
+            .filter(|cl| self.is_on_workspace(cl, state))
+            .peekable();
+
+        let client_peek = clients_on_active.peek();
+        if client_peek.is_some()
+            && !self.options.special
+            && !self.options.show
+            && !self.options.hide
+            && active.floating
+            && active.initial_title != self.title
+        {
+            Refocus(client_peek.unwrap())
+        } else if self.options.special || self.options.show || client_peek.is_none() {
+            Summon
+        } else if self.options.hide || !active.floating || active.initial_title == self.title {
+            Hide(clients_on_active.collect())
+        } else {
+            Focus(client_peek.unwrap())
+        }
+    }
+
     fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
         let focus = |adr: &Address| {
             hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(adr.clone()))
                 .log_err(file!(), line!());
         };
 
-        let mut client_on_active = state
-            .clients_with_title
-            .iter()
-            .filter(|cl| self.is_on_workspace(cl, state))
-            .peekable();
-
-        let should_refocus = client_on_active.peek().is_some()
-            && !self.options.special
-            && !self.options.show
-            && !self.options.hide
-            && active.floating
-            && active.initial_title != self.title;
-
-        let should_summon =
-            self.options.special || self.options.show || client_on_active.peek().is_none();
-        let should_hide =
-            self.options.hide || !active.floating || active.initial_title == self.title;
-
-        if should_refocus {
-            self.hide_active(titles, state)?;
-            focus(&client_on_active.peek().unwrap().address);
-        } else if should_summon {
-            self.summon(state)?;
-            self.hide_active(titles, state)?;
-        } else if should_hide {
-            client_on_active.for_each(|cl| {
-                move_to_special(cl).log_err(file!(), line!());
-            });
-        } else {
-            focus(&client_on_active.peek().unwrap().address);
+        match self.get_mode(state, active) {
+            Refocus(client) => {
+                self.hide_active(titles, state)?;
+                focus(&client.address);
+            }
+            Hide(clients) => clients.into_iter().for_each(move_to_special),
+            Focus(client) => focus(&client.address),
+            Summon => {
+                self.summon(state)?;
+                self.hide_active(titles, state)?;
+            }
         }
 
-        if !should_hide {
-            Dispatch::call(DispatchType::BringActiveToTop)?;
-        }
+        Dispatch::call(DispatchType::BringActiveToTop)?;
         Ok(())
     }
 
@@ -378,7 +391,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         assert_eq!(active_client.initial_title, resources.title);
 
-        move_to_special(&active_client).unwrap();
+        move_to_special(&active_client);
         sleep(Duration::from_millis(500));
 
         assert_eq!(

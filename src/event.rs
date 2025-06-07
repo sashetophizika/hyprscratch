@@ -2,63 +2,70 @@ use crate::config::Config;
 use crate::daemon::DaemonOptions;
 use crate::daemon::DaemonState;
 use crate::logs::*;
-use crate::scratchpad::*;
+use crate::scratchpad::ScratchpadOptions;
 use crate::utils::*;
 use hyprland::data::{Client, Clients, Monitor};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::sync::MutexGuard;
 use std::sync::{Arc, Mutex};
 use std::thread::*;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
-fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
-    let should_move = |opts: &ScratchpadOptions| -> bool {
-        if opts.special {
+fn get_client_opts<'a>(cl: &Client, config: &'a MutexGuard<Config>) -> &'a ScratchpadOptions {
+    let idx = config
+        .scratchpads
+        .iter()
+        .position(|x| x.title == cl.initial_title)
+        .unwrap_log(file!(), line!());
+
+    &config.scratchpads[idx].options
+}
+
+fn should_move(cl: &Client, config: &MutexGuard<Config>) -> bool {
+    let opts = get_client_opts(cl, config);
+    if opts.special {
+        return false;
+    }
+
+    if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
+        if active.name != *monitor && active.id.to_string() != *monitor {
             return false;
         }
+    }
+    true
+}
 
-        if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
-            if active.name != *monitor && active.id.to_string() != *monitor {
-                return false;
-            }
-        }
-        true
-    };
+fn move_to_current(cl: &Client, config: &MutexGuard<Config>) {
+    if !should_move(cl, config) {
+        return;
+    }
 
-    let follow = move || {
-        let (f, l) = (file!(), line!());
-        let conf = &config.lock().unwrap_log(f, l);
-        let move_to_current = |cl: Client| {
-            let idx = conf
-                .scratchpads
-                .iter()
-                .position(|x| x.title == cl.initial_title)
-                .unwrap_log(f, l);
+    hyprland::dispatch!(
+        MoveToWorkspace,
+        WorkspaceIdentifierWithSpecial::Relative(0),
+        Some(WindowIdentifier::Address(cl.address.clone()))
+    )
+    .log_err(file!(), line!())
+}
 
-            if !should_move(&conf.scratchpads[idx].options) {
-                return;
-            }
+fn follow_workpace(config: &ConfigMutex) {
+    let conf = config.lock().unwrap_log(file!(), line!());
+    if let Ok(clients) = Clients::get() {
+        clients
+            .into_iter()
+            .filter(|cl| !is_on_special(cl) && is_known(&conf.pinned_titles, cl))
+            .for_each(|cl| move_to_current(&cl, &conf));
+    }
+}
 
-            hyprland::dispatch!(
-                MoveToWorkspace,
-                WorkspaceIdentifierWithSpecial::Relative(0),
-                Some(WindowIdentifier::Address(cl.address))
-            )
-            .log_err(f, l)
-        };
-
-        if let Ok(clients) = Clients::get() {
-            clients
-                .into_iter()
-                .filter(|cl| !is_on_special(cl) && is_known(&conf.pinned_titles, cl))
-                .for_each(move_to_current);
-        }
-    };
-
+fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
+    let follow = move || follow_workpace(&config);
     let follow_clone = follow.clone();
+
     ev.add_workspace_changed_handler(move |_| follow_clone());
     ev.add_active_monitor_changed_handler(move |_| follow());
 }
@@ -117,7 +124,7 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
 }
 
 fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
-    let max_restartx = 50;
+    let max_restarts = 50;
     let mut restarts = 0;
 
     loop {
@@ -126,7 +133,7 @@ fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: C
         let options = options.clone();
 
         restarts += 1;
-        if restarts >= max_restartx {
+        if restarts >= max_restarts {
             let _ = log("Event listener repeated panic".to_string(), Warn);
             break;
         }

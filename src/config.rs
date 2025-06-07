@@ -1,6 +1,8 @@
 use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use crate::utils::dequote;
+use crate::DEFAULT_CONFIG_FILES;
+use crate::KNOWN_COMMANDS;
 use hyprland::Result;
 use std::collections::HashMap;
 use std::env::var;
@@ -27,19 +29,11 @@ impl Config {
         let home = var("HOME").unwrap_log(file!(), line!());
         let prepend_home = |str| format!("{home}/.config/{str}");
 
-        [
-            "hypr/hyprscratch.conf",
-            "hypr/hyprscratch.toml",
-            "hyprscratch/config.conf",
-            "hyprscratch/config.toml",
-            "hyprscratch/hyprscratch.conf",
-            "hyprscratch/hyprscratch.toml",
-            "hypr/hyprland.conf",
-        ]
-        .iter()
-        .map(prepend_home)
-        .filter(|x| Path::new(&x).exists())
-        .collect()
+        DEFAULT_CONFIG_FILES
+            .iter()
+            .map(prepend_home)
+            .filter(|x| Path::new(&x).exists())
+            .collect()
     }
 
     fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
@@ -186,73 +180,64 @@ fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
     lines
 }
 
-fn warn_unknown_option(opt: &str) {
+fn warn_unknown_options(opts: &str) {
+    let known_arg_options = ["monitor"];
     let known_options = [
         "", "pin", "cover", "persist", "sticky", "shiny", "lazy", "show", "hide", "poly", "tiled",
         "special",
     ];
-    if !known_options.contains(&opt) {
-        let _ = log(
-            "Unknown scratchpad option: ".to_string() + opt,
-            Warn,
-        );
+
+    let warn_unknown = |opt: &str, is_arg: bool| -> bool {
+        if is_arg {
+            return false;
+        }
+        if !known_options.contains(&opt) {
+            if known_arg_options.contains(&opt) {
+                return true;
+            } else {
+                let _ = log(format!("Unknown scratchpad option: {opt}"), Warn);
+            }
+        }
+        false
+    };
+
+    opts.split_whitespace()
+        .fold(false, |acc, x| warn_unknown(x, acc));
+}
+
+fn parse_args(args: &[String]) -> Option<[String; 3]> {
+    if KNOWN_COMMANDS.contains(&args.get(1).map_or("", |s| s.as_str())) {
+        return None;
+    }
+
+    match args.len() {
+        2 => Some([dequote(&args[1]), dequote(&args[2]), "".into()]),
+        3.. => {
+            let opts = args[3..].join(" ");
+            warn_unknown_options(&opts);
+            Some([dequote(&args[1]), dequote(&args[2]), opts])
+        }
+        _ => {
+            let _ = log(
+                format!("Unknown command or no command after title: {}", args[1]),
+                Warn,
+            );
+            None
+        }
     }
 }
 
 fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
-    let known_commands = [
-        "no-auto-reload",
-        "get-config",
-        "spotless",
-        "hide-all",
-        "kill-all",
-        "previous",
-        "version",
-        "reload",
-        "toggle",
-        "clean",
-        "eager",
-        "cycle",
-        "init",
-        "show",
-        "hide",
-        "kill",
-        "logs",
-        "help",
-    ];
-
     let mut buf: String = String::new();
-    std::fs::File::open(config_file)?.read_to_string(&mut buf)?;
+    File::open(config_file)?.read_to_string(&mut buf)?;
     let lines: Vec<String> = get_hyprscratch_lines(buf);
 
     let mut scratchpads: Vec<Scratchpad> = vec![];
     for line in lines {
         let args = split_args(line);
-        if args.len() <= 1 {
-            continue;
+        if let Some([title, command, opts]) = parse_args(&args) {
+            scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
         }
-
-        match args[1].as_str() {
-            cmd if known_commands.contains(&cmd) => continue,
-            _ => {
-                let [title, command, opts] = match args.len() {
-                    2 => [dequote(&args[1]), dequote(&args[2]), "".into()],
-                    3.. => {
-                        args[3..].iter().for_each(|x| warn_unknown_option(x));
-                        [dequote(&args[1]), dequote(&args[2]), args[3..].join(" ")]
-                    }
-                    _ => {
-                        log(
-                            "Unknown command or no command after title: ".to_string() + &args[1],
-                            Warn,
-                        )?;
-                        continue;
-                    }
-                };
-
-                scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
-            }
-        };
     }
 
     Ok(scratchpads)
@@ -277,13 +262,10 @@ fn warn_syntax_err(err: SyntaxErr) {
         Unopened => "Unopened '}'",
         Nameless => "Scratchpad with no name",
     };
-    let _ = log(
-        format!("Syntax error in configuration: {msg}"),
-        Warn,
-    );
+    let _ = log(format!("Syntax error in configuration: {msg}"), Warn);
 }
 
-fn open_scope(scd: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) {
+fn open_scope(scratchpad_data: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) {
     if *in_scope {
         warn_syntax_err(Unclosed);
         return;
@@ -294,20 +276,15 @@ fn open_scope(scd: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) 
             warn_syntax_err(Nameless);
         } else {
             *in_scope = true;
-            scd.insert("name", n.into());
+            scratchpad_data.insert("name", n.into());
             for f in ["title", "command", "rules", "options"] {
-                scd.insert(f, String::new());
+                scratchpad_data.insert(f, String::new());
             }
         }
     }
 }
 
-fn close_scope(scd: &HashMap<&str, String>, in_scope: &mut bool) -> Option<Scratchpad> {
-    if !*in_scope {
-        warn_syntax_err(Unopened);
-        return None;
-    }
-
+fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
     let warn_empty = |field: &str, name: &str| -> bool {
         if field.is_empty() {
             warn_syntax_err(MissingField(field, name));
@@ -316,22 +293,57 @@ fn close_scope(scd: &HashMap<&str, String>, in_scope: &mut bool) -> Option<Scrat
         false
     };
 
-    if warn_empty(&scd["title"], &scd["name"]) || warn_empty(&scd["command"], &scd["name"]) {
-        return None;
+    if warn_empty(&scratchpad_data["title"], &scratchpad_data["name"]) {
+        return false;
+    }
+
+    if warn_empty(&scratchpad_data["command"], &scratchpad_data["name"]) {
+        return false;
+    }
+
+    warn_unknown_options(&scratchpad_data["options"]);
+    true
+}
+
+fn close_scope(
+    scratchpad_data: &HashMap<&str, String>,
+    in_scope: &mut bool,
+    scratchpads: &mut Vec<Scratchpad>,
+) {
+    if !*in_scope {
+        warn_syntax_err(Unopened);
+        return;
     }
 
     *in_scope = false;
-    let c = if scd["rules"].is_empty() {
-        scd["command"].clone()
+    if !validate_data(scratchpad_data) {
+        return;
+    }
+
+    let command = &if scratchpad_data["rules"].is_empty() {
+        scratchpad_data["command"].clone()
     } else {
-        format!("[{}] {}", scd["rules"].replace(",", ";"), scd["command"])
+        format!(
+            "[{}] {}",
+            scratchpad_data["rules"].replace(",", ";"),
+            scratchpad_data["command"]
+        )
     };
 
-    let [n, t, o] = [&scd["name"], &scd["title"], &scd["options"]];
-    Some(Scratchpad::new(n, t, &c, o))
+    let [name, title, options] = [
+        &scratchpad_data["name"],
+        &scratchpad_data["title"],
+        &scratchpad_data["options"],
+    ];
+
+    scratchpads.push(Scratchpad::new(name, title, command, options));
 }
 
-fn set_field<'a>(scd: &mut HashMap<&'a str, String>, in_scope: bool, split: (&'a str, &'a str)) {
+fn set_field<'a>(
+    scratchpad_data: &mut HashMap<&'a str, String>,
+    in_scope: bool,
+    split: (&'a str, &'a str),
+) {
     if !in_scope {
         warn_syntax_err(NotInScope);
         return;
@@ -342,8 +354,8 @@ fn set_field<'a>(scd: &mut HashMap<&'a str, String>, in_scope: bool, split: (&'a
     };
 
     let k = split.0.trim();
-    if scd.contains_key(k) {
-        scd.insert(k, es(split.1));
+    if scratchpad_data.contains_key(k) {
+        scratchpad_data.insert(k, es(split.1));
     } else {
         warn_syntax_err(UnknownField(k));
     }
@@ -353,7 +365,7 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
     let mut conf = String::new();
     File::open(config_file)?.read_to_string(&mut conf)?;
 
-    let mut scd: HashMap<&str, String> = HashMap::new();
+    let mut scratchpad_data: HashMap<&str, String> = HashMap::new();
     let mut scratchpads = vec![];
     let mut in_scope = false;
 
@@ -361,13 +373,11 @@ fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
         if line.starts_with("#") {
             continue;
         } else if line.split_whitespace().any(|s| s == "{") {
-            open_scope(&mut scd, &mut in_scope, line)
+            open_scope(&mut scratchpad_data, &mut in_scope, line)
         } else if let Some(split) = line.split_once("=") {
-            set_field(&mut scd, in_scope, split);
+            set_field(&mut scratchpad_data, in_scope, split);
         } else if line.trim() == "}" {
-            if let Some(sc) = close_scope(&scd, &mut in_scope) {
-                scratchpads.push(sc);
-            }
+            close_scope(&scratchpad_data, &mut in_scope, &mut scratchpads);
         }
     }
 
@@ -425,6 +435,7 @@ fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::fs::File;
 
     fn expected_scratchpads() -> Vec<Scratchpad> {

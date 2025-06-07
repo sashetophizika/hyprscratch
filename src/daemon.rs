@@ -181,7 +181,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
-fn handle_get_config(stream: &mut UnixStream, config: &Config) -> Result<()> {
+fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
     let map_format = |field: &dyn Fn(&Scratchpad) -> &str| {
         config
             .scratchpads

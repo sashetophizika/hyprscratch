@@ -12,37 +12,76 @@ use crate::logs::*;
 use crate::utils::*;
 use hyprland::shared::HyprError;
 use hyprland::Result;
+use std::env::args;
 
 const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
 const DEFAULT_LOGFILE: &str = "/tmp/hyprscratch/hyprscratch.log";
 const DEFAULT_SOCKET: &str = "/tmp/hyprscratch/hyprscratch.sock";
 
-fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) -> bool {
-    let known_flags = [
-        "get-config",
-        "version",
-        "reload",
-        "config",
-        "socket",
-        "help",
-        "logs",
-        "kill",
-    ];
+const DEFAULT_CONFIG_FILES: [&str; 7] = [
+    "hypr/hyprscratch.conf",
+    "hypr/hyprscratch.toml",
+    "hyprscratch/config.conf",
+    "hyprscratch/config.toml",
+    "hyprscratch/hyprscratch.conf",
+    "hyprscratch/hyprscratch.toml",
+    "hypr/hyprland.conf",
+];
 
+const KNOWN_FLAGS: [&str; 8] = [
+    "get-config",
+    "version",
+    "reload",
+    "config",
+    "socket",
+    "help",
+    "logs",
+    "kill",
+];
+
+const KNOWN_COMMANDS: [&str; 18] = [
+    "no-auto-reload",
+    "get-config",
+    "spotless",
+    "hide-all",
+    "kill-all",
+    "previous",
+    "version",
+    "reload",
+    "toggle",
+    "clean",
+    "eager",
+    "cycle",
+    "init",
+    "show",
+    "hide",
+    "kill",
+    "logs",
+    "help",
+];
+
+fn exec_command(command: &str, socket: Option<&str>, config: &Option<String>) -> bool {
+    match command {
+        "config" | "socket" => return false,
+        "get-config" => get_config(socket).log_err(file!(), line!()),
+        "kill" => send(socket, "kill", "").log_err(file!(), line!()),
+        "help" => print_help(),
+        "logs" => print_logs().log_err(file!(), line!()),
+        "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
+        "reload" => {
+            send(socket, "reload", &config.clone().unwrap_or("".into())).log_err(file!(), line!())
+        }
+        _ => (),
+    }
+    true
+}
+
+fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) -> bool {
     for arg in args {
-        if let Some(f) = flag_present(arg, &known_flags) {
-            match f {
-                "config" | "socket" => continue,
-                "get-config" => get_config(socket).log_err(file!(), line!()),
-                "kill" => send(socket, "kill", "").log_err(file!(), line!()),
-                "help" => print_help(),
-                "logs" => print_logs().log_err(file!(), line!()),
-                "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
-                "reload" => send(socket, "reload", &config.clone().unwrap_or("".into()))
-                    .log_err(file!(), line!()),
-                _ => (),
+        if let Some(flag) = flag_present(arg, &KNOWN_FLAGS) {
+            if exec_command(flag, socket, config) {
+                return true;
             }
-            return true;
         } else if arg.starts_with("-") {
             let _ = log(format!("Unknown flag: {arg}"), Warn);
         }
@@ -96,22 +135,22 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     resolve_command(args, config, socket)
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let log_err = |err: HyprError| {
-        if let HyprError::IoError(e) = err {
-            if e.to_string() == "Connection refused (os error 111)" {
-                let _ = log("Could not connect to daemon. Is it running?".into(), Warn);
-            }
-        } else {
-            {
-                let _ = log(
-                    format!("{}, command: '{}'.", err, args[1..].join(" ")),
-                    Warn,
-                );
-            }
+fn catch_err(args: &[String], err: HyprError) {
+    if let HyprError::IoError(e) = err {
+        if e.to_string() == "Connection refused (os error 111)" {
+            let _ = log("Could not connect to daemon. Is it running?".into(), Warn);
         }
-    };
+    } else {
+        {
+            let _ = log(
+                format!("{}, command: '{}'.", err, args[1..].join(" ")),
+                Warn,
+            );
+        }
+    }
+}
 
-    hyprscratch(&args).unwrap_or_else(log_err);
+fn main() {
+    let args: Vec<String> = args().collect();
+    hyprscratch(&args).unwrap_or_else(|e| catch_err(&args, e));
 }

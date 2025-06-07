@@ -5,17 +5,40 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
-use std::path::Path;
 
-pub fn get_config(socket: Option<&str>) -> Result<()> {
+fn max_len(xs: &Vec<&str>, min: usize, max: usize) -> usize {
+    xs.iter()
+        .map(|x| x.chars().count())
+        .max()
+        .unwrap_or(0)
+        .max(min)
+        .min(max)
+}
+
+fn pad(x: usize, str: &str) -> String {
+    str.to_string() + &" ".repeat(if x < str.len() { 0 } else { x - str.len() })
+}
+
+fn color(str: String) -> String {
+    str.replace(";", "?")
+        .replace("[", "[\x1b[0;36m")
+        .replace("]", "\x1b[0;0m]")
+        .replace("?", "\x1b[0;0m;\x1b[0;36m")
+}
+
+fn get_config_data(socket: Option<&str>) -> Result<String> {
     let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all("get-config?".as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
+    Ok(buf)
+}
 
-    let Some((conf, data)) = buf.split_once('#') else {
+pub fn get_config(socket: Option<&str>) -> Result<()> {
+    let data = get_config_data(socket)?;
+    let Some((conf, data)) = data.split_once('#') else {
         log("Could not get configuration data".into(), Error)?;
         return Ok(());
     };
@@ -27,15 +50,6 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     else {
         log("Config data could not be parsed".into(), Error)?;
         return Ok(());
-    };
-
-    let max_len = |xs: &Vec<&str>, min: usize, max: usize| {
-        xs.iter()
-            .map(|x| x.chars().count())
-            .max()
-            .unwrap_or(0)
-            .max(min)
-            .min(max)
     };
 
     let max_chars = 80;
@@ -53,23 +67,12 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         );
     };
 
-    let pad = |x: usize, str: &str| {
-        str.to_string() + &" ".repeat(if x < str.len() { 0 } else { x - str.len() })
-    };
-
-    let truncate = |str: &str| {
+    let truncate = |str: &str| -> String {
         if str.len() < max_chars {
             str.into()
         } else {
             str[..max_chars - 3].to_string() + "..."
         }
-    };
-
-    let color = |str: String| {
-        str.replace(";", "?")
-            .replace("[", "[\x1b[0;36m")
-            .replace("]", "\x1b[0;0m]")
-            .replace("?", "\x1b[0;0m;\x1b[0;36m")
     };
 
     let table_width = max_titles + max_commands + max_options + 6;
@@ -105,14 +108,15 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn get_log_data() -> Result<String> {
+    let mut file = File::open(DEFAULT_LOGFILE)?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf)?;
+    Ok(buf)
+}
 pub fn print_logs() -> Result<()> {
-    let path = Path::new(DEFAULT_LOGFILE);
-    if path.exists() {
-        let mut file = File::open(path)?;
-        let mut buf = String::new();
-        file.read_to_string(&mut buf)?;
-
-        let log_str = buf
+    if let Ok(data) = get_log_data() {
+        let log_str = data
             .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
             .replace("DEBUG", "\x1b[0;32mDEBUG\x1b[0;0m")
             .replace("WARN", "\x1b[0;33mWARN\x1b[0;0m")

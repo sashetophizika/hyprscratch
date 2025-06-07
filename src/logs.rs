@@ -1,12 +1,11 @@
+use crate::{DEFAULT_LOGFILE, HYPRSCRATCH_DIR};
 use chrono::Local;
 use std::env::VarError;
 use std::fs::{create_dir, File};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::exit;
 use std::sync::LockResult;
-use crate::{DEFAULT_LOGFILE, HYPRSCRATCH_DIR};
-
 
 pub use LogLevel::*;
 #[derive(PartialEq)]
@@ -55,7 +54,7 @@ macro_rules! impl_logerr {
     }
 }
 
-impl_logerr!(hyprland::Result<T>, std::io::Result<T>, 
+impl_logerr!(hyprland::Result<T>, io::Result<T>, 
     Result<T, VarError>, LockResult<T>);
 
 impl<T> LogErr<T> for Option<T> {
@@ -63,10 +62,7 @@ impl<T> LogErr<T> for Option<T> {
         match self {
             Some(t) => t,
             None => {
-                let _ = log(
-                    format!("Function returned None at {file}:{line}"),
-                    Error,
-                );
+                let _ = log(format!("Function returned None at {file}:{line}"), Error);
                 exit(1)
             }
         }
@@ -79,28 +75,31 @@ impl<T> LogErr<T> for Option<T> {
     }
 }
 
-pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
+fn get_log_file() -> io::Result<File> {
     let temp_dir = Path::new(HYPRSCRATCH_DIR);
     if !temp_dir.exists() {
         create_dir(temp_dir)?;
     }
 
-    let mut file = File::options()
+    File::options()
         .create(true)
         .read(true)
         .append(true)
-        .open(DEFAULT_LOGFILE)?;
+        .open(DEFAULT_LOGFILE)
+}
 
-    file.write_all(
+fn write_msg(msg: &String, level: &LogLevel) -> io::Result<()> {
+    get_log_file()?.write_all(
         format!(
             "{} {} {msg}\n",
             Local::now().format("%d.%m.%Y %H:%M:%S"),
             level.as_str()
         )
         .as_bytes(),
-    )?;
+    )
+}
 
-    println!("{msg}");
+fn exit_on_err(level: LogLevel) {
     if level == Error {
         if cfg!(debug_assertions) {
             panic!("Fatal");
@@ -108,6 +107,11 @@ pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
             exit(1);
         }
     }
+}
 
+pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
+    write_msg(&msg, &level)?;
+    println!("{msg}");
+    exit_on_err(level);
     Ok(())
 }
