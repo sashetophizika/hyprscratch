@@ -76,11 +76,17 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     };
 
     let table_width = max_titles + max_commands + max_options + 6;
+    let center_fix = if table_width % 2 == 0 {
+        conf.len() + conf.len() % 2
+    } else {
+        conf.len() - 1
+    };
+
     let center_conf = format!(
         "{}\x1b[0;35m{}\x1b[0;0m{}",
         " ".repeat(table_width / 2 - conf.len() / 2),
         conf,
-        " ".repeat(table_width / 2 - (conf.len() - 1) / 2)
+        " ".repeat((table_width - center_fix) / 2)
     );
 
     print_border("┌", "─", "┐");
