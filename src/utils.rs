@@ -327,6 +327,7 @@ mod tests {
         let mut config = Config {
             scratchpads,
             config_file: "".to_string(),
+            ephemeral_titles: Vec::new(),
             special_titles: Vec::new(),
             normal_titles: Vec::new(),
             pinned_titles: Vec::new(),

@@ -4,6 +4,7 @@ use crate::daemon::DaemonState;
 use crate::logs::*;
 use crate::scratchpad::ScratchpadOptions;
 use crate::utils::*;
+use hyprland::data::Workspace;
 use hyprland::data::{Client, Clients, Monitor};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
@@ -54,6 +55,10 @@ fn move_to_current(cl: &Client, config: &MutexGuard<Config>) {
 
 fn follow_workpace(config: &ConfigMutex) {
     let conf = config.lock().unwrap_log(file!(), line!());
+    if conf.pinned_titles.is_empty() {
+        return;
+    }
+
     if let Ok(clients) = Clients::get() {
         clients
             .into_iter()
@@ -68,6 +73,27 @@ fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
 
     ev.add_workspace_changed_handler(move |_| follow_clone());
     ev.add_active_monitor_changed_handler(move |_| follow());
+}
+
+fn add_eph(ev: &mut EventListener, config: ConfigMutex) {
+    ev.add_window_moved_handler(move |data| {
+        let (f, l) = (file!(), line!());
+        let conf = &config.lock().unwrap_log(f, l);
+        if conf.ephemeral_titles.is_empty() {
+            return;
+        }
+
+        if let (Ok(clients), Ok(active)) = (Clients::get(), Workspace::get_active()) {
+            clients
+                .iter()
+                .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
+                .filter(|cl| conf.ephemeral_titles.contains(&cl.initial_title))
+                .for_each(|cl| {
+                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&cl.title))
+                        .log_err(f, l);
+                });
+        }
+    });
 }
 
 fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
@@ -119,6 +145,7 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
         add_spotless(&mut ev, config.clone());
     }
 
+    add_eph(&mut ev, config.clone());
     add_pin(&mut ev, config.clone());
     ev.start_listener()
 }

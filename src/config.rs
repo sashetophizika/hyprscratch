@@ -15,6 +15,7 @@ use toml::{Table, Value};
 #[derive(Debug)]
 pub struct Config {
     pub scratchpads: Vec<Scratchpad>,
+    pub ephemeral_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
     pub pinned_titles: Vec<String>,
@@ -62,7 +63,7 @@ impl Config {
         for config in config_files {
             let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
             let mut config_str = String::new();
-            File::open(&config)?.read_to_string(&mut config_str)?;
+            File::open(config)?.read_to_string(&mut config_str)?;
 
             let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
                 parse_config(&config_str)?
@@ -99,6 +100,7 @@ impl Config {
         };
 
         Ok(Config {
+            ephemeral_titles: filter_titles(&|opts| opts.ephemeral),
             special_titles: filter_titles(&|opts| opts.special),
             normal_titles: filter_titles(&|opts| !opts.special),
             fickle_titles: filter_titles(&|opts| !opts.persist && !opts.special),
@@ -121,7 +123,7 @@ impl Config {
             }
         }
 
-        return "".into();
+        "".into()
     }
 
     pub fn get_daemon_options(config_path: Option<String>) -> Result<String> {
@@ -135,7 +137,7 @@ impl Config {
                 return Ok(Self::find_daemon_options(&config_str));
             };
         }
-        return Ok("".into());
+        Ok("".into())
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -292,7 +294,7 @@ fn warn_syntax_err(err: SyntaxErr) {
         MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
         UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
         GlobalInScope => "Global variable defined inside scratchpad",
-        NotInScope => "Not in scope",
+        NotInScope => "Field set outside of scratchpad",
         Unclosed => "Unclosed '{'",
         Unopened => "Unopened '}'",
         Nameless => "Scratchpad with no name",
@@ -453,7 +455,7 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     Ok(scratchpads)
 }
 
-fn parse_toml(config: &String) -> Result<Vec<Scratchpad>> {
+fn parse_toml(config: &str) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
         Warn,
@@ -597,6 +599,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
                 "cmat".to_string(),
             ],
             pinned_titles: vec![],
+            ephemeral_titles: vec![],
         };
 
         assert_eq!(config.scratchpads, expected_config.scratchpads);
@@ -642,6 +645,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 "cmat".to_string(),
             ],
             pinned_titles: vec![],
+            ephemeral_titles: vec![],
         };
 
         assert_eq!(config.scratchpads, expected_config.scratchpads);

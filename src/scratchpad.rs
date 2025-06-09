@@ -42,6 +42,7 @@ impl HyprlandState {
 pub struct ScratchpadOptions {
     options_string: String,
     pub monitor: Option<String>,
+    pub ephemeral: bool,
     pub persist: bool,
     pub special: bool,
     pub sticky: bool,
@@ -69,6 +70,7 @@ impl ScratchpadOptions {
 
         ScratchpadOptions {
             options_string: opts.to_string(),
+            ephemeral: opts.contains("ephemeral"),
             persist: opts.contains("persist"),
             special: opts.contains("special"),
             sticky: opts.contains("sticky"),
@@ -87,6 +89,7 @@ impl ScratchpadOptions {
     pub fn toggle(&mut self, opt: &str) {
         match opt {
             "persist" => self.persist ^= true,
+            "ephemeral" => self.ephemeral ^= true,
             "special" => self.special ^= true,
             "summon" => self.show ^= true,
             "sticky" => self.sticky ^= true,
@@ -103,7 +106,7 @@ impl ScratchpadOptions {
     }
 
     pub fn as_str(&self) -> &str {
-        &self.options_string.trim()
+        self.options_string.trim()
     }
 }
 
