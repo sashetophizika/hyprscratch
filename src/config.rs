@@ -61,12 +61,15 @@ impl Config {
         let mut scratchpads: Vec<Scratchpad> = vec![];
         for config in config_files {
             let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
+            let mut config_str = String::new();
+            File::open(&config)?.read_to_string(&mut config_str)?;
+
             let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
-                parse_config(config)?
+                parse_config(&config_str)?
             } else if ext == "toml" {
-                parse_toml(config)?
+                parse_toml(&config_str)?
             } else {
-                parse_hyprlang(config)?
+                parse_hyprlang(&config_str)?
             };
             scratchpads.append(&mut config_data);
         }
@@ -105,6 +108,34 @@ impl Config {
             config_file: config_files[0].clone(),
             scratchpads,
         })
+    }
+
+    fn find_daemon_options(config: &str) -> String {
+        for line in config.lines() {
+            if line.starts_with('#') {
+                continue;
+            } else if let Some((k, v)) = line.split_once('=') {
+                if k.trim() == "daemon_options" {
+                    return v.into();
+                }
+            }
+        }
+
+        return "".into();
+    }
+
+    pub fn get_daemon_options(config_path: Option<String>) -> Result<String> {
+        let config_files = Self::get_config_files(config_path)?;
+        for config in config_files {
+            let mut config_str = String::new();
+            File::open(&config)?.read_to_string(&mut config_str)?;
+
+            let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
+            if !config.contains("hyprland.conf") && ext == "conf" {
+                return Ok(Self::find_daemon_options(&config_str));
+            };
+        }
+        return Ok("".into());
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -166,9 +197,9 @@ fn split_args(line: String) -> Vec<String> {
     args
 }
 
-fn get_hyprscratch_lines(config_file: String) -> Vec<String> {
+fn get_hyprscratch_lines(config: &str) -> Vec<String> {
     let mut lines = vec![];
-    for line in config_file.lines() {
+    for line in config.lines() {
         if line.trim().starts_with("#") {
             continue;
         }
@@ -211,26 +242,28 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
     }
 
     match args.len() {
-        2 => Some([dequote(&args[1]), dequote(&args[2]), "".into()]),
-        3.. => {
+        4.. => {
             let opts = args[3..].join(" ");
             warn_unknown_options(&opts);
             Some([dequote(&args[1]), dequote(&args[2]), opts])
         }
-        _ => {
+        3 => Some([dequote(&args[1]), dequote(&args[2]), "".into()]),
+        2 => {
             let _ = log(
                 format!("Unknown command or no command after title: {}", args[1]),
                 Warn,
             );
             None
         }
+        _ => {
+            let _ = log("Use without arguments is not supported".into(), Warn);
+            None
+        }
     }
 }
 
-fn parse_config(config_file: &str) -> Result<Vec<Scratchpad>> {
-    let mut buf: String = String::new();
-    File::open(config_file)?.read_to_string(&mut buf)?;
-    let lines: Vec<String> = get_hyprscratch_lines(buf);
+fn parse_config(config: &str) -> Result<Vec<Scratchpad>> {
+    let lines: Vec<String> = get_hyprscratch_lines(config);
 
     let mut scratchpads: Vec<Scratchpad> = vec![];
     for line in lines {
@@ -247,6 +280,7 @@ use SyntaxErr::*;
 enum SyntaxErr<'a> {
     MissingField(&'a str, &'a str),
     UnknownField(&'a str),
+    GlobalInScope,
     NotInScope,
     Unopened,
     Unclosed,
@@ -257,6 +291,7 @@ fn warn_syntax_err(err: SyntaxErr) {
     let msg = match err {
         MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
         UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
+        GlobalInScope => "Global variable defined inside scratchpad",
         NotInScope => "Not in scope",
         Unclosed => "Unclosed '{'",
         Unopened => "Unopened '}'",
@@ -302,6 +337,7 @@ fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
     }
 
     warn_unknown_options(&scratchpad_data["options"]);
+    warn_unknown_options(&scratchpad_data["global_options"]);
     true
 }
 
@@ -339,61 +375,91 @@ fn close_scope(
     scratchpads.push(Scratchpad::new(name, title, command, options));
 }
 
+fn escape(s: &str) -> String {
+    dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
+}
+
+fn set_global<'a>(
+    scratchpad_data: &mut HashMap<&'a str, String>,
+    in_scope: bool,
+    (k, v): (&'a str, &'a str),
+) {
+    if in_scope {
+        warn_syntax_err(GlobalInScope);
+        return;
+    }
+
+    scratchpad_data.insert(k, escape(v));
+}
+
 fn set_field<'a>(
     scratchpad_data: &mut HashMap<&'a str, String>,
     in_scope: bool,
-    split: (&'a str, &'a str),
+    (k, v): (&'a str, &'a str),
 ) {
     if !in_scope {
         warn_syntax_err(NotInScope);
         return;
     }
 
-    let es = |s: &str| -> String {
-        dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
-    };
-
-    let k = split.0.trim();
     if scratchpad_data.contains_key(k) {
-        scratchpad_data.insert(k, es(split.1));
+        scratchpad_data.insert(k, escape(v));
     } else {
         warn_syntax_err(UnknownField(k));
     }
 }
 
-fn parse_hyprlang(config_file: &String) -> Result<Vec<Scratchpad>> {
-    let mut conf = String::new();
-    File::open(config_file)?.read_to_string(&mut conf)?;
+fn set_var<'a>(
+    scratchpad_data: &mut HashMap<&'a str, String>,
+    in_scope: bool,
+    split: (&'a str, &'a str),
+) {
+    let k = split.0.trim();
+    if k.contains("global") {
+        set_global(scratchpad_data, in_scope, (k, split.1));
+    } else {
+        set_field(scratchpad_data, in_scope, (k, split.1));
+    }
+}
 
+fn initialize_globals(scratchpad_data: &mut HashMap<&str, String>) {
+    scratchpad_data.insert("global_options", "".into());
+    scratchpad_data.insert("global_rules", "".into());
+}
+
+fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     let mut scratchpad_data: HashMap<&str, String> = HashMap::new();
+    initialize_globals(&mut scratchpad_data);
+
     let mut scratchpads = vec![];
     let mut in_scope = false;
 
-    for line in conf.lines() {
+    for line in config.lines() {
         if line.starts_with("#") {
             continue;
         } else if line.split_whitespace().any(|s| s == "{") {
             open_scope(&mut scratchpad_data, &mut in_scope, line)
         } else if let Some(split) = line.split_once("=") {
-            set_field(&mut scratchpad_data, in_scope, split);
+            set_var(&mut scratchpad_data, in_scope, split);
         } else if line.trim() == "}" {
             close_scope(&scratchpad_data, &mut in_scope, &mut scratchpads);
         }
     }
 
+    scratchpads.iter_mut().for_each(|sc| {
+        sc.append_opts(&scratchpad_data["global_options"]);
+        sc.append_rules(&scratchpad_data["global_rules"]);
+    });
     Ok(scratchpads)
 }
 
-fn parse_toml(config_file: &String) -> Result<Vec<Scratchpad>> {
+fn parse_toml(config: &String) -> Result<Vec<Scratchpad>> {
     log(
         "Toml configuration is deprecated. Convert to hyprlang.".into(),
         Warn,
     )?;
 
-    let mut buf = String::new();
-    File::open(config_file)?.read_to_string(&mut buf)?;
-    let toml = buf.parse::<Table>().unwrap();
-
+    let toml = config.parse::<Table>().unwrap();
     let get_field = |key| {
         toml.values()
             .map(|val| {
@@ -457,24 +523,33 @@ mod tests {
         ]
     }
 
+    fn open_conf(config_file: &str) -> String {
+        let mut conf = String::new();
+        File::open(config_file)
+            .unwrap()
+            .read_to_string(&mut conf)
+            .unwrap();
+        conf
+    }
     #[test]
     fn test_parse_hyprlang() {
-        let scratchpads = parse_hyprlang(&"./test_configs/test_hyprlang.conf".to_owned()).unwrap();
+        println!("{}", &open_conf("./test_configs/test_hyprlang.conf"));
+        let scratchpads = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
         assert_eq!(scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_toml() {
-        let scratchpads = parse_toml(&"./test_configs/test_toml.toml".to_owned()).unwrap();
+        let scratchpads = parse_toml(&open_conf("./test_configs/test_toml.toml")).unwrap();
         assert_eq!(scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_config() {
-        let scratchpads = parse_config(&"./test_configs/test_config1.txt".to_owned()).unwrap();
+        let scratchpads = parse_config(&open_conf("./test_configs/test_config1.txt")).unwrap();
         let mut expected_scratchpads = expected_scratchpads();
-        for i in 0..4 {
-            expected_scratchpads[i].name = expected_scratchpads[i].title.clone();
+        for sc in expected_scratchpads.iter_mut() {
+            sc.name = sc.title.clone();
         }
         assert_eq!(scratchpads, expected_scratchpads);
     }

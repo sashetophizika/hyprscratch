@@ -27,12 +27,16 @@ pub struct DaemonOptions {
 }
 
 impl DaemonOptions {
-    fn new(opts: &str) -> DaemonOptions {
+    pub fn new(opts: &str, config_path: Option<String>) -> DaemonOptions {
+        let options = format!(
+            "{opts} {}",
+            Config::get_daemon_options(config_path).unwrap_or("".into())
+        );
         DaemonOptions {
-            eager: opts.contains("eager"),
-            clean: opts.contains("clean"),
-            spotless: opts.contains("spotless"),
-            auto_reload: !opts.contains("no-auto-reload"),
+            eager: options.contains("eager"),
+            clean: options.contains("clean"),
+            spotless: options.contains("spotless"),
+            auto_reload: !options.contains("no-auto-reload"),
         }
     }
 }
@@ -44,11 +48,11 @@ pub struct DaemonState {
 }
 
 impl DaemonState {
-    fn new(args: &str) -> DaemonState {
+    pub fn new(args: &str, config_path: Option<String>) -> DaemonState {
         DaemonState {
             cycle_index: 0,
             prev_titles: [String::new(), String::new()],
-            options: Arc::new(DaemonOptions::new(args)),
+            options: Arc::new(DaemonOptions::new(args, config_path)),
         }
     }
 
@@ -315,7 +319,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
     let _ = send(socket_path, "kill", "");
 
     let (f, l) = (file!(), line!());
-    let mut state = DaemonState::new(&args);
+    let mut state = DaemonState::new(&args, config_path.clone());
     let config = Arc::new(Mutex::new(Config::new(config_path).unwrap_log(f, l)));
     start_event_listeners(&config, &mut state);
 
@@ -364,7 +368,7 @@ mod tests {
     #[test]
     fn test_state() {
         let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
-        let mut state = DaemonState::new("".into());
+        let mut state = DaemonState::new("".into(), None);
 
         assert_eq!(get_cycle_index("special", &config, &mut state), Some(2));
         assert_eq!(get_cycle_index("normal", &config, &mut state), Some(3));

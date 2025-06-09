@@ -103,7 +103,7 @@ impl ScratchpadOptions {
     }
 
     pub fn as_str(&self) -> &str {
-        &self.options_string
+        &self.options_string.trim()
     }
 }
 
@@ -134,6 +134,17 @@ impl Scratchpad {
         }
     }
 
+    pub fn append_rules(&mut self, rules: &str) {
+        self.command = prepend_rules(&self.command, rules);
+    }
+
+    pub fn append_opts(&mut self, options: &str) {
+        if options.is_empty() {
+            return;
+        }
+        self.options = ScratchpadOptions::new(&format!("{} {}", self.options.as_str(), options));
+    }
+
     fn capture_special(&self, state: &HyprlandState) -> Result<()> {
         let first_title = &state.clients_with_title[0];
         move_to_special(first_title);
@@ -160,7 +171,7 @@ impl Scratchpad {
 
     fn spawn_special(&self) -> Result<()> {
         let special_cmd =
-            prepend_rules(&self.command, Some(&self.name), false, !self.options.tiled);
+            prepare_command(&self.command, Some(&self.name), false, !self.options.tiled);
         hyprland::dispatch!(Exec, &special_cmd)
     }
 
@@ -198,7 +209,7 @@ impl Scratchpad {
         }
 
         self.command.split("?").for_each(|cmd| {
-            let cmd = prepend_rules(cmd, None, false, !self.options.tiled);
+            let cmd = prepare_command(cmd, None, false, !self.options.tiled);
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }

@@ -14,6 +14,29 @@ pub fn warn_deprecated(feature: &str) -> Result<()> {
     Ok(())
 }
 
+fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
+    let long = format!("--{flag}");
+    let is_short = |x: &str| {
+        x.len() > 1
+            && !x.contains('=')
+            && x.starts_with("-")
+            && !x[1..].starts_with("-")
+            && x.contains(flag.as_bytes()[0] as char)
+    };
+
+    let is_present = |x: &str| x == *flag || *x == long || is_short(x);
+    if is_present(arg) {
+        return Some(flag);
+    }
+
+    if let Some((key, _)) = arg.split_once('=') {
+        if is_present(key) {
+            return Some(flag);
+        }
+    }
+    None
+}
+
 pub fn flag_present<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
     if flags.is_empty() {
         return None;
@@ -24,24 +47,9 @@ pub fn flag_present<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
             continue;
         }
 
-        let long = format!("--{flag}");
-        let is_short = |x: &str| {
-            x.len() > 1
-                && !x.contains('=')
-                && x.starts_with("-")
-                && !x[1..].starts_with("-")
-                && x.contains(flag.as_bytes()[0] as char)
-        };
-
-        let is_present = |x: &str| x == *flag || *x == long || is_short(x);
-        if is_present(arg) {
-            return Some(flag);
-        }
-
-        if let Some((key, _)) = arg.split_once('=') {
-            if is_present(key) {
-                return Some(flag);
-            }
+        let f = is_flag(arg, flag);
+        if f.is_some() {
+            return f;
         }
     }
     None
@@ -123,7 +131,32 @@ pub fn move_floating(titles: &[String]) -> Result<()> {
     Ok(())
 }
 
-pub fn prepend_rules(command: &str, workspace: Option<&str>, silent: bool, float: bool) -> String {
+pub fn prepend_rules(command: &str, rules: &str) -> String {
+    if rules.is_empty() {
+        return command.into();
+    }
+
+    let mut rules = rules.to_owned();
+    if !rules.starts_with('[') {
+        rules.insert(0, '[');
+    }
+
+    if command.starts_with('[') {
+        if !rules.ends_with(';') {
+            rules.push(';');
+        }
+        command.replacen('[', &(rules + " "), 1)
+    } else {
+        format!("{rules}] {command}")
+    }
+}
+
+pub fn prepare_command(
+    command: &str,
+    workspace: Option<&str>,
+    silent: bool,
+    float: bool,
+) -> String {
     let mut rules = String::from("[");
     if let Some(workspace) = workspace {
         let silent = if silent { "silent" } else { "" };
@@ -134,11 +167,7 @@ pub fn prepend_rules(command: &str, workspace: Option<&str>, silent: bool, float
         rules += "float;";
     }
 
-    if command.find('[').is_none() {
-        format!("{rules}] {command}")
-    } else {
-        command.replacen('[', &rules, 1)
-    }
+    prepend_rules(command, &rules)
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
@@ -152,7 +181,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .iter()
         .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
         .for_each(|sc| {
-            let cmd = prepend_rules(&sc.command, Some(&sc.name), true, !sc.options.tiled);
+            let cmd = prepare_command(&sc.command, Some(&sc.name), true, !sc.options.tiled);
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
         });
 
