@@ -43,6 +43,11 @@ bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title bto
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
 ```python
+# Optional globals that apply to all scratchapds
+daemon_options = clean
+global_options = special
+global_rules = size 90% 90%
+
 name {
     # Mandatory fields
     title = title                        
@@ -81,6 +86,8 @@ Using a configuration file can be combined with normally configured scratchpads.
 * `config </path/to/config>`: specify a path to the configuration file.
 
 ### Scratchpad options:
+
+* `ephemeral`: closes the scratchpad when it is hidden
 
 * `persist`: prevents the scratchpad from getting replaced when a new one is summoned.
 

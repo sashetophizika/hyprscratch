@@ -150,6 +150,7 @@ DAEMON OPTIONS
   config </path/to/config>    Specify a path to the configuration file             
 
 SCRATCHPAD OPTIONS
+  ephemeral                   Close the scratchpad when it is hidden
   persist                     Prevent the scratchpad from being replaced when a new one is summoned
   cover                       Prevent the scratchpad from replacing another one if one is already present
   sticky                      Prevent the scratchpad from being hidden by 'clean'
