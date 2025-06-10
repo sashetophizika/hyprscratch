@@ -185,33 +185,30 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
-fn split_scratchpads(scratchpads: &mut Vec<Scratchpad>, config: &mut Config) {
-    config.scratchpads.iter().for_each(|sc| {
-        sc.command.split("?").for_each(|cmd| {
-            scratchpads.push(Scratchpad::new(
-                &sc.name,
-                &sc.title,
-                cmd,
-                &sc.options.as_str(),
-            ))
-        })
-    });
+fn split_commands(config: &mut Config) -> Vec<[String; 3]> {
+    let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
+        sc.command
+            .split("?")
+            .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.to_string()])
+            .collect()
+    };
+
+    config.scratchpads.iter().map(split).flatten().collect()
 }
 
 fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    let mut scratchpads = vec![];
-    split_scratchpads(&mut scratchpads, config);
+    let scratchpads = split_commands(config);
 
-    let format_field = |field: &dyn Fn(&Scratchpad) -> &str| {
+    let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
         scratchpads.iter().map(field).collect::<Vec<_>>().join("^")
     };
 
     let config = format!(
         "{}#{}|{}|{}",
         config.config_file,
-        format_field(&|x| &x.title),
-        format_field(&|x| &x.command),
-        format_field(&|x| x.options.as_str()),
+        format_field(&|x| &x[0]),
+        format_field(&|x| &x[1]),
+        format_field(&|x| &x[2]),
     );
 
     stream.write_all(config.as_bytes())?;

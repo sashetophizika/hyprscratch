@@ -401,13 +401,19 @@ fn set_global<'a>(
 }
 
 fn append_to_field(field: &mut String, k: &str, v: &str) {
-    let add_sep = |s, v| format!("{s} {v}");
-    match k {
-        "command" => field.push_str(&add_sep("?", v)),
-        "rules" => field.push_str(&add_sep(";", v)),
-        "options" => field.push_str(&add_sep("", v)),
-        _ => (),
+    if field.is_empty() {
+        field.push_str(v);
+        return;
+    }
+
+    let sep = match k {
+        "command" => "?",
+        "rules" => ";",
+        "options" => "",
+        _ => return,
     };
+
+    field.push_str(&format!("{sep} {v}"));
 }
 
 fn set_field<'a>(
@@ -421,11 +427,7 @@ fn set_field<'a>(
     }
 
     if scratchpad_data.contains_key(k) {
-        if scratchpad_data[k].is_empty() {
-            scratchpad_data.insert(k, escape(v));
-        } else {
-            append_to_field(scratchpad_data.get_mut(k).unwrap(), k, &escape(v));
-        }
+        append_to_field(scratchpad_data.get_mut(k).unwrap(), k, &escape(v));
     } else {
         warn_syntax_err(UnknownField(k));
     }

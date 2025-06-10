@@ -75,7 +75,7 @@ fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_active_monitor_changed_handler(move |_| follow());
 }
 
-fn add_eph(ev: &mut EventListener, config: ConfigMutex) {
+fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_window_moved_handler(move |data| {
         let (f, l) = (file!(), line!());
         let conf = &config.lock().unwrap_log(f, l);
@@ -145,7 +145,7 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
         add_spotless(&mut ev, config.clone());
     }
 
-    add_eph(&mut ev, config.clone());
+    add_vanish(&mut ev, config.clone());
     add_pin(&mut ev, config.clone());
     ev.start_listener()
 }

@@ -108,6 +108,9 @@ impl ScratchpadOptions {
     pub fn as_str(&self) -> &str {
         self.options_string.trim()
     }
+    pub fn to_string(&self) -> String {
+        self.options_string.trim().into()
+    }
 }
 
 use TriggerMode::*;
