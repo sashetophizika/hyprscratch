@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::scratchpad::Scratchpad;
 use crate::{logs::*, DEFAULT_SOCKET};
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
@@ -131,17 +132,17 @@ pub fn move_floating(titles: &[String]) -> Result<()> {
     Ok(())
 }
 
-pub fn prepend_rules(command: &str, rules: &str) -> String {
+fn prepend(command: &str, rules: &str) -> String {
     if rules.is_empty() {
         return command.into();
     }
 
     let mut rules = rules.to_owned();
-    if !rules.starts_with('[') {
+    if !rules.trim().starts_with('[') {
         rules.insert(0, '[');
     }
 
-    if command.starts_with('[') {
+    if command.trim().starts_with('[') {
         if !rules.ends_with(';') {
             rules.push(';');
         }
@@ -151,12 +152,16 @@ pub fn prepend_rules(command: &str, rules: &str) -> String {
     }
 }
 
-pub fn prepare_command(
+pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
+    command.split("?").map(|c| prepend(c, rules)).collect()
+}
+
+pub fn prepare_commands(
     command: &str,
     workspace: Option<&str>,
     silent: bool,
     float: bool,
-) -> String {
+) -> Vec<String> {
     let mut rules = String::from("[");
     if let Some(workspace) = workspace {
         let silent = if silent { "silent" } else { "" };
@@ -176,14 +181,17 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .map(|x| x.initial_title)
         .collect();
 
+    let spawn = |sc: &Scratchpad| {
+        prepare_commands(&sc.command, Some(&sc.name), true, !sc.options.tiled)
+            .iter()
+            .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
+    };
+
     config
         .scratchpads
         .iter()
         .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
-        .for_each(|sc| {
-            let cmd = prepare_command(&sc.command, Some(&sc.name), true, !sc.options.tiled);
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!())
-        });
+        .for_each(spawn);
 
     Ok(())
 }

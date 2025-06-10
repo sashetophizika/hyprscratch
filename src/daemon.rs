@@ -185,22 +185,33 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
+fn split_scratchpads(scratchpads: &mut Vec<Scratchpad>, config: &mut Config) {
+    config.scratchpads.iter().for_each(|sc| {
+        sc.command.split("?").for_each(|cmd| {
+            scratchpads.push(Scratchpad::new(
+                &sc.name,
+                &sc.title,
+                cmd,
+                &sc.options.as_str(),
+            ))
+        })
+    });
+}
+
 fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    let map_format = |field: &dyn Fn(&Scratchpad) -> &str| {
-        config
-            .scratchpads
-            .iter()
-            .map(field)
-            .collect::<Vec<_>>()
-            .join("^")
+    let mut scratchpads = vec![];
+    split_scratchpads(&mut scratchpads, config);
+
+    let format_field = |field: &dyn Fn(&Scratchpad) -> &str| {
+        scratchpads.iter().map(field).collect::<Vec<_>>().join("^")
     };
 
     let config = format!(
-        "{}#{}?{}?{}",
+        "{}#{}|{}|{}",
         config.config_file,
-        map_format(&|x| &x.title),
-        map_format(&|x| &x.command),
-        map_format(&|x| x.options.as_str()),
+        format_field(&|x| &x.title),
+        format_field(&|x| &x.command),
+        format_field(&|x| x.options.as_str()),
     );
 
     stream.write_all(config.as_bytes())?;
@@ -370,10 +381,10 @@ mod tests {
         let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
         let mut state = DaemonState::new("".into(), None);
 
-        assert_eq!(get_cycle_index("special", &config, &mut state), Some(2));
-        assert_eq!(get_cycle_index("normal", &config, &mut state), Some(3));
-        assert_eq!(get_cycle_index("", &config, &mut state), Some(4));
+        assert_eq!(get_cycle_index("special", &config, &mut state), Some(3));
+        assert_eq!(get_cycle_index("normal", &config, &mut state), Some(4));
         assert_eq!(get_cycle_index("", &config, &mut state), Some(5));
+        assert_eq!(get_cycle_index("", &config, &mut state), Some(6));
         assert_eq!(get_cycle_index("", &config, &mut state), Some(0));
         assert_eq!(get_cycle_index("unknown", &config, &mut state), Some(1));
 

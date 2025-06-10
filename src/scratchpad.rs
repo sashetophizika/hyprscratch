@@ -137,11 +137,11 @@ impl Scratchpad {
         }
     }
 
-    pub fn append_rules(&mut self, rules: &str) {
-        self.command = prepend_rules(&self.command, rules);
+    pub fn add_rules(&mut self, rules: &str) {
+        self.command = prepend_rules(&self.command, rules).join("?");
     }
 
-    pub fn append_opts(&mut self, options: &str) {
+    pub fn add_opts(&mut self, options: &str) {
         if options.is_empty() {
             return;
         }
@@ -172,10 +172,12 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn spawn_special(&self) -> Result<()> {
-        let special_cmd =
-            prepare_command(&self.command, Some(&self.name), false, !self.options.tiled);
-        hyprland::dispatch!(Exec, &special_cmd)
+    fn spawn_special(&self) {
+        prepare_commands(&self.command, Some(&self.name), false, !self.options.tiled)
+            .iter()
+            .for_each(|cmd| {
+                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            });
     }
 
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
@@ -190,7 +192,7 @@ impl Scratchpad {
         } else if !state.clients_with_title.is_empty() {
             self.toggle_special(state)?;
         } else {
-            self.spawn_special()?;
+            self.spawn_special();
         }
         Ok(())
     }
@@ -211,10 +213,11 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        self.command.split("?").for_each(|cmd| {
-            let cmd = prepare_command(cmd, None, false, !self.options.tiled);
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-        });
+        prepare_commands(&self.command, None, false, !self.options.tiled)
+            .iter()
+            .for_each(|cmd| {
+                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            });
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {

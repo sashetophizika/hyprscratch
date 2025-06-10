@@ -1,6 +1,6 @@
 use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
-use crate::utils::dequote;
+use crate::utils::{dequote, prepend_rules};
 use crate::DEFAULT_CONFIG_FILES;
 use crate::KNOWN_COMMANDS;
 use hyprland::Result;
@@ -26,61 +26,9 @@ pub struct Config {
 }
 
 impl Config {
-    fn find_config_files() -> Vec<String> {
-        let home = var("HOME").unwrap_log(file!(), line!());
-        let prepend_home = |str| format!("{home}/.config/{str}");
-
-        DEFAULT_CONFIG_FILES
-            .iter()
-            .map(prepend_home)
-            .filter(|x| Path::new(&x).exists())
-            .collect()
-    }
-
-    fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
-        let default_configs = Self::find_config_files();
-        if default_configs.is_empty() {
-            log("No configuration files found".into(), Error)?;
-        }
-
-        let config_files = if let Some(conf) = config_path {
-            if !default_configs.contains(&conf) {
-                if !Path::new(&conf).exists() {
-                    log(format!("Config file not found: {conf}"), Error)?;
-                }
-                vec![conf]
-            } else {
-                default_configs
-            }
-        } else {
-            default_configs
-        };
-        Ok(config_files)
-    }
-
-    fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
-        let mut scratchpads: Vec<Scratchpad> = vec![];
-        for config in config_files {
-            let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
-            let mut config_str = String::new();
-            File::open(config)?.read_to_string(&mut config_str)?;
-
-            let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
-                parse_config(&config_str)?
-            } else if ext == "toml" {
-                parse_toml(&config_str)?
-            } else {
-                parse_hyprlang(&config_str)?
-            };
-            scratchpads.append(&mut config_data);
-        }
-
-        Ok(scratchpads)
-    }
-
     pub fn new(config_path: Option<String>) -> Result<Config> {
-        let config_files = Self::get_config_files(config_path)?;
-        let scratchpads = Self::get_scratchpads(&config_files)?;
+        let config_files = get_config_files(config_path)?;
+        let scratchpads = get_scratchpads(&config_files)?;
 
         log(
             format!(
@@ -111,30 +59,15 @@ impl Config {
             scratchpads,
         })
     }
-
-    fn find_daemon_options(config: &str) -> String {
-        for line in config.lines() {
-            if line.starts_with('#') {
-                continue;
-            } else if let Some((k, v)) = line.split_once('=') {
-                if k.trim() == "daemon_options" {
-                    return v.into();
-                }
-            }
-        }
-
-        "".into()
-    }
-
     pub fn get_daemon_options(config_path: Option<String>) -> Result<String> {
-        let config_files = Self::get_config_files(config_path)?;
+        let config_files = get_config_files(config_path)?;
         for config in config_files {
             let mut config_str = String::new();
             File::open(&config)?.read_to_string(&mut config_str)?;
 
             let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
             if !config.contains("hyprland.conf") && ext == "conf" {
-                return Ok(Self::find_daemon_options(&config_str));
+                return Ok(find_daemon_options(&config_str));
             };
         }
         Ok("".into())
@@ -147,6 +80,72 @@ impl Config {
         };
         Ok(())
     }
+}
+
+fn find_daemon_options(config: &str) -> String {
+    for line in config.lines() {
+        if line.starts_with('#') {
+            continue;
+        } else if let Some((k, v)) = line.split_once('=') {
+            if k.trim() == "daemon_options" {
+                return v.into();
+            }
+        }
+    }
+
+    "".into()
+}
+
+fn find_config_files() -> Vec<String> {
+    let home = var("HOME").unwrap_log(file!(), line!());
+    let prepend_home = |str| format!("{home}/.config/{str}");
+
+    DEFAULT_CONFIG_FILES
+        .iter()
+        .map(prepend_home)
+        .filter(|x| Path::new(&x).exists())
+        .collect()
+}
+
+fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
+    let default_configs = find_config_files();
+    if default_configs.is_empty() {
+        log("No configuration files found".into(), Error)?;
+    }
+
+    let config_files = if let Some(conf) = config_path {
+        if !default_configs.contains(&conf) {
+            if !Path::new(&conf).exists() {
+                log(format!("Config file not found: {conf}"), Error)?;
+            }
+            vec![conf]
+        } else {
+            default_configs
+        }
+    } else {
+        default_configs
+    };
+    Ok(config_files)
+}
+
+fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
+    let mut scratchpads: Vec<Scratchpad> = vec![];
+    for config in config_files {
+        let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
+        let mut config_str = String::new();
+        File::open(config)?.read_to_string(&mut config_str)?;
+
+        let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
+            parse_config(&config_str)?
+        } else if ext == "toml" {
+            parse_toml(&config_str)?
+        } else {
+            parse_hyprlang(&config_str)?
+        };
+        scratchpads.append(&mut config_data);
+    }
+
+    Ok(scratchpads)
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -216,8 +215,19 @@ fn get_hyprscratch_lines(config: &str) -> Vec<String> {
 fn warn_unknown_options(opts: &str) {
     let known_arg_options = ["monitor"];
     let known_options = [
-        "", "pin", "cover", "persist", "sticky", "shiny", "lazy", "show", "hide", "poly", "tiled",
+        "",
+        "pin",
+        "cover",
+        "persist",
+        "sticky",
+        "shiny",
+        "lazy",
+        "show",
+        "hide",
+        "poly",
+        "tiled",
         "special",
+        "ephemeral",
     ];
 
     let warn_unknown = |opt: &str, is_arg: bool| -> bool {
@@ -358,15 +368,11 @@ fn close_scope(
         return;
     }
 
-    let command = &if scratchpad_data["rules"].is_empty() {
-        scratchpad_data["command"].clone()
-    } else {
-        format!(
-            "[{}] {}",
-            scratchpad_data["rules"].replace(",", ";"),
-            scratchpad_data["command"]
-        )
-    };
+    let command = &prepend_rules(
+        &scratchpad_data["command"],
+        &scratchpad_data["rules"].replace(",", ";"),
+    )
+    .join("?");
 
     let [name, title, options] = [
         &scratchpad_data["name"],
@@ -394,6 +400,16 @@ fn set_global<'a>(
     scratchpad_data.insert(k, escape(v));
 }
 
+fn append_to_field(field: &mut String, k: &str, v: &str) {
+    let add_sep = |s, v| format!("{s} {v}");
+    match k {
+        "command" => field.push_str(&add_sep("?", v)),
+        "rules" => field.push_str(&add_sep(";", v)),
+        "options" => field.push_str(&add_sep("", v)),
+        _ => (),
+    };
+}
+
 fn set_field<'a>(
     scratchpad_data: &mut HashMap<&'a str, String>,
     in_scope: bool,
@@ -405,7 +421,11 @@ fn set_field<'a>(
     }
 
     if scratchpad_data.contains_key(k) {
-        scratchpad_data.insert(k, escape(v));
+        if scratchpad_data[k].is_empty() {
+            scratchpad_data.insert(k, escape(v));
+        } else {
+            append_to_field(scratchpad_data.get_mut(k).unwrap(), k, &escape(v));
+        }
     } else {
         warn_syntax_err(UnknownField(k));
     }
@@ -417,7 +437,7 @@ fn set_var<'a>(
     split: (&'a str, &'a str),
 ) {
     let k = split.0.trim();
-    if k.contains("global") {
+    if k.contains("global") || k.contains("daemon") {
         set_global(scratchpad_data, in_scope, (k, split.1));
     } else {
         set_field(scratchpad_data, in_scope, (k, split.1));
@@ -449,8 +469,8 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     }
 
     scratchpads.iter_mut().for_each(|sc| {
-        sc.append_opts(&scratchpad_data["global_options"]);
-        sc.append_rules(&scratchpad_data["global_rules"]);
+        sc.add_opts(&scratchpad_data["global_options"]);
+        sc.add_rules(&scratchpad_data["global_rules"]);
     });
     Ok(scratchpads)
 }

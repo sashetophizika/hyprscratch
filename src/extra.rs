@@ -44,7 +44,7 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     };
 
     let [titles, commands, options] = &data
-        .splitn(3, '?')
+        .splitn(3, '|')
         .map(|x| x.split('^').collect::<Vec<_>>())
         .collect::<Vec<_>>()[0..3]
     else {
