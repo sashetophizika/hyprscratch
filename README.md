@@ -33,17 +33,20 @@ exec-once = hyprscratch init [DAEMON_OPTIONS]
 bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
 ```
 
-Example scratchpad:
+Example scratchpad configuration:
 
 ```bash
-bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" lazy
+exec-once = hyprscratch init clean eager
+
+bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" persist pin
+bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 1
 ```
 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
 ```python
-# Optional globals that apply to all scratchapds
+# Optional globals that apply to all scratchpads
 daemon_options = clean
 global_options = special
 global_rules = size 90% 90%
@@ -59,7 +62,7 @@ name {
 }
 ```
 
-And in `hyprland.conf`:
+And in `hyprland.conf`, using the given name:
 
 ```bash
 exec-once = hyprscratch init 
