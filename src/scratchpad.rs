@@ -340,6 +340,9 @@ impl Scratchpad {
             }
         }
 
+        if active.floating {
+            Dispatch::call(DispatchType::BringActiveToTop).log_err(file!(), line!());
+        }
         Ok(())
     }
 
