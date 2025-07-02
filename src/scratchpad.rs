@@ -224,34 +224,22 @@ impl Scratchpad {
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
-        let show = |client: &Client| -> Result<()> {
-            let active_is_special = if let Some(ac) = &state.active_client {
-                ac.workspace.id < 0
-            } else {
-                false
-            };
-
-            if active_is_special {
-                hyprland::dispatch!(
-                    MoveToWorkspace,
-                    WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
-                    Some(WindowIdentifier::Address(client.address.clone()))
-                )
-            } else {
-                hyprland::dispatch!(
-                    MoveToWorkspaceSilent,
-                    WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
-                    Some(WindowIdentifier::Address(client.address.clone()))
-                )
-            }
-        };
-
         for client in state
             .clients_with_title
             .iter()
             .filter(|x| !self.is_on_workspace(x, state))
         {
-            show(client)?;
+            hyprland::dispatch!(
+                MoveToWorkspaceSilent,
+                WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
+                Some(WindowIdentifier::Address(client.address.clone()))
+            )?;
+
+            hyprland::dispatch!(
+                FocusWindow,
+                WindowIdentifier::Address(client.address.clone())
+            )?;
+
             if !self.options.poly {
                 break;
             }
@@ -312,7 +300,7 @@ impl Scratchpad {
         let mut clients_on_active = state
             .clients_with_title
             .iter()
-            .filter(|cl| self.is_on_workspace(cl, state))
+            .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating))
             .peekable();
 
         let client_peek = clients_on_active.peek();
@@ -352,7 +340,6 @@ impl Scratchpad {
             }
         }
 
-        Dispatch::call(DispatchType::BringActiveToTop)?;
         Ok(())
     }
 
@@ -363,7 +350,6 @@ impl Scratchpad {
         } else {
             self.summon(&state)?;
         }
-
         Ok(())
     }
 }

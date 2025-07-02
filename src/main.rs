@@ -28,12 +28,13 @@ const DEFAULT_CONFIG_FILES: [&str; 7] = [
     "hypr/hyprland.conf",
 ];
 
-const KNOWN_FLAGS: [&str; 8] = [
+const KNOWN_FLAGS: [&str; 9] = [
     "get-config",
     "version",
     "reload",
     "config",
     "socket",
+    "full",
     "help",
     "logs",
     "kill",
@@ -63,10 +64,11 @@ const KNOWN_COMMANDS: [&str; 18] = [
 fn exec_command(command: &str, socket: Option<&str>, config: &Option<String>) -> bool {
     match command {
         "config" | "socket" => return false,
-        "get-config" => get_config(socket).log_err(file!(), line!()),
+        "get-config" => get_config(socket, false).log_err(file!(), line!()),
         "kill" => send(socket, "kill", "").log_err(file!(), line!()),
+        "full" => print_full_raw(socket),
         "help" => print_help(),
-        "logs" => print_logs().log_err(file!(), line!()),
+        "logs" => print_logs(false).log_err(file!(), line!()),
         "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
         "reload" => {
             send(socket, "reload", &config.clone().unwrap_or("".into())).log_err(file!(), line!())

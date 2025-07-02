@@ -36,7 +36,7 @@ fn get_config_data(socket: Option<&str>) -> Result<String> {
     Ok(buf)
 }
 
-pub fn get_config(socket: Option<&str>) -> Result<()> {
+pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
     let data = get_config_data(socket)?;
     let Some((conf, data)) = data.split_once('#') else {
         log("Could not get configuration data".into(), Error)?;
@@ -58,6 +58,10 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
     let max_options = max_len(options, 7, max_chars);
 
     let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
+        if raw {
+            return;
+        }
+
         println!(
             "{}{}{}{}",
             sep_l,
@@ -75,39 +79,52 @@ pub fn get_config(socket: Option<&str>) -> Result<()> {
         }
     };
 
-    let table_width = max_titles + max_commands + max_options + 6;
-    let center_fix = if table_width % 2 == 0 {
-        conf.len() + conf.len() % 2
-    } else {
-        conf.len() - 1
+    let get_centered_conf = || {
+        let table_width = max_titles + max_commands + max_options + 6;
+        let center_fix = if table_width % 2 == 0 {
+            conf.len() + conf.len() % 2
+        } else {
+            conf.len() - 1
+        };
+
+        format!(
+            "{}\x1b[0;35m{}\x1b[0;0m{}",
+            " ".repeat(table_width / 2 - conf.len() / 2),
+            conf,
+            " ".repeat((table_width - center_fix) / 2)
+        )
     };
 
-    let center_conf = format!(
-        "{}\x1b[0;35m{}\x1b[0;0m{}",
-        " ".repeat(table_width / 2 - conf.len() / 2),
-        conf,
-        " ".repeat((table_width - center_fix) / 2)
-    );
+    let config_str = if raw {
+        conf.to_string()
+    } else {
+        get_centered_conf()
+    };
 
+    let sep = if raw { "" } else { "│" };
     print_border("┌", "─", "┐");
-    println!("│ {} │", center_conf);
+    println!("{sep} {} {sep}", config_str);
 
     print_border("├", "┬", "┤");
-    println!(
-        "│ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │ \x1b[0;33m{}\x1b[0;0m │",
+    if !raw {
+        println!(
+        "{sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep}",
         pad(max_titles, "Titles"),
         pad(max_commands, "Commands"),
         pad(max_options, "Options")
-    );
+        );
+    }
 
     print_border("├", "┼", "┤");
     for ((title, command), option) in titles.iter().zip(commands).zip(options) {
-        println!(
-            "│ {} │ {} │ {} │",
+        let [t, c, o] = [
             pad(max_titles, &truncate(title)),
-            color(pad(max_commands, &(truncate(command)))),
-            pad(max_options, &truncate(option))
-        )
+            pad(max_commands, &(truncate(command))),
+            pad(max_options, &truncate(option)),
+        ];
+
+        let c = if raw { c } else { color(c) };
+        println!("{sep} {} {sep} {} {sep} {} {sep}", t, c, o);
     }
 
     print_border("└", "┴", "┘");
@@ -120,8 +137,13 @@ fn get_log_data() -> Result<String> {
     file.read_to_string(&mut buf)?;
     Ok(buf)
 }
-pub fn print_logs() -> Result<()> {
+pub fn print_logs(raw: bool) -> Result<()> {
     if let Ok(data) = get_log_data() {
+        if raw {
+            println!("{}", data.trim());
+            return Ok(());
+        }
+
         let log_str = data
             .replace("ERROR", "\x1b[0;31mERROR\x1b[0;0m")
             .replace("DEBUG", "\x1b[0;32mDEBUG\x1b[0;0m")
@@ -132,6 +154,12 @@ pub fn print_logs() -> Result<()> {
         println!("Logs are empty");
     }
     Ok(())
+}
+
+pub fn print_full_raw(socket: Option<&str>) {
+    print_logs(true).log_err(file!(), line!());
+    println!("\n\n");
+    get_config(socket, true).log_err(file!(), line!());
 }
 
 pub fn print_help() {
