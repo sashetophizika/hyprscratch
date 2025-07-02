@@ -193,7 +193,7 @@ fn split_commands(config: &mut Config) -> Vec<[String; 3]> {
             .collect()
     };
 
-    config.scratchpads.iter().map(split).flatten().collect()
+    config.scratchpads.iter().flat_map(split).collect()
 }
 
 fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
