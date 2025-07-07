@@ -38,7 +38,7 @@ fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
     None
 }
 
-pub fn flag_present<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
+pub fn get_flag_name<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
     if flags.is_empty() {
         return None;
     }
@@ -91,7 +91,7 @@ pub fn dequote(s: &str) -> String {
     }
 }
 
-pub fn send(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
+pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all(format!("{request}?{message}").as_bytes())?;
     stream.shutdown(Shutdown::Write)?;

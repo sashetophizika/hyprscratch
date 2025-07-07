@@ -28,12 +28,10 @@ const DEFAULT_CONFIG_FILES: [&str; 7] = [
     "hypr/hyprland.conf",
 ];
 
-const KNOWN_FLAGS: [&str; 9] = [
+const KNOWN_COMMAND_FLAGS: [&str; 7] = [
     "get-config",
     "version",
     "reload",
-    "config",
-    "socket",
     "full",
     "help",
     "logs",
@@ -61,34 +59,29 @@ const KNOWN_COMMANDS: [&str; 18] = [
     "help",
 ];
 
-fn exec_command(command: &str, socket: Option<&str>, config: &Option<String>) -> bool {
+fn exec_cli_command(command: &str, socket: Option<&str>, config: &Option<String>) {
     match command {
-        "config" | "socket" => return false,
         "get-config" => get_config(socket, false).log_err(file!(), line!()),
-        "kill" => send(socket, "kill", "").log_err(file!(), line!()),
+        "kill" => send_request(socket, "kill", "").log_err(file!(), line!()),
         "full" => print_full_raw(socket),
         "help" => print_help(),
         "logs" => print_logs(false).log_err(file!(), line!()),
         "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
-        "reload" => {
-            send(socket, "reload", &config.clone().unwrap_or("".into())).log_err(file!(), line!())
-        }
+        "reload" => send_request(socket, "reload", &config.clone().unwrap_or("".into()))
+            .log_err(file!(), line!()),
         _ => (),
     }
-    true
 }
 
-fn cli_commands(args: &[String], config: &Option<String>, socket: Option<&str>) -> bool {
+fn get_cli_command<'a>(args: &'a [String]) -> Option<&'a str> {
     for arg in args {
-        if let Some(flag) = flag_present(arg, &KNOWN_FLAGS) {
-            if exec_command(flag, socket, config) {
-                return true;
-            }
+        if let Some(flag) = get_flag_name(arg, &KNOWN_COMMAND_FLAGS) {
+            return Some(flag);
         } else if arg.starts_with("-") {
             let _ = log(format!("Unknown flag: {arg}"), Warn);
         }
     }
-    false
+    None
 }
 
 fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
@@ -100,15 +93,15 @@ fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
         log(msg, Warn)?;
         return Ok(());
     }
-    send(socket, "manual", &args[1..].join("^"))
+    send_request(socket, "manual", &args[1..].join("^"))
 }
 
-fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
+fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
     let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
         "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
-            send(socket, req, msg)?
+            send_request(socket, req, msg)?
         }
         "init" => initialize_daemon(args.join(" "), config, socket),
         "" => print_help(),
@@ -118,14 +111,16 @@ fn main_commands(args: &[String], config: Option<String>, socket: Option<&str>) 
 }
 
 fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
-    if cli_commands(args, &config, socket) {
+    if let Some(cmd) = get_cli_command(args) {
+        exec_cli_command(cmd, socket, &config);
         return Ok(());
     }
-    main_commands(args, config, socket)
+    exec_main_command(args, config, socket)
 }
 
 fn hyprscratch(args: &[String]) -> Result<()> {
-    for feature in ["summon"] {
+    let depracated_features = ["summon"];
+    for feature in depracated_features {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }

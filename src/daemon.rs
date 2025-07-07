@@ -324,7 +324,7 @@ fn start_unix_listener(
 }
 
 pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path: Option<&str>) {
-    let _ = send(socket_path, "kill", "");
+    let _ = send_request(socket_path, "kill", "");
 
     let (f, l) = (file!(), line!());
     let mut state = DaemonState::new(&args, config_path.clone());

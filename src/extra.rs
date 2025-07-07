@@ -137,6 +137,7 @@ fn get_log_data() -> Result<String> {
     file.read_to_string(&mut buf)?;
     Ok(buf)
 }
+
 pub fn print_logs(raw: bool) -> Result<()> {
     if let Ok(data) = get_log_data() {
         if raw {
