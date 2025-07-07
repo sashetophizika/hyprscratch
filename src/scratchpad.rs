@@ -108,7 +108,7 @@ impl ScratchpadOptions {
     pub fn as_str(&self) -> &str {
         self.options_string.trim()
     }
-    pub fn to_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         self.options_string.trim().into()
     }
 }
@@ -118,7 +118,6 @@ use TriggerMode::*;
 enum TriggerMode<T> {
     Hide(Vec<T>),
     Refocus(T),
-    Focus(T),
     Summon,
 }
 
@@ -303,21 +302,19 @@ impl Scratchpad {
             .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating))
             .peekable();
 
-        let client_peek = clients_on_active.peek();
-        if client_peek.is_some()
-            && !self.options.special
-            && !self.options.show
-            && !self.options.hide
-            && active.floating
-            && active.initial_title != self.title
-        {
-            Refocus(client_peek.unwrap())
-        } else if self.options.special || self.options.show || client_peek.is_none() {
-            Summon
-        } else if self.options.hide || !active.floating || active.initial_title == self.title {
-            Hide(clients_on_active.collect())
-        } else {
-            Focus(client_peek.unwrap())
+        if self.options.special || self.options.show {
+            return Summon;
+        }
+
+        match clients_on_active.peek() {
+            Some(client) => {
+                if !self.options.hide && active.floating && active.initial_title != self.title {
+                    Refocus(client)
+                } else {
+                    Hide(clients_on_active.collect())
+                }
+            }
+            None => Summon,
         }
     }
 
@@ -328,12 +325,11 @@ impl Scratchpad {
         };
 
         match self.get_mode(state, active) {
+            Hide(clients) => clients.into_iter().for_each(move_to_special),
             Refocus(client) => {
                 self.hide_active(titles, state)?;
                 focus(&client.address);
             }
-            Hide(clients) => clients.into_iter().for_each(move_to_special),
-            Focus(client) => focus(&client.address),
             Summon => {
                 self.summon(state)?;
                 self.hide_active(titles, state)?;

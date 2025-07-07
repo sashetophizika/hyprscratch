@@ -189,7 +189,7 @@ fn split_commands(config: &mut Config) -> Vec<[String; 3]> {
     let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
         sc.command
             .split("?")
-            .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.to_string()])
+            .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.as_string()])
             .collect()
     };
 
@@ -305,10 +305,10 @@ fn start_unix_listener(
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf)?;
 
-                let request = buf.split_once("?").unwrap_log(file!(), line!());
+                let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
 
-                match handle_request(request, &mut stream, state, conf) {
+                match handle_request((req, msg), &mut stream, state, conf) {
                     Ok(()) => (),
                     Err(HyprError::Other(_)) => break,
                     Err(e) => log(format!("{e} in {buf}"), Warn)?,
