@@ -3,7 +3,6 @@ use crate::utils::*;
 use hyprland::data::{Client, Clients, Monitors, Workspace};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
-use hyprland::shared::Address;
 use hyprland::Result;
 use std::collections::HashMap;
 
@@ -244,10 +243,7 @@ impl Scratchpad {
             }
         }
 
-        hyprland::dispatch!(
-            FocusWindow,
-            WindowIdentifier::Address(state.clients_with_title[0].address.clone())
-        )
+        Ok(())
     }
 
     fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
@@ -319,17 +315,16 @@ impl Scratchpad {
     }
 
     fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
-        let focus = |adr: &Address| {
-            hyprland::dispatch!(FocusWindow, WindowIdentifier::Address(adr.clone()))
-                .log_err(file!(), line!());
-        };
-
         match self.get_mode(state, active) {
-            Hide(clients) => clients.into_iter().for_each(move_to_special),
             Refocus(client) => {
                 self.hide_active(titles, state)?;
-                focus(&client.address);
+                hyprland::dispatch!(
+                    FocusWindow,
+                    WindowIdentifier::Address(client.address.clone())
+                )
+                .log_err(file!(), line!());
             }
+            Hide(clients) => clients.into_iter().for_each(move_to_special),
             Summon => {
                 self.summon(state)?;
                 self.hide_active(titles, state)?;

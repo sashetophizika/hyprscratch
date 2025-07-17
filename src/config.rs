@@ -461,7 +461,7 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     for line in config.lines() {
         if line.starts_with("#") {
             continue;
-        } else if line.split_whitespace().any(|s| s == "{") {
+        } else if let Some("{") = line.split_whitespace().last() {
             open_scope(&mut scratchpad_data, &mut in_scope, line)
         } else if let Some(split) = line.split_once("=") {
             set_var(&mut scratchpad_data, in_scope, split);
