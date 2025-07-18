@@ -11,6 +11,7 @@ struct HyprlandState {
     clients_with_title: Vec<Client>,
     monitors: HashMap<String, i32>,
     active_workspace_id: i32,
+    active_workspace_name: String,
 }
 
 impl HyprlandState {
@@ -21,8 +22,11 @@ impl HyprlandState {
             monitors.insert(x.id.to_string(), x.active_workspace.id);
         });
 
+        let ws = Workspace::get_active()?;
+        let active_workspace_id = ws.id;
+        let active_workspace_name = ws.name;
+
         let active_client = Client::get_active()?;
-        let active_workspace_id = Workspace::get_active()?.id;
         let clients_with_title = Clients::get()?
             .into_iter()
             .filter(|x| x.initial_title == title)
@@ -30,6 +34,7 @@ impl HyprlandState {
 
         Ok(HyprlandState {
             active_workspace_id,
+            active_workspace_name,
             clients_with_title,
             active_client,
             monitors,
@@ -198,14 +203,19 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn get_workspace_id(&self, state: &HyprlandState) -> i32 {
+    fn get_workspace_id(&self, state: &HyprlandState) -> String {
         if let Some(m) = &self.options.monitor {
-            state.monitors.get(m).copied().unwrap_or_else(|| {
-                let _ = log(format!("Monitor {m} not found"), Warn);
-                state.active_workspace_id
-            })
+            state
+                .monitors
+                .get(m)
+                .copied()
+                .unwrap_or_else(|| {
+                    let _ = log(format!("Monitor {m} not found"), Warn);
+                    state.active_workspace_id
+                })
+                .to_string()
         } else {
-            state.active_workspace_id
+            state.active_workspace_name.clone()
         }
     }
 
@@ -229,7 +239,7 @@ impl Scratchpad {
         {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Id(self.get_workspace_id(state)),
+                WorkspaceIdentifierWithSpecial::Name(&self.get_workspace_id(state)),
                 Some(WindowIdentifier::Address(client.address.clone()))
             )?;
 
