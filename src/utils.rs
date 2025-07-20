@@ -110,7 +110,7 @@ pub fn move_to_special(client: &Client) {
 }
 
 pub fn hide_special(cl: &Client) {
-    if cl.workspace.id <= 0 {
+    if cl.workspace.id <= 0 && cl.workspace.id >= -1000 {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title.clone()))
             .log_err(file!(), line!());
     }

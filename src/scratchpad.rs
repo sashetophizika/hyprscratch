@@ -9,22 +9,19 @@ use std::collections::HashMap;
 struct HyprlandState {
     active_client: Option<Client>,
     clients_with_title: Vec<Client>,
-    monitors: HashMap<String, i32>,
-    active_workspace_id: i32,
-    active_workspace_name: String,
+    monitors: HashMap<String, String>,
+    active_workspace: Workspace,
 }
 
 impl HyprlandState {
     fn new(title: &str) -> Result<HyprlandState> {
         let mut monitors = HashMap::new();
         Monitors::get()?.into_iter().for_each(|x| {
-            monitors.insert(x.name, x.active_workspace.id);
-            monitors.insert(x.id.to_string(), x.active_workspace.id);
+            monitors.insert(x.name.clone(), x.active_workspace.name.clone());
+            monitors.insert(x.id.to_string(), x.active_workspace.name.clone());
         });
 
-        let ws = Workspace::get_active()?;
-        let active_workspace_id = ws.id;
-        let active_workspace_name = ws.name;
+        let active_workspace = Workspace::get_active()?;
 
         let active_client = Client::get_active()?;
         let clients_with_title = Clients::get()?
@@ -33,9 +30,8 @@ impl HyprlandState {
             .collect();
 
         Ok(HyprlandState {
-            active_workspace_id,
-            active_workspace_name,
             clients_with_title,
+            active_workspace,
             active_client,
             monitors,
         })
@@ -158,7 +154,7 @@ impl Scratchpad {
         let first_title = &state.clients_with_title[0];
         move_to_special(first_title);
 
-        if !self.options.hide && first_title.workspace.id == state.active_workspace_id {
+        if !self.options.hide && first_title.workspace.id == state.active_workspace.id {
             hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
         }
         Ok(())
@@ -208,14 +204,13 @@ impl Scratchpad {
             state
                 .monitors
                 .get(m)
-                .copied()
                 .unwrap_or_else(|| {
                     let _ = log(format!("Monitor {m} not found"), Warn);
-                    state.active_workspace_id
+                    &state.active_workspace.name
                 })
-                .to_string()
+                .to_owned()
         } else {
-            state.active_workspace_name.clone()
+            state.active_workspace.name.clone()
         }
     }
 
@@ -282,7 +277,7 @@ impl Scratchpad {
         let should_hide = |cl: &&Client| {
             is_known(titles, cl)
                 && cl.initial_title != self.title
-                && cl.workspace.id == state.active_workspace_id
+                && cl.workspace.id == state.active_workspace.id
                 && cl.floating
         };
 
@@ -295,9 +290,12 @@ impl Scratchpad {
 
     fn is_on_workspace(&self, client: &Client, state: &HyprlandState) -> bool {
         if self.options.monitor.is_some() {
-            state.monitors.values().any(|id| *id == client.workspace.id)
+            state
+                .monitors
+                .values()
+                .any(|id| *id == client.workspace.name)
         } else {
-            state.active_workspace_id == client.workspace.id
+            state.active_workspace.id == client.workspace.id
         }
     }
 
