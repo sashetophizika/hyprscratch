@@ -349,7 +349,6 @@ fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
     }
 
     warn_unknown_options(&scratchpad_data["options"]);
-    warn_unknown_options(&scratchpad_data["global_options"]);
     true
 }
 
@@ -470,6 +469,7 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
         }
     }
 
+    warn_unknown_options(&scratchpad_data["global_options"]);
     scratchpads.iter_mut().for_each(|sc| {
         sc.add_opts(&scratchpad_data["global_options"]);
         sc.add_rules(&scratchpad_data["global_rules"]);

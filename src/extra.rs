@@ -158,8 +158,9 @@ pub fn print_logs(raw: bool) -> Result<()> {
 }
 
 pub fn print_full_raw(socket: Option<&str>) {
+    println!("### LOGS ###\n");
     print_logs(true).log_err(file!(), line!());
-    println!("\n\n");
+    println!("\n### CONFIGURATION ###\n");
     get_config(socket, true).log_err(file!(), line!());
 }
 
@@ -191,7 +192,7 @@ SCRATCHPAD OPTIONS
   pin                         Keep the scratchpad active through workspace changes
   tiled                       Makes a tiled scratchpad instead of a floating one
   special                     Use Hyprland's special workspace, ignores most other options
-  monitor <id>                Restrict the scratchpad to a specified monitor
+  monitor <id|name>           Restrict the scratchpad to a specified monitor
 
 EXTRA COMMANDS
   cycle [normal|special]      Cycle between [only normal | only special] scratchpads

@@ -112,7 +112,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `tiled`: spawns the scratchpad tiled instead of floating.
 
-* `monitor <id>`: restricts the scratchpad to a specific monitor.
+* `monitor <id|name>`: restricts the scratchpad to a specific monitor.
 
 * `special`: uses the special workspace. Does not work with all other options.
 
