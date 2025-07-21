@@ -114,7 +114,7 @@ impl ScratchpadOptions {
 }
 
 use TriggerMode::*;
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum TriggerMode<T> {
     Hide(Vec<T>),
     Refocus(T),
@@ -186,20 +186,20 @@ impl Scratchpad {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
             .iter()
-            .filter(|x| x.workspace.id < 0)
+            .filter(|x| x.workspace.id < 0 && x.workspace.id > -1000)
             .collect();
 
-        if special_with_title.is_empty() && !state.clients_with_title.is_empty() {
-            self.capture_special(state)?;
-        } else if !state.clients_with_title.is_empty() {
-            self.toggle_special(state)?;
-        } else {
+        if state.clients_with_title.is_empty() {
             self.spawn_special();
+        } else if special_with_title.is_empty() {
+            self.capture_special(state)?;
+        } else {
+            self.toggle_special(state)?;
         }
         Ok(())
     }
 
-    fn get_workspace_id(&self, state: &HyprlandState) -> String {
+    fn get_workspace_name(&self, state: &HyprlandState) -> String {
         if let Some(m) = &self.options.monitor {
             state
                 .monitors
@@ -230,11 +230,11 @@ impl Scratchpad {
         for client in state
             .clients_with_title
             .iter()
-            .filter(|x| !self.is_on_workspace(x, state))
+            .filter(|cl| !self.is_on_workspace(cl, state))
         {
             hyprland::dispatch!(
                 MoveToWorkspaceSilent,
-                WorkspaceIdentifierWithSpecial::Name(&self.get_workspace_id(state)),
+                WorkspaceIdentifierWithSpecial::Name(&self.get_workspace_name(state)),
                 Some(WindowIdentifier::Address(client.address.clone()))
             )?;
 
@@ -269,9 +269,9 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide_active(&self, titles: &[String], state: &HyprlandState) -> Result<()> {
+    fn hide_active(&self, titles: &[String], state: &HyprlandState) {
         if self.options.cover || self.options.hide {
-            return Ok(());
+            return;
         }
 
         let should_hide = |cl: &&Client| {
@@ -281,11 +281,11 @@ impl Scratchpad {
                 && cl.floating
         };
 
-        Clients::get()?
-            .iter()
-            .filter(should_hide)
-            .for_each(move_to_special);
-        Ok(())
+        if let Some(ac) = &state.active_client {
+            if should_hide(&ac) {
+                move_to_special(ac);
+            }
+        }
     }
 
     fn is_on_workspace(&self, client: &Client, state: &HyprlandState) -> bool {
@@ -293,13 +293,13 @@ impl Scratchpad {
             state
                 .monitors
                 .values()
-                .any(|id| *id == client.workspace.name)
+                .any(|name| *name == client.workspace.name)
         } else {
             state.active_workspace.id == client.workspace.id
         }
     }
 
-    fn get_mode<'a>(&self, state: &'a HyprlandState, active: &Client) -> TriggerMode<&'a Client> {
+    fn get_mode<'a>(&self, state: &'a HyprlandState) -> TriggerMode<&'a Client> {
         let mut clients_on_active = state
             .clients_with_title
             .iter()
@@ -310,48 +310,45 @@ impl Scratchpad {
             return Summon;
         }
 
+        let active = match &state.active_client {
+            Some(cl) => cl,
+            None => return Summon,
+        };
+
         match clients_on_active.peek() {
             Some(client) => {
-                if !self.options.hide && active.floating && active.initial_title != self.title {
-                    Refocus(client)
-                } else {
+                if self.options.hide || !active.floating || active.initial_title == self.title {
                     Hide(clients_on_active.collect())
+                } else {
+                    Refocus(client)
                 }
             }
             None => Summon,
         }
     }
 
-    fn shoot(&mut self, titles: &[String], state: &HyprlandState, active: &Client) -> Result<()> {
-        match self.get_mode(state, active) {
-            Refocus(client) => {
-                self.hide_active(titles, state)?;
-                hyprland::dispatch!(
-                    FocusWindow,
-                    WindowIdentifier::Address(client.address.clone())
-                )
-                .log_err(file!(), line!());
-            }
-            Hide(clients) => clients.into_iter().for_each(move_to_special),
-            Summon => {
-                self.summon(state)?;
-                self.hide_active(titles, state)?;
-            }
-        }
-
-        if active.floating {
-            Dispatch::call(DispatchType::BringActiveToTop).log_err(file!(), line!());
-        }
+    fn refocus(client: &Client) -> Result<()> {
+        hyprland::dispatch!(
+            FocusWindow,
+            WindowIdentifier::Address(client.address.clone())
+        )?;
         Ok(())
+    }
+
+    fn hide(clients: Vec<&Client>) {
+        clients.into_iter().for_each(move_to_special)
     }
 
     pub fn trigger(&mut self, titles: &[String]) -> Result<()> {
         let state = HyprlandState::new(&self.title)?;
-        if let Some(active) = &state.active_client {
-            self.shoot(titles, &state, active)?;
-        } else {
-            self.summon(&state)?;
+        match self.get_mode(&state) {
+            Refocus(client) => Self::refocus(client)?,
+            Hide(clients) => Self::hide(clients),
+            Summon => self.summon(&state)?,
         }
+
+        self.hide_active(titles, &state);
+        Dispatch::call(DispatchType::BringActiveToTop)?;
         Ok(())
     }
 }
@@ -486,8 +483,7 @@ mod tests {
         .hide_active(
             &vec![resources.title.clone()],
             &HyprlandState::new(&resources.title).unwrap(),
-        )
-        .unwrap();
+        );
         sleep(Duration::from_millis(500));
 
         let active_client = Client::get_active().unwrap().unwrap();
@@ -518,8 +514,7 @@ mod tests {
         assert_eq!(active_client.initial_title, resources.title);
 
         Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(&vec![], &HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+            .hide_active(&vec![], &HyprlandState::new(&resources.title).unwrap());
         sleep(Duration::from_millis(500));
 
         assert!(Clients::get()
@@ -735,5 +730,43 @@ mod tests {
             clients_with_title[0].workspace.name,
             "special:".to_owned() + &resources.title
         );
+    }
+
+    #[test]
+    fn test_named_workspace() {
+        let resources = TestResources {
+            title: "test_named_workspace".to_string(),
+            command: "[size 30% 30%] kitty --title test_named_workspace".to_string(),
+        };
+
+        assert_eq!(
+            Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == resources.title),
+            false
+        );
+
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Name("test")).unwrap();
+        sleep(Duration::from_millis(500));
+        assert_eq!(Workspace::get_active().unwrap().name, "test");
+
+        Scratchpad::new(
+            &resources.title,
+            &resources.title,
+            &resources.command,
+            "summon",
+        )
+        .trigger(&vec![resources.title.clone()])
+        .unwrap();
+        sleep(Duration::from_millis(1000));
+
+        assert_eq!(
+            Client::get_active().unwrap().unwrap().initial_title,
+            resources.title
+        );
+
+        assert_eq!(Workspace::get_active().unwrap().name, "test");
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Id(1)).unwrap();
     }
 }
