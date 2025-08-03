@@ -54,7 +54,7 @@ macro_rules! impl_logerr {
     }
 }
 
-impl_logerr!(hyprland::Result<T>, io::Result<T>, 
+impl_logerr!(hyprland::Result<T>, io::Result<T>, notify::Result<T>,
     Result<T, VarError>, LockResult<T>);
 
 impl<T> LogErr<T> for Option<T> {

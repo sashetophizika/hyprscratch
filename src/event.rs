@@ -1,17 +1,16 @@
 use crate::config::Config;
-use crate::daemon::DaemonOptions;
-use crate::daemon::DaemonState;
+use crate::daemon::{DaemonOptions, DaemonState};
 use crate::logs::*;
 use crate::scratchpad::ScratchpadOptions;
 use crate::utils::*;
-use hyprland::data::Workspace;
-use hyprland::data::{Client, Clients, Monitor};
+use hyprland::data::{Client, Clients, Monitor, Workspace};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
 use hyprland::Result;
-use std::sync::MutexGuard;
-use std::sync::{Arc, Mutex};
+use notify::{Event, RecursiveMode, Watcher};
+use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread::*;
 
 type ConfigMutex = Arc<Mutex<Config>>;
@@ -123,7 +122,7 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
     });
 }
 
-fn add_auto_reload(ev: &mut EventListener, config: ConfigMutex) {
+fn add_builtin_reload(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_config_reloaded_handler(move || {
         let (f, l) = (file!(), line!());
         config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
@@ -134,7 +133,7 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
     let mut ev = EventListener::new();
 
     if options.auto_reload {
-        add_auto_reload(&mut ev, config.clone());
+        add_builtin_reload(&mut ev, config.clone());
     }
 
     if options.clean {
@@ -169,10 +168,51 @@ fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: C
     }
 }
 
+fn reload_on_modify(res: notify::Result<Event>, config: ConfigMutex) {
+    let (f, l) = (file!(), line!());
+    let mut config_guard = config.lock().unwrap_log(f, l);
+    let config_path = PathBuf::from(&config_guard.config_file);
+
+    match res {
+        Ok(e) if e.kind.is_modify() && e.paths.contains(&config_path) => {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            config_guard.reload(None).log_err(f, l)
+        }
+        Err(err) => {
+            let _ = log(format!("Watcher returned error: {err}"), Warn);
+        }
+        _ => (),
+    }
+}
+
+fn start_auto_reload(config: ConfigMutex) -> notify::Result<()> {
+    let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
+    let mut watcher = notify::recommended_watcher(tx)?;
+
+    let (f, l) = (file!(), line!());
+    watcher.watch(
+        Path::new(&config.lock().unwrap_log(f, l).config_file)
+            .parent()
+            .unwrap_log(f, l),
+        RecursiveMode::NonRecursive,
+    )?;
+
+    for res in rx {
+        reload_on_modify(res, config.clone());
+    }
+    Ok(())
+}
+
 pub fn start_event_listeners(config: &ConfigMutex, state: &mut DaemonState) {
+    let (f, l) = (file!(), line!());
+    if state.options.auto_reload {
+        let config_c = config.clone();
+        spawn(move || start_auto_reload(config_c).log_err(f, l));
+    }
+
     let config_c = config.clone();
     let options = state.options.clone();
-    let handle = spawn(move || start_events(options, config_c).log_err(file!(), line!()));
+    let handle = spawn(move || start_events(options, config_c).log_err(f, l));
 
     let config_c = config.clone();
     let options = state.options.clone();
