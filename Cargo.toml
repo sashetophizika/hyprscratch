@@ -8,12 +8,13 @@ homepage = "https://github.com/sashetophizika/hyprscratch"
 documentation = "https://docs.rs/crate/hyprscratch"
 repository = "https://github.com/sashetophizika/hyprscratch"
 readme = "README.md"
-keywords = ["hyprland", "scratchpad"]
+keywords = ["linux", "wayland", "hyprland", "scratchpad"]
 categories = ["command-line-utilities"]
 
 [dependencies]
 chrono = "0.4.38"
 hyprland = "0.4.0-beta.2"
+notify = "8.1.0"
 toml = "0.9.2"
 
 [dev-dependencies]
