@@ -73,7 +73,7 @@ fn exec_cli_command(command: &str, socket: Option<&str>, config: &Option<String>
     }
 }
 
-fn get_cli_command<'a>(args: &'a [String]) -> Option<&'a str> {
+fn get_cli_command(args: &[String]) -> Option<&str> {
     for arg in args {
         if let Some(flag) = get_flag_name(arg, &KNOWN_COMMAND_FLAGS) {
             return Some(flag);
