@@ -10,7 +10,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use toml::{Table, Value};
 
 #[derive(Debug)]
 pub struct Config {
@@ -137,8 +136,6 @@ fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
 
         let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
             parse_config(&config_str)?
-        } else if ext == "toml" {
-            parse_toml(&config_str)?
         } else {
             parse_hyprlang(&config_str)?
         };
@@ -479,51 +476,6 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     Ok(scratchpads)
 }
 
-fn parse_toml(config: &str) -> Result<Vec<Scratchpad>> {
-    log(
-        "Toml configuration is deprecated. Convert to hyprlang.".into(),
-        Warn,
-    )?;
-
-    let toml = config.parse::<Table>().unwrap();
-    let get_field = |key| {
-        toml.values()
-            .map(|val| {
-                val.get(key)
-                    .unwrap_or(&Value::String("".into()))
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string()
-            })
-            .collect::<Vec<_>>()
-    };
-
-    let names = toml.keys().map(|k| k.into()).collect::<Vec<String>>();
-    let titles = get_field("title");
-    let options = get_field("options");
-    let commands = get_field("command")
-        .into_iter()
-        .zip(get_field("rules"))
-        .map(|(c, r)| {
-            if r.is_empty() {
-                c
-            } else {
-                format!("[{r}] {c}")
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let scratchpads: Vec<Scratchpad> = names
-        .into_iter()
-        .zip(titles)
-        .zip(commands)
-        .zip(options)
-        .map(|(((n, t), c), o)| Scratchpad::new(&n, &t, &c, &o))
-        .collect();
-
-    Ok(scratchpads)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,12 +513,6 @@ mod tests {
     fn test_parse_hyprlang() {
         println!("{}", &open_conf("./test_configs/test_hyprlang.conf"));
         let scratchpads = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
-        assert_eq!(scratchpads, expected_scratchpads());
-    }
-
-    #[test]
-    fn test_parse_toml() {
-        let scratchpads = parse_toml(&open_conf("./test_configs/test_toml.toml")).unwrap();
         assert_eq!(scratchpads, expected_scratchpads());
     }
 
