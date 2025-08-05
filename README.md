@@ -51,7 +51,7 @@ bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
-```python
+```hyprlang
 # Optional globals that apply to all scratchpads
 daemon_options = clean
 global_options = special
@@ -59,8 +59,11 @@ global_rules = size 90% 90%
 
 name {
     # Mandatory fields
-    title = title                        
     command = command
+
+    # At least one is mandatory, title takes priority
+    title = title                        
+    class = class
 
     # Optional fields
     options = option1 option2 option3
@@ -148,7 +151,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 
 ## Other Relevant Information
-To find the title needed for a scratchpad, run `hyprctl clients` and check the `initialTitle` field. An incorrect title results in the scratchpad not being hidden and a new one being spawned every time.
+The title of a scratchpad has to be either the `initialTitle` or `initialClass` field of the client, which can be found with `hyprctl clients`. An incorrect title results in the scratchpad not being hidden and a new one being spawned every time.
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
