@@ -12,6 +12,7 @@ use hyprland::shared::HyprError;
 use hyprland::Result;
 use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
+use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -342,7 +343,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 mod tests {
     use super::*;
     use hyprland::data::{Clients, Workspace};
-    use std::{thread::sleep, time::Duration};
+    use std::{env, fs::File, thread::sleep, time::Duration};
 
     fn test_handle(request: &str) {
         let mut stream = UnixStream::connect("/tmp/hyprscratch_test.sock").unwrap();
@@ -622,5 +623,45 @@ mod tests {
         verify_test(&resources);
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
         sleep(Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_auto_reload() {
+        let config_path = "./test_configs/test_hyprlang.conf".replacen(
+            ".",
+            env::current_dir().unwrap().as_os_str().to_str().unwrap(),
+            1,
+        );
+
+        let mut config_file = File::options()
+            .read(true)
+            .append(true)
+            .open(&config_path)
+            .unwrap();
+
+        let mut content = String::new();
+        config_file.read_to_string(&mut content).unwrap();
+
+        let config = Arc::new(Mutex::new(
+            Config::new(Some(config_path.to_string())).unwrap(),
+        ));
+        let mut state = DaemonState::new("", Some(config_path.to_string()));
+        start_event_listeners(&config, &mut state);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        config_file
+            .write_all(b"test_reload {\ntitle=test_reload\ncommand=test_reload\n}\n")
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+
+        assert!(config
+            .lock()
+            .unwrap()
+            .scratchpads
+            .iter()
+            .any(|x| x.name == "test_reload"));
+
+        let mut config_file = File::create(config_path).unwrap();
+        config_file.write(content.as_bytes()).unwrap();
     }
 }
