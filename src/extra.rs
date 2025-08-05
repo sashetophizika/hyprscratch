@@ -53,8 +53,8 @@ pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
     };
 
     let max_chars = 80;
-    let max_titles = max_len(titles, 6, max_chars);
-    let max_commands = max_len(commands, 8, max_chars);
+    let max_titles = max_len(titles, 11, max_chars);
+    let max_commands = max_len(commands, 7, max_chars);
     let max_options = max_len(options, 7, max_chars);
 
     let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
@@ -109,8 +109,8 @@ pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
     if !raw {
         println!(
         "{sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep}",
-        pad(max_titles, "Titles"),
-        pad(max_commands, "Commands"),
+        pad(max_titles, "Title/Class"),
+        pad(max_commands, "Command"),
         pad(max_options, "Options")
         );
     }

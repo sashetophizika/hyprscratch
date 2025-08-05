@@ -26,7 +26,7 @@ impl HyprlandState {
         let active_client = Client::get_active()?;
         let clients_with_title = Clients::get()?
             .into_iter()
-            .filter(|x| x.initial_title == title)
+            .filter(|x| x.initial_title == title || x.initial_class == title)
             .collect();
 
         Ok(HyprlandState {
@@ -150,6 +150,16 @@ impl Scratchpad {
         self.options = ScratchpadOptions::new(&format!("{} {}", self.options.as_str(), options));
     }
 
+    fn matches_client(&self, client: &Client) -> bool {
+        let title = self.title.to_lowercase();
+        if title == client.initial_title.to_lowercase()
+            || title == client.initial_class.to_lowercase()
+        {
+            return true;
+        }
+        false
+    }
+
     fn capture_special(&self, state: &HyprlandState) -> Result<()> {
         let first_title = &state.clients_with_title[0];
         move_to_special(first_title);
@@ -162,8 +172,8 @@ impl Scratchpad {
 
     fn toggle_special(&self, state: &HyprlandState) -> Result<()> {
         if let Some(ac) = &state.active_client {
-            let should_toggle = (ac.initial_title == self.title && !self.options.show)
-                || (ac.initial_title != self.title && !self.options.hide);
+            let should_toggle = (self.matches_client(ac) && !self.options.show)
+                || (!self.matches_client(ac) && !self.options.hide);
 
             if should_toggle {
                 hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
@@ -276,7 +286,7 @@ impl Scratchpad {
 
         let should_hide = |cl: &&Client| {
             is_known(titles, cl)
-                && cl.initial_title != self.title
+                && !self.matches_client(cl)
                 && cl.workspace.id == state.active_workspace.id
                 && cl.floating
         };
@@ -317,7 +327,7 @@ impl Scratchpad {
 
         match clients_on_active.peek() {
             Some(client) => {
-                if self.options.hide || !active.floating || active.initial_title == self.title {
+                if self.options.hide || !active.floating || self.matches_client(active) {
                     Hide(clients_on_active.collect())
                 } else {
                     Refocus(client)

@@ -290,7 +290,7 @@ fn parse_config(config: &str) -> Result<Vec<Scratchpad>> {
 
 use SyntaxErr::*;
 enum SyntaxErr<'a> {
-    MissingField(&'a str, &'a str),
+    MissingField(&'a [&'a str], &'a str),
     UnknownField(&'a str),
     GlobalInScope,
     NotInScope,
@@ -301,7 +301,7 @@ enum SyntaxErr<'a> {
 
 fn warn_syntax_err(err: SyntaxErr) {
     let msg = match err {
-        MissingField(f, n) => &format!("Field '{f}' not defined for scratchpad '{n}'"),
+        MissingField(f, n) => &format!("Field '{}' not found for scratchpad '{n}'", f.join(" or ")),
         UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
         GlobalInScope => "Global variable defined inside scratchpad",
         NotInScope => "Field set outside of scratchpad",
@@ -324,7 +324,7 @@ fn open_scope(scratchpad_data: &mut HashMap<&str, String>, in_scope: &mut bool, 
         } else {
             *in_scope = true;
             scratchpad_data.insert("name", n.into());
-            for f in ["title", "command", "rules", "options"] {
+            for f in ["title", "class", "command", "rules", "options"] {
                 scratchpad_data.insert(f, String::new());
             }
         }
@@ -332,19 +332,19 @@ fn open_scope(scratchpad_data: &mut HashMap<&str, String>, in_scope: &mut bool, 
 }
 
 fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
-    let warn_empty = |field: &str, name: &str| -> bool {
-        if field.is_empty() {
-            warn_syntax_err(MissingField(field, name));
+    let warn_empty = |fields: &[&str]| -> bool {
+        if fields.iter().all(|f| scratchpad_data[f].is_empty()) {
+            warn_syntax_err(MissingField(fields, &scratchpad_data["name"]));
             return true;
         }
         false
     };
 
-    if warn_empty(&scratchpad_data["title"], &scratchpad_data["name"]) {
+    if warn_empty(&["title", "class"]) {
         return false;
     }
 
-    if warn_empty(&scratchpad_data["command"], &scratchpad_data["name"]) {
+    if warn_empty(&[&"command"]) {
         return false;
     }
 
@@ -373,11 +373,13 @@ fn close_scope(
     )
     .join("?");
 
-    let [name, title, options] = [
-        &scratchpad_data["name"],
-        &scratchpad_data["title"],
-        &scratchpad_data["options"],
-    ];
+    let title = if scratchpad_data["title"].is_empty() {
+        &scratchpad_data["class"]
+    } else {
+        &scratchpad_data["title"]
+    };
+
+    let [name, options] = [&scratchpad_data["name"], &scratchpad_data["options"]];
 
     scratchpads.push(Scratchpad::new(name, title, command, options));
 }
@@ -458,7 +460,7 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
     let mut in_scope = false;
 
     for line in config.lines() {
-        if line.starts_with("#") {
+        if line.trim().starts_with("#") {
             continue;
         } else if let Some("{") = line.split_whitespace().last() {
             open_scope(&mut scratchpad_data, &mut in_scope, line)
