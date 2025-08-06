@@ -420,8 +420,10 @@ fn set_var<'a>(
 }
 
 fn initialize_globals(scratchpad_data: &mut HashMap<&str, String>) {
-    scratchpad_data.insert("global_options", "".into());
-    scratchpad_data.insert("global_rules", "".into());
+    let global_keys = ["daemon_options", "global_options", "global_rules"];
+    for key in global_keys {
+        scratchpad_data.insert(key, "".into());
+    }
 }
 
 fn parse_hyprlang(config: &str) -> Result<ConfigData> {
