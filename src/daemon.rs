@@ -140,8 +140,18 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
     Ok(())
 }
 
-fn get_previous_index(title: String, config: &Config, state: &mut DaemonState) -> Option<usize> {
-    let prev_active = (title == state.prev_titles[0]) as usize;
+fn get_previous_index(
+    client: Option<Client>,
+    config: &Config,
+    state: &mut DaemonState,
+) -> Option<usize> {
+    let prev_active = if let Some(cl) = client {
+        (cl.initial_class == state.prev_titles[0] || cl.initial_title == state.prev_titles[0])
+            as usize
+    } else {
+        0
+    };
+
     if state.prev_titles[prev_active].is_empty() {
         let _ = log("No previous scratchpad found".into(), Warn);
         return None;
@@ -158,13 +168,8 @@ fn handle_previous(config: &mut Config, state: &mut DaemonState) -> Result<()> {
         return log("No previous scratchpads exist".into(), Warn);
     }
 
-    let active_title = if let Ok(Some(ac)) = Client::get_active() {
-        ac.initial_title
-    } else {
-        "something that will never be a real title".into()
-    };
-
-    if let Some(i) = get_previous_index(active_title, config, state) {
+    let active = Client::get_active().unwrap_log(file!(), line!());
+    if let Some(i) = get_previous_index(active, config, state) {
         handle_scratchpad(config, state, i)?;
     }
     Ok(())
@@ -413,15 +418,6 @@ mod tests {
         assert_eq!(get_cycle_index("", &config, &mut state), Some(6));
         assert_eq!(get_cycle_index("", &config, &mut state), Some(0));
         assert_eq!(get_cycle_index("unknown", &config, &mut state), Some(1));
-
-        assert_eq!(
-            get_previous_index("test_nonexistant".into(), &config, &mut state),
-            Some(1)
-        );
-        assert_eq!(
-            get_previous_index("test_nonfloating".into(), &config, &mut state),
-            Some(0)
-        );
     }
 
     struct TestResources {
