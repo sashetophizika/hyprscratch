@@ -73,29 +73,58 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
-fn get_mode(msg: &str) -> Option<bool> {
+use CycleMode::*;
+enum CycleMode {
+    Special,
+    Normal,
+    All,
+}
+
+fn get_mode(msg: &str) -> CycleMode {
     match msg {
-        m if m.contains("special") => Some(true),
-        m if m.contains("normal") => Some(false),
-        _ => None,
+        m if m.contains("special") => Special,
+        m if m.contains("normal") => Normal,
+        _ => All,
     }
 }
 
 fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
-    let mut current_index = state.cycle_index % config.scratchpads.len();
-    if let Some(m) = get_mode(msg) {
-        if (m && config.special_titles.is_empty()) || (!m && config.normal_titles.is_empty()) {
-            let _ = log(format!("No {msg} scratchpads found"), Warn);
-            return None;
-        }
+    let len = config.scratchpads.len();
+    let mut current_index = (state.cycle_index + 1) % len;
 
-        while m != config.scratchpads[current_index].options.special {
-            current_index = (current_index + 1) % config.scratchpads.len();
+    let warn_empty = |titles: &[_]| {
+        if titles.is_empty() {
+            let _ = log(format!("No {msg} scratchpads found"), Warn);
+            return true;
         }
+        false
+    };
+
+    let find_next = |mode, current_index: &mut usize| {
+        while mode == config.scratchpads[*current_index].options.special {
+            *current_index = (*current_index + 1) % len;
+        }
+    };
+
+    match get_mode(msg) {
+        Special => {
+            if warn_empty(&config.special_titles) {
+                return None;
+            }
+            find_next(false, &mut current_index);
+        }
+        Normal => {
+            if warn_empty(&config.normal_titles) {
+                return None;
+            }
+            find_next(true, &mut current_index);
+        }
+        All => (),
     }
 
-    state.update_prev_titles(&config.scratchpads[current_index].title);
-    state.cycle_index = current_index + 1;
+    state.update_prev_titles(&config.scratchpads[state.cycle_index].title);
+    state.cycle_index = current_index;
+
     Some(current_index)
 }
 
