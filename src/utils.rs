@@ -334,6 +334,7 @@ mod tests {
 
         let mut config = Config {
             scratchpads,
+            daemon_options: "".into(),
             config_file: "".to_string(),
             ephemeral_titles: Vec::new(),
             special_titles: Vec::new(),
