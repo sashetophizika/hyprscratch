@@ -448,7 +448,7 @@ fn parse_hyprlang(config: &str) -> Result<ConfigData> {
         sc.add_opts(&scratchpad_data["global_options"]);
         sc.add_rules(&scratchpad_data["global_rules"]);
     });
-    Ok((scratchpad_data["daemon_rules"].clone(), scratchpads))
+    Ok((scratchpad_data["daemon_options"].clone(), scratchpads))
 }
 
 #[cfg(test)]
