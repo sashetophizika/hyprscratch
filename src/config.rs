@@ -5,11 +5,13 @@ use crate::DEFAULT_CONFIG_FILES;
 use crate::KNOWN_COMMANDS;
 use hyprland::Result;
 use std::collections::HashMap;
-use std::env::var;
+use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+
+type ConfigData = (String, Vec<Scratchpad>);
 
 #[derive(Debug)]
 pub struct Config {
@@ -21,13 +23,14 @@ pub struct Config {
     pub fickle_titles: Vec<String>,
     pub slick_titles: Vec<String>,
     pub dirty_titles: Vec<String>,
+    pub daemon_options: String,
     pub config_file: String,
 }
 
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
         let config_files = get_config_files(config_path)?;
-        let scratchpads = get_scratchpads(&config_files)?;
+        let (daemon_options, scratchpads) = get_config_data(&config_files)?;
 
         log(
             format!(
@@ -55,21 +58,9 @@ impl Config {
             slick_titles: filter_titles(&|opts| !opts.sticky && !opts.pin),
             dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
             config_file: config_files[0].clone(),
+            daemon_options,
             scratchpads,
         })
-    }
-    pub fn get_daemon_options(config_path: Option<String>) -> Result<String> {
-        let config_files = get_config_files(config_path)?;
-        for config in config_files {
-            let mut config_str = String::new();
-            File::open(&config)?.read_to_string(&mut config_str)?;
-
-            let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
-            if !config.contains("hyprland.conf") && ext == "conf" {
-                return Ok(find_daemon_options(&config_str));
-            };
-        }
-        Ok("".into())
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -81,68 +72,52 @@ impl Config {
     }
 }
 
-fn find_daemon_options(config: &str) -> String {
-    for line in config.lines() {
-        if line.starts_with('#') {
-            continue;
-        } else if let Some((k, v)) = line.split_once('=') {
-            if k.trim() == "daemon_options" {
-                return v.into();
-            }
-        }
-    }
-
-    "".into()
-}
-
 fn find_config_files() -> Vec<String> {
-    let home = var("HOME").unwrap_log(file!(), line!());
-    let prepend_home = |str| format!("{home}/.config/{str}");
+    let home = env::var("HOME").unwrap_log(file!(), line!());
 
     DEFAULT_CONFIG_FILES
         .iter()
-        .map(prepend_home)
-        .filter(|x| Path::new(&x).exists())
+        .map(|path| format!("{home}/.config/{path}"))
+        .filter(|path| Path::new(&path).exists())
         .collect()
 }
 
 fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
     let default_configs = find_config_files();
-    if default_configs.is_empty() {
+    if default_configs.is_empty() && config_path.is_none() {
         log("No configuration files found".into(), Error)?;
     }
 
-    let config_files = if let Some(conf) = config_path {
-        if !default_configs.contains(&conf) {
-            if !Path::new(&conf).exists() {
-                log(format!("Config file not found: {conf}"), Error)?;
-            }
-            vec![conf]
-        } else {
-            default_configs
+    if let Some(conf) = config_path {
+        if !default_configs.contains(&conf) && !Path::new(&conf).exists() {
+            log(format!("Config file not found: {conf}"), Error)?;
         }
-    } else {
-        default_configs
-    };
-    Ok(config_files)
+        return Ok(vec![conf]);
+    }
+
+    Ok(default_configs)
 }
 
-fn get_scratchpads(config_files: &[String]) -> Result<Vec<Scratchpad>> {
+fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
     let mut scratchpads: Vec<Scratchpad> = vec![];
+    let mut daemon_options = String::new();
+
     for config in config_files {
         let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
-        let mut config_str = String::new();
-        File::open(config)?.read_to_string(&mut config_str)?;
+        let mut content = String::new();
+        File::open(config)?.read_to_string(&mut content)?;
 
-        let mut config_data = if config.contains("hyprland.conf") || ext == "txt" {
-            parse_config(&config_str)?
+        let (options, mut config_data) = if config.contains("hyprland.conf") || ext == "txt" {
+            parse_config(&content)?
         } else {
-            parse_hyprlang(&config_str)?
+            parse_hyprlang(&content)?
         };
+
+        daemon_options.push_str(&options);
         scratchpads.append(&mut config_data);
     }
 
-    Ok(scratchpads)
+    Ok((daemon_options, scratchpads))
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -271,7 +246,7 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
     }
 }
 
-fn parse_config(config: &str) -> Result<Vec<Scratchpad>> {
+fn parse_config(config: &str) -> Result<ConfigData> {
     let lines: Vec<String> = get_hyprscratch_lines(config);
 
     let mut scratchpads: Vec<Scratchpad> = vec![];
@@ -282,7 +257,7 @@ fn parse_config(config: &str) -> Result<Vec<Scratchpad>> {
         }
     }
 
-    Ok(scratchpads)
+    Ok(("".into(), scratchpads))
 }
 
 use SyntaxErr::*;
@@ -341,7 +316,7 @@ fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
         return false;
     }
 
-    if warn_empty(&[&"command"]) {
+    if warn_empty(&["command"]) {
         return false;
     }
 
@@ -449,7 +424,7 @@ fn initialize_globals(scratchpad_data: &mut HashMap<&str, String>) {
     scratchpad_data.insert("global_rules", "".into());
 }
 
-fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
+fn parse_hyprlang(config: &str) -> Result<ConfigData> {
     let mut scratchpad_data: HashMap<&str, String> = HashMap::new();
     initialize_globals(&mut scratchpad_data);
 
@@ -473,7 +448,7 @@ fn parse_hyprlang(config: &str) -> Result<Vec<Scratchpad>> {
         sc.add_opts(&scratchpad_data["global_options"]);
         sc.add_rules(&scratchpad_data["global_rules"]);
     });
-    Ok(scratchpads)
+    Ok((scratchpad_data["daemon_rules"].clone(), scratchpads))
 }
 
 #[cfg(test)]
@@ -512,13 +487,14 @@ mod tests {
     #[test]
     fn test_parse_hyprlang() {
         println!("{}", &open_conf("./test_configs/test_hyprlang.conf"));
-        let scratchpads = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
+        let (_, scratchpads) =
+            parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
         assert_eq!(scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_config() {
-        let scratchpads = parse_config(&open_conf("./test_configs/test_config1.txt")).unwrap();
+        let (_, scratchpads) = parse_config(&open_conf("./test_configs/test_config1.txt")).unwrap();
         let mut expected_scratchpads = expected_scratchpads();
         for sc in expected_scratchpads.iter_mut() {
             sc.name = sc.title.clone();
@@ -549,6 +525,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n"
         ];
         let expected_config = Config {
             config_file,
+            daemon_options: "".into(),
             scratchpads,
             normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
             special_titles: vec!["btop".to_string(), "htop".to_string()],
@@ -603,6 +580,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
         ];
         let expected_config = Config {
             config_file,
+            daemon_options: "".into(),
             scratchpads,
             normal_titles: vec!["btop".to_string(), "htop".to_string()],
             special_titles: vec!["firefox".to_string(), "cmat".to_string()],
