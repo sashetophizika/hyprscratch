@@ -6,14 +6,16 @@
 [![AUR Version](https://img.shields.io/aur/version/hyprscratch?style=for-the-badge&color=blue)](https://aur.archlinux.org/packages/hyprscratch)
 [![AUR Votes](https://img.shields.io/aur/votes/hyprscratch?style=for-the-badge&color=blue)](https://aur.archlinux.org/packages/hyprscratch)
 
+Hyprscratch makes scratchpads in Hyprland painless in a well-integrated and flexible way.
+
 ## Features
 * Scratchpads are part of your current workspace rather than the special one by default.
 * Can be configured entirely in `hyprland.conf` or a dedicated configuration file.
+* Makes special workspace scratchpads easier to configure.
 * Many options to easily tweak behaviour of scratchpads.
 * Event listeners to allow automation of scratchpad management.
 * Includes cycling and restoring previous scratchpads.
 * Supports many scratchpads active at the same time. 
-* Makes special workspace scratchpads easier to configure.
 
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
