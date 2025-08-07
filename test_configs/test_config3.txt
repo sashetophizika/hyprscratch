@@ -1,7 +1,7 @@
-bind = $mainMod, a, exec, hyprscratch test_normal "kitty --title test_normal"
+bind = $mainMod, a, exec, hyprscratch test_normal "kitty --class test_normal"
 bind = $mainMod, b, exec, hyprscratch test_nonfloating "kitty --title test_nofloating" tiled
 bind = $mainMod, d, exec, hyprscratch test_ephemeral "kitty --title test_ephemeral" ephemeral
-bind = $mainMod, c, exec, hyprscratch test_special "kitty --title test_special" special
+bind = $mainMod, c, exec, hyprscratch test_special "kitty --class test_special" special
 bind = $mainMod, d, exec, hyprscratch test_sticky "kitty --title test_sticky" sticky
-bind = $mainMod, d, exec, hyprscratch test_shiny "kitty --title test_shiny" shiny
+bind = $mainMod, d, exec, hyprscratch test_shiny "kitty --class test_shiny" shiny
 bind = $mainMod, d, exec, hyprscratch test_pin "kitty --title test_pin" pin
