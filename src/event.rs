@@ -19,7 +19,7 @@ fn get_client_opts<'a>(cl: &Client, config: &'a MutexGuard<Config>) -> &'a Scrat
     let idx = config
         .scratchpads
         .iter()
-        .position(|x| x.title == cl.initial_title)
+        .position(|x| x.matches_client(cl))
         .unwrap_log(file!(), line!());
 
     &config.scratchpads[idx].options
@@ -86,7 +86,7 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
             clients
                 .iter()
                 .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
-                .filter(|cl| conf.ephemeral_titles.contains(&cl.initial_title))
+                .filter(|cl| is_known(&conf.ephemeral_titles, cl))
                 .for_each(|cl| {
                     hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&cl.title))
                         .log_err(f, l);

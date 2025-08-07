@@ -248,12 +248,7 @@ fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()>
 }
 
 fn handle_killall(config: &Config) -> Result<()> {
-    let is_scratchpad = |cl: &Client| {
-        config
-            .scratchpads
-            .iter()
-            .any(|scratchpad| scratchpad.title == cl.initial_title)
-    };
+    let is_scratchpad = |cl: &Client| config.scratchpads.iter().any(|sc| sc.matches_client(cl));
 
     let kill = |cl: Client| {
         let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));

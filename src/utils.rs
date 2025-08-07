@@ -98,11 +98,11 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
     Ok(())
 }
 
-pub fn move_to_special(client: &Client) {
+pub fn move_to_special(cl: &Client) {
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(&client.initial_title.clone())),
-        Some(WindowIdentifier::Address(client.address.clone()))
+        WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title.clone())),
+        Some(WindowIdentifier::Address(cl.address.clone()))
     )
     .unwrap_or_else(|_| {
         log("MoveToSpecial returned Err".into(), Debug).unwrap();
@@ -110,18 +110,18 @@ pub fn move_to_special(client: &Client) {
 }
 
 pub fn hide_special(cl: &Client) {
-    if cl.workspace.id <= 0 && cl.workspace.id >= -1000 {
+    if is_on_special(cl) {
         hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title.clone()))
             .log_err(file!(), line!());
     }
 }
 
-pub fn is_on_special(client: &Client) -> bool {
-    client.workspace.name.contains("special")
+pub fn is_on_special(cl: &Client) -> bool {
+    cl.workspace.name.contains("special")
 }
 
 pub fn is_known(titles: &[String], client: &Client) -> bool {
-    titles.contains(&client.initial_title)
+    titles.contains(&client.initial_title) || titles.contains(&client.initial_class)
 }
 
 pub fn move_floating(titles: &[String]) -> Result<()> {
@@ -176,21 +176,17 @@ pub fn prepare_commands(
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
-    let client_titles: Vec<String> = Clients::get()?
-        .into_iter()
-        .map(|x| x.initial_title)
-        .collect();
-
     let spawn = |sc: &Scratchpad| {
         prepare_commands(&sc.command, Some(&sc.name), true, !sc.options.tiled)
             .iter()
             .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
     };
 
+    let clients = Clients::get()?;
     config
         .scratchpads
         .iter()
-        .filter(|sc| !sc.options.lazy && !client_titles.contains(&sc.title))
+        .filter(|sc| !sc.options.lazy && !clients.iter().any(|cl| sc.matches_client(cl)))
         .for_each(spawn);
 
     Ok(())

@@ -150,7 +150,7 @@ impl Scratchpad {
         self.options = ScratchpadOptions::new(&format!("{} {}", self.options.as_str(), options));
     }
 
-    fn matches_client(&self, client: &Client) -> bool {
+    pub fn matches_client(&self, client: &Client) -> bool {
         let title = self.title.to_lowercase();
         if title == client.initial_title.to_lowercase()
             || title == client.initial_class.to_lowercase()
@@ -196,7 +196,7 @@ impl Scratchpad {
         let special_with_title: Vec<&Client> = state
             .clients_with_title
             .iter()
-            .filter(|x| x.workspace.id < 0 && x.workspace.id > -1000)
+            .filter(|cl| is_on_special(cl))
             .collect();
 
         if state.clients_with_title.is_empty() {
