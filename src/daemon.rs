@@ -73,21 +73,6 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
-use CycleMode::*;
-enum CycleMode {
-    Special,
-    Normal,
-    All,
-}
-
-fn get_mode(msg: &str) -> CycleMode {
-    match msg {
-        m if m.contains("special") => Special,
-        m if m.contains("normal") => Normal,
-        _ => All,
-    }
-}
-
 fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let len = config.scratchpads.len();
     let mut current_index = (state.cycle_index + 1) % len;
@@ -106,20 +91,16 @@ fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Optio
         }
     };
 
-    match get_mode(msg) {
-        Special => {
-            if warn_empty(&config.special_titles) {
-                return None;
-            }
-            find_next(false, &mut current_index);
+    if msg.contains("special") {
+        if warn_empty(&config.special_titles) {
+            return None;
         }
-        Normal => {
-            if warn_empty(&config.normal_titles) {
-                return None;
-            }
-            find_next(true, &mut current_index);
+        find_next(false, &mut current_index);
+    } else if msg.contains("normal") {
+        if warn_empty(&config.normal_titles) {
+            return None;
         }
-        All => (),
+        find_next(true, &mut current_index);
     }
 
     state.update_prev_titles(&config.scratchpads[state.cycle_index].title);
