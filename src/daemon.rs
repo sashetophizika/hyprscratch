@@ -288,8 +288,7 @@ fn handle_request(
         "manual" => handle_manual(msg, config, state),
         "cycle" => handle_cycle(msg, config, state),
         "kill" => {
-            let msg = "Recieved 'kill' request, terminating listener".into();
-            log(msg, Info)?;
+            let _ = log("Recieved 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
         }
         _ => log(format!("Unknown request: {req}?{msg}"), Warn),
@@ -315,7 +314,7 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
     }
 
     let listener = UnixListener::bind(sock)?;
-    let msg = format!("Daemon started successfully, listening on {sock:?}",);
+    let msg = format!("Daemon started successfully, listening on {sock:?}");
     log(msg, Info)?;
     Ok(listener)
 }

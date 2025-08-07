@@ -157,11 +157,12 @@ pub fn print_logs(raw: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn print_full_raw(socket: Option<&str>) {
+pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
     println!("### LOGS ###\n");
-    print_logs(true).log_err(file!(), line!());
+    print_logs(true)?;
     println!("\n### CONFIGURATION ###\n");
-    get_config(socket, true).log_err(file!(), line!());
+    get_config(socket, true)?;
+    Ok(())
 }
 
 pub fn print_help() {

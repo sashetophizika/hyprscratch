@@ -56,17 +56,16 @@ const KNOWN_COMMANDS: [&str; 18] = [
     "help",
 ];
 
-fn exec_cli_command(command: &str, socket: Option<&str>, config: &Option<String>) {
+fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>) -> Result<()> {
     match command {
-        "get-config" => get_config(socket, false).log_err(file!(), line!()),
-        "kill" => send_request(socket, "kill", "").log_err(file!(), line!()),
+        "get-config" => get_config(socket, false),
+        "kill" => send_request(socket, "kill", ""),
         "full" => print_full_raw(socket),
-        "help" => print_help(),
-        "logs" => print_logs(false).log_err(file!(), line!()),
-        "version" => println!("hyprscratch v{}", env!("CARGO_PKG_VERSION")),
-        "reload" => send_request(socket, "reload", &config.clone().unwrap_or("".into()))
-            .log_err(file!(), line!()),
-        _ => (),
+        "logs" => print_logs(false),
+        "help" => Ok(print_help()),
+        "version" => Ok(println!("hyprscratch v{}", env!("CARGO_PKG_VERSION"))),
+        "reload" => send_request(socket, "reload", &config.unwrap_or("".into())),
+        _ => Ok(()),
     }
 }
 
@@ -109,7 +108,7 @@ fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&st
 
 fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
     if let Some(cmd) = get_cli_command(args) {
-        exec_cli_command(cmd, socket, &config);
+        exec_cli_command(cmd, socket, config)?;
         return Ok(());
     }
     exec_main_command(args, config, socket)
