@@ -163,10 +163,14 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
 
     let index = config.scratchpads.iter().position(|x| x.name == msg);
 
+    let toggle_opts = |sc: &mut Scratchpad| {
+        sc.options.toggle(req);
+    };
+
     if let Some(i) = index {
-        config.scratchpads[i].options.toggle(req);
+        toggle_opts(&mut config.scratchpads[i]);
         handle_scratchpad(config, state, i)?;
-        config.scratchpads[i].options.toggle(req);
+        toggle_opts(&mut config.scratchpads[i]);
     } else {
         let _ = log(format!("Scratchpad '{msg}' not found"), Warn);
     }
@@ -275,6 +279,7 @@ fn handle_request(
         _ => log(format!("Unknown request: {req}?{msg}"), Warn),
     }
 }
+
 fn get_sock(socket_path: Option<&str>) -> &Path {
     match socket_path {
         Some(sp) => Path::new(sp),
