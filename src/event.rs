@@ -8,10 +8,12 @@ use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
 use hyprland::Result;
-use notify::{Event, RecursiveMode, Watcher};
+use notify::event::ModifyKind;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread::*;
+use std::time::Duration;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
@@ -178,9 +180,11 @@ fn reload_on_modify(res: notify::Result<Event>, config: ConfigMutex) {
     let config_path = PathBuf::from(&config_guard.config_file);
 
     match res {
-        Ok(e) if e.kind.is_modify() && e.paths.contains(&config_path) => {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            config_guard.reload(None).log_err(f, l)
+        Ok(e) if e.paths.contains(&config_path) => {
+            if let EventKind::Modify(ModifyKind::Data(_)) = e.kind {
+                sleep(Duration::from_millis(100));
+                config_guard.reload(None).log_err(f, l)
+            }
         }
         Err(err) => {
             let _ = log(format!("Watcher returned error: {err}"), Warn);
