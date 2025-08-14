@@ -95,7 +95,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `eager`: spawns all scratchpads hidden on start.
 
-* `no-auto-reload`: does not reload the configuration when `hyprland.conf` is updated.
+* `no-auto-reload`: does not reload the configuration when the files are modified.
 
 * `config </path/to/config>`: specify a path to the configuration file.
 
