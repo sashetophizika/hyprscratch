@@ -316,10 +316,6 @@ fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
         return false;
     }
 
-    if warn_empty(&["command"]) {
-        return false;
-    }
-
     warn_unknown_options(&scratchpad_data["options"]);
     true
 }
