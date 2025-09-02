@@ -1,5 +1,5 @@
-exec-once = hyprscratch 
-exec-once = hyprscratch eager 
+exec-once = hyprscratch
+exec-once = hyprscratch eager
 exec-once = hyprscratch clean
 exec-once = hyprscratch spotless
 exec-once = hyprscratch no-auto-reload
@@ -18,6 +18,6 @@ bind = $mainMod, b, exec, hyprscratch kill
 bind = $mainMod, b, exec, hyprscratch kill-all
 
 bind = $mainMod, b, exec, hyprscratch btop '[size 85% 85%] kitty --title btop -e btop' cover persist sticky shiny lazy show hide poly special tiled
-bind = $mainMod, b, exec, hyprscratch "Loading…" "[size 70% 80%] nautilus" 
-bind = $mainMod, b, exec, hyprscratch \" \' cover eager special 
+bind = $mainMod, b, exec, hyprscratch "Loading…" "[size 70% 80%] nautilus"
+bind = $mainMod, b, exec, hyprscratch \" \' cover eager special
 bind = $mainMod, b, exec, hyprscratch " a program with ' a wierd ' name" ' a "command with" \'a wierd\' format' hide show
