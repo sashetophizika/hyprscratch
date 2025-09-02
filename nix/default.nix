@@ -6,9 +6,9 @@ rustPlatform.buildRustPackage {
   pname = "hyprscratch";
   version = "0.6.2";
 
-  src = lib.cleanSource ./.;
+  src = lib.cleanSource ../.;
 
-  cargoLock.lockFile = ./Cargo.lock;
+  cargoLock.lockFile = ../Cargo.lock;
 
   doCheck = false;
 

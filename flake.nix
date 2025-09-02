@@ -15,7 +15,12 @@
   in {
     packages = forAllSystems (system: {
       default = self.packages.${system}.hyprscratch;
-      hyprscratch = pkgsFor.${system}.callPackage ./. {};
+      hyprscratch = pkgsFor.${system}.callPackage ./nix {};
     });
+
+    homeModules = {
+      default = self.homeModules.hyprscratch;
+      hyprscratch = import ./nix/hm.nix self;
+    };
   };
 }
