@@ -104,8 +104,8 @@ pub fn move_to_special(cl: &Client) {
         WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title.clone())),
         Some(WindowIdentifier::Address(cl.address.clone()))
     )
-    .unwrap_or_else(|_| {
-        log("MoveToSpecial returned Err".into(), Debug).unwrap();
+    .unwrap_or_else(|e| {
+        log(format!("MoveToSpecial returned Err: {e}"), Debug).unwrap();
     });
 }
 
@@ -160,6 +160,7 @@ pub fn prepare_commands(
     command: &str,
     workspace: Option<&str>,
     silent: bool,
+    pinned: bool,
     float: bool,
 ) -> Vec<String> {
     let mut rules = String::from("[");
@@ -172,12 +173,16 @@ pub fn prepare_commands(
         rules += "float;";
     }
 
+    if pinned {
+        rules += "pin;";
+    }
+
     prepend_rules(command, &rules)
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |sc: &Scratchpad| {
-        prepare_commands(&sc.command, Some(&sc.name), true, !sc.options.tiled)
+        prepare_commands(&sc.command, Some(&sc.name), true, false, !sc.options.tiled)
             .iter()
             .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
     };

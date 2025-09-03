@@ -147,7 +147,7 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
     }
 
     add_vanish(&mut ev, config.clone());
-    add_pin(&mut ev, config.clone());
+    // add_pin(&mut ev, config.clone());
     ev.start_listener()
 }
 

@@ -185,11 +185,17 @@ impl Scratchpad {
     }
 
     fn spawn_special(&self) {
-        prepare_commands(&self.command, Some(&self.name), false, !self.options.tiled)
-            .iter()
-            .for_each(|cmd| {
-                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-            });
+        prepare_commands(
+            &self.command,
+            Some(&self.name),
+            false,
+            false,
+            !self.options.tiled,
+        )
+        .iter()
+        .for_each(|cmd| {
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        });
     }
 
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
@@ -229,11 +235,17 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        prepare_commands(&self.command, None, false, !self.options.tiled)
-            .iter()
-            .for_each(|cmd| {
-                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-            });
+        prepare_commands(
+            &self.command,
+            None,
+            false,
+            self.options.pin,
+            !self.options.tiled,
+        )
+        .iter()
+        .for_each(|cmd| {
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        });
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
@@ -252,6 +264,10 @@ impl Scratchpad {
                 FocusWindow,
                 WindowIdentifier::Address(client.address.clone())
             )?;
+
+            if self.options.pin {
+                Dispatch::call(DispatchType::TogglePin)?;
+            }
 
             if !self.options.poly {
                 break;
@@ -345,7 +361,12 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide(clients: Vec<&Client>) {
+    fn hide(&self, clients: Vec<&Client>) {
+        if self.options.pin {
+            Self::refocus(clients[0]).log_err(file!(), line!());
+            Dispatch::call(DispatchType::TogglePin).log_err(file!(), line!());
+        }
+
         clients.into_iter().for_each(move_to_special)
     }
 
@@ -353,7 +374,7 @@ impl Scratchpad {
         let state = HyprlandState::new(&self.title)?;
         match self.get_mode(&state) {
             Refocus(client) => Self::refocus(client)?,
-            Hide(clients) => Self::hide(clients),
+            Hide(clients) => self.hide(clients),
             Summon => self.summon(&state)?,
         }
 
