@@ -15,7 +15,7 @@ Hyprscratch makes scratchpads in Hyprland painless in a well-integrated and flex
 * Many options to easily tweak behaviour of scratchpads.
 * Event listeners to allow automation of scratchpad management.
 * Includes cycling and restoring previous scratchpads.
-* Supports many scratchpads active at the same time. 
+* Supports many scratchpads active at the same time.
 
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
@@ -64,7 +64,7 @@ name {
     command = command
 
     # At least one is mandatory, title takes priority
-    title = title                        
+    title = title
     class = class
 
     # Optional fields
@@ -76,7 +76,7 @@ name {
 And in `hyprland.conf`, using the given name:
 
 ```bash
-exec-once = hyprscratch init 
+exec-once = hyprscratch init
 
 bind = $mainMod, t, hyprscratch toggle name
 bind = $mainMod, s, hyprscratch show name
@@ -159,6 +159,6 @@ Terminal applications often all use the title of the terminal emulator. Usually 
 
 Multiple commands can be bound to a single scratchpad by separating them with `?`(e.g. `hyprscratch title "[rules1] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
 
-To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them. 
+To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them.
 
 If there are multiple clients with the same title, the program just grabs the first one it finds. This usually results in cycling between them, every time one is shown.

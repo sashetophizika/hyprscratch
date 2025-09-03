@@ -178,7 +178,7 @@ DAEMON OPTIONS
   spotless                    Hide scratchpads on focus change
   eager                       Spawn scratchpads hidden on start
   no-auto-reload              Don't reload the configuration when the configuration file is updated
-  config </path/to/config>    Specify a path to the configuration file             
+  config </path/to/config>    Specify a path to the configuration file
 
 SCRATCHPAD OPTIONS
   ephemeral                   Close the scratchpad when it is hidden
@@ -211,11 +211,11 @@ EXTRA COMMANDS
   help                        Print this help message
 
 FLAG ALIASES
-  -c, --config                 
-  -r, --reload                 
-  -g, --get-config             
-  -k, --kill                   
-  -l, --logs                   
-  -v, --version                
+  -c, --config
+  -r, --reload
+  -g, --get-config
+  -k, --kill
+  -l, --logs
+  -v, --version
   -h, --help")
 }
