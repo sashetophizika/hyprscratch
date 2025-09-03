@@ -20,43 +20,12 @@ Hyprscratch makes scratchpads in Hyprland painless in a well-integrated and flex
 ## Installation
 ### [Cargo](https://crates.io/crates/hyprscratch):
 
-```
+```bash
 cargo install hyprscratch
 ```
 ### [AUR](https://aur.archlinux.org/packages/hyprscratch):
-```
+```bash
 paru -S hyprscratch
-```
-### Nix:
-```nix
-# flake.nix
-inputs = {
-  hyprscratch = {
-    url = "github:sashetophizika/hyprscratch";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-};
-```
-```nix
-# home.nix
-{inputs, pkgs, ...}: {
-  home.packages = [inputs.hyprscratch.packages.${pkgs.system}.default];
-
-  # or
-
-  imports = [inputs.hyprscratch.homeModules.default];
-  programs.hyprscratch = {
-    enable = true;
-    settings = {
-      btop = {
-        class = "btop";
-        command = "kitty --title btop -e btop";
-        rules = "size 85% 85%";
-        options = "cover persist sticky";
-      };
-    };
-  };
-}
 ```
 
 ## Usage
