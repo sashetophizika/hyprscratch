@@ -28,6 +28,10 @@ cargo install hyprscratch
 paru -S hyprscratch
 ```
 
+### Nix:
+
+Look [here](https://github.com/sashetophizika/hyprscratch/blob/master/NIX.md) for installation options.
+
 ## Usage
 
 ### Basic
