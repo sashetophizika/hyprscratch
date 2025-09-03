@@ -1,4 +1,4 @@
-## Nix Installation insctructions:
+## Nix Installation Insctructions:
 
 ### Flake:
 ```nix
