@@ -266,7 +266,7 @@ impl Scratchpad {
             )?;
 
             if self.options.pin {
-                Dispatch::call(DispatchType::TogglePin)?;
+                Self::toggle_pin(client, true)?;
             }
 
             if !self.options.poly {
@@ -361,10 +361,20 @@ impl Scratchpad {
         Ok(())
     }
 
+    fn toggle_pin(client: &Client, set_to: bool) -> Result<()> {
+        if client.pinned != set_to {
+            hyprland::dispatch!(
+                Custom,
+                "pin",
+                format!("address:{}", client.address).as_str()
+            )?;
+        }
+        Ok(())
+    }
+
     fn hide(&self, clients: Vec<&Client>) {
         if self.options.pin {
-            Self::refocus(clients[0]).log_err(file!(), line!());
-            Dispatch::call(DispatchType::TogglePin).log_err(file!(), line!());
+            Self::toggle_pin(clients[0], false).log_err(file!(), line!());
         }
 
         clients.into_iter().for_each(move_to_special)
