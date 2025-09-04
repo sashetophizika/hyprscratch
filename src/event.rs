@@ -1,9 +1,8 @@
 use crate::config::Config;
 use crate::daemon::{DaemonOptions, DaemonState};
 use crate::logs::*;
-use crate::scratchpad::ScratchpadOptions;
 use crate::utils::*;
-use hyprland::data::{Client, Clients, Monitor, Workspace};
+use hyprland::data::{Client, Clients, Workspace};
 use hyprland::dispatch::*;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
@@ -11,70 +10,11 @@ use hyprland::Result;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex, MutexGuard};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::*;
 use std::time::Duration;
 
 type ConfigMutex = Arc<Mutex<Config>>;
-
-fn get_client_opts<'a>(cl: &Client, config: &'a MutexGuard<Config>) -> &'a ScratchpadOptions {
-    let idx = config
-        .scratchpads
-        .iter()
-        .position(|x| x.matches_client(cl))
-        .unwrap_log(file!(), line!());
-
-    &config.scratchpads[idx].options
-}
-
-fn should_move(cl: &Client, config: &MutexGuard<Config>) -> bool {
-    let opts = get_client_opts(cl, config);
-    if opts.special {
-        return false;
-    }
-
-    if let (Some(monitor), Ok(active)) = (&opts.monitor, Monitor::get_active()) {
-        if active.name != *monitor && active.id.to_string() != *monitor {
-            return false;
-        }
-    }
-    true
-}
-
-fn move_to_current(cl: &Client, config: &MutexGuard<Config>) {
-    if !should_move(cl, config) {
-        return;
-    }
-
-    hyprland::dispatch!(
-        MoveToWorkspace,
-        WorkspaceIdentifierWithSpecial::Relative(0),
-        Some(WindowIdentifier::Address(cl.address.clone()))
-    )
-    .log_err(file!(), line!())
-}
-
-fn follow_workpace(config: &ConfigMutex) {
-    let conf = config.lock().unwrap_log(file!(), line!());
-    if conf.pinned_titles.is_empty() {
-        return;
-    }
-
-    if let Ok(clients) = Clients::get() {
-        clients
-            .into_iter()
-            .filter(|cl| !is_on_special(cl) && is_known(&conf.pinned_titles, cl))
-            .for_each(|cl| move_to_current(&cl, &conf));
-    }
-}
-
-fn add_pin(ev: &mut EventListener, config: ConfigMutex) {
-    let follow = move || follow_workpace(&config);
-    let follow_clone = follow.clone();
-
-    ev.add_workspace_changed_handler(move |_| follow_clone());
-    ev.add_active_monitor_changed_handler(move |_| follow());
-}
 
 fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_window_moved_handler(move |data| {
@@ -147,7 +87,6 @@ fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> 
     }
 
     add_vanish(&mut ev, config.clone());
-    // add_pin(&mut ev, config.clone());
     ev.start_listener()
 }
 
