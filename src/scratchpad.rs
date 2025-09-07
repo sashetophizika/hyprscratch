@@ -185,15 +185,7 @@ impl Scratchpad {
     }
 
     fn spawn_special(&self) {
-        prepare_commands(
-            &self.command,
-            Some(&self.name),
-            false,
-            false,
-            !self.options.tiled,
-        )
-        .iter()
-        .for_each(|cmd| {
+        prepare_commands(&self, Some(false)).iter().for_each(|cmd| {
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }
@@ -235,15 +227,7 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        prepare_commands(
-            &self.command,
-            None,
-            false,
-            self.options.pin,
-            !self.options.tiled,
-        )
-        .iter()
-        .for_each(|cmd| {
+        prepare_commands(&self, None).iter().for_each(|cmd| {
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }
@@ -266,7 +250,7 @@ impl Scratchpad {
             )?;
 
             if self.options.pin {
-                Dispatch::call(DispatchType::TogglePin)?;
+                set_pin(client, true)?;
             }
 
             if !self.options.poly {
@@ -362,11 +346,6 @@ impl Scratchpad {
     }
 
     fn hide(&self, clients: Vec<&Client>) {
-        if self.options.pin {
-            Self::refocus(clients[0]).log_err(file!(), line!());
-            Dispatch::call(DispatchType::TogglePin).log_err(file!(), line!());
-        }
-
         clients.into_iter().for_each(move_to_special)
     }
 
@@ -395,6 +374,77 @@ mod tests {
         command: String,
     }
 
+    impl TestResources {
+        fn new(title: &str) -> TestResources {
+            TestResources {
+                title: format!("test_{title}"),
+                command: format!("[size 30% 30%] kitty --title test_{title}"),
+            }
+        }
+
+        fn into_scratchpad(&self, options: &str) -> Scratchpad {
+            Scratchpad::new(&self.title, &self.title, &self.command, options)
+        }
+
+        fn assert_present(&self) {
+            assert_eq!(
+                Clients::get()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.initial_title == self.title),
+                true
+            );
+        }
+
+        fn assert_not_present(&self) {
+            assert_eq!(
+                Clients::get()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.initial_title == self.title),
+                false
+            );
+        }
+
+        fn assert_on_active(&self, count: usize) {
+            assert_eq!(
+                Clients::get()
+                    .unwrap()
+                    .iter()
+                    .filter(|x| x.initial_title == self.title
+                        && x.workspace.name == Workspace::get_active().unwrap().name)
+                    .count(),
+                count
+            );
+        }
+
+        fn assert_active(&self) {
+            assert_eq!(
+                Client::get_active().unwrap().unwrap().initial_title,
+                self.title
+            );
+        }
+
+        fn assert_not_active(&self) {
+            assert_ne!(
+                Client::get_active().unwrap().unwrap().initial_title,
+                self.title
+            );
+        }
+
+        fn assert_single(&self) {
+            assert_eq!(
+                Clients::get()
+                    .unwrap()
+                    .into_iter()
+                    .filter(|x| x.initial_title == self.title)
+                    .collect::<Vec<_>>()
+                    .len(),
+                1
+            );
+        }
+    }
+
     impl Drop for TestResources {
         fn drop(&mut self) {
             self.command.split("?").for_each(|_| {
@@ -406,153 +456,74 @@ mod tests {
 
     #[test]
     fn test_summon_normal() {
-        let resources = TestResources {
-            title: "test_normal_scratchpad".to_string(),
-            command: "[float;size 30% 30%] kitty --title test_normal_scratchpad".to_string(),
-        };
+        let resources = TestResources::new("normal");
+        let mut scratchpad = resources.into_scratchpad("");
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
+        resources.assert_not_present();
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources.title);
+        resources.assert_active();
 
-        move_to_special(&active_client);
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            true
-        );
-        assert_ne!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_present();
+        resources.assert_not_active();
 
-        let active_workspace = Workspace::get_active().unwrap();
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(Workspace::get_active().unwrap().id, active_workspace.id);
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_active();
+        resources.assert_on_active(1);
     }
 
     #[test]
     fn test_summon_special() {
-        let resources = TestResources {
-            title: "test_special_scratchpad".to_string(),
-            command: "[size 30% 30%] kitty --title test_special_scratchpad".to_string(),
-        };
+        let resources = TestResources::new("special");
+        let mut scratchpad = resources.into_scratchpad("special");
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
+        resources.assert_not_present();
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_active();
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            true
-        );
-        assert_ne!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_present();
+        resources.assert_not_active();
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_special(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpad.trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources.title);
-
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "cover",
-        )
-        .hide_active(
-            &vec![resources.title.clone()],
-            &HyprlandState::new(&resources.title).unwrap(),
-        );
-        sleep(Duration::from_millis(500));
-
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources.title);
+        resources.assert_active();
+        resources.assert_on_active(0);
     }
 
     #[test]
     fn test_persist() {
-        let resources = TestResources {
-            title: "test_persist".to_string(),
-            command: "[size 30% 30%] kitty --title test_persist".to_string(),
-        };
+        let resources = [TestResources::new("persist"), TestResources::new("normal")];
+        let mut scratchpads = [
+            resources[0].into_scratchpad("persist"),
+            resources[1].into_scratchpad(""),
+        ];
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
+        resources.iter().for_each(|r| r.assert_not_present());
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .summon_normal(&HyprlandState::new(&resources.title).unwrap())
-            .unwrap();
+        scratchpads[0].trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources.title);
+        resources[0].assert_active();
 
-        Scratchpad::new(&resources.title, &resources.title, &resources.command, "")
-            .hide_active(&vec![], &HyprlandState::new(&resources.title).unwrap());
+        scratchpads[1].trigger(&[]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert!(Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.workspace.id == Workspace::get_active().unwrap().id)
-            .any(|x| x.initial_title == resources.title));
+        resources[1].assert_active();
+        resources[0].assert_on_active(1);
     }
 
     #[test]
@@ -561,241 +532,125 @@ mod tests {
             title: "test_poly".to_string(),
             command: "[size 30% 30%; move 0 0] kitty --title test_poly ? [size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
         };
+        let mut scratchpad = resources.into_scratchpad("poly");
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "poly",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        resources.assert_not_present();
+
+        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .filter(|x| x.initial_title == resources.title
-                    && x.workspace.name == Workspace::get_active().unwrap().name)
-                .count(),
-            2
-        );
+        resources.assert_on_active(2);
 
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "poly",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .filter(|x| x.initial_title == resources.title
-                    && x.workspace.name == Workspace::get_active().unwrap().name)
-                .count(),
-            0
-        );
+        resources.assert_on_active(0);
     }
 
     #[test]
     fn test_tiled() {
-        let resources = [
-            TestResources {
-                title: "test_tiled".to_string(),
-                command: "kitty --title test_tiled".to_string(),
-            },
-            TestResources {
-                title: "test_floating".to_string(),
-                command: "kitty --title test_floating".to_string(),
-            },
+        let resources = [TestResources::new("tiled"), TestResources::new("floating")];
+        let mut scratchpad = [
+            resources[0].into_scratchpad("tiled"),
+            resources[0].into_scratchpad(""),
         ];
 
-        assert_eq!(
-            Clients::get().unwrap().iter().any(|x| resources
-                .iter()
-                .filter(|y| y.title == x.initial_title)
-                .next()
-                .is_none()),
-            true
-        );
+        resources.iter().for_each(|r| r.assert_not_present());
 
-        Scratchpad::new(
-            &resources[0].title,
-            &resources[0].title,
-            &resources[0].command,
-            "tiled",
-        )
-        .trigger(&vec![resources[0].title.clone()])
-        .unwrap();
+        scratchpad[0]
+            .trigger(&vec![resources[0].title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
+        resources[0].assert_active();
         let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources[0].title);
         assert_eq!(active_client.floating, false);
 
-        Scratchpad::new(
-            &resources[1].title,
-            &resources[1].title,
-            &resources[1].command,
-            "",
-        )
-        .trigger(&vec![resources[1].title.clone()])
-        .unwrap();
+        scratchpad[1]
+            .trigger(&vec![resources[1].title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
+        resources[1].assert_active();
         let active_client = Client::get_active().unwrap().unwrap();
-        assert_eq!(active_client.initial_title, resources[1].title);
         assert_eq!(active_client.floating, true);
     }
 
     #[test]
+    fn test_pin() {
+        let resources = TestResources::new("pin");
+        let mut scratchpad = resources.into_scratchpad("pin");
+
+        resources.assert_not_present();
+
+        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
+        sleep(Duration::from_millis(500));
+
+        resources.assert_active();
+
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        sleep(Duration::from_millis(500));
+
+        resources.assert_active();
+        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
+    }
+
+    #[test]
     fn test_summon_hide() {
-        let resources = TestResources {
-            title: "test_summon_hide".to_string(),
-            command: "[size 30% 30%] kitty --title test_summon_hide".to_string(),
-        };
+        let resources = TestResources::new("summon_hide");
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
+        resources.assert_not_present();
 
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "summon",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        resources
+            .into_scratchpad("summon")
+            .trigger(&vec![resources.title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_active();
 
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "summon",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        resources
+            .into_scratchpad("summon")
+            .trigger(&vec![resources.title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
-        let clients_with_title: Vec<Client> = Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.initial_title == resources.title)
-            .collect();
+        resources.assert_single();
+        resources.assert_active();
 
-        assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
-
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "hide",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        resources
+            .into_scratchpad("hide")
+            .trigger(&vec![resources.title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
-        assert_ne!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title,
-        );
+        resources.assert_present();
+        resources.assert_not_active();
 
-        let clients_with_title: Vec<Client> = Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.initial_title == resources.title)
-            .collect();
-
-        assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(
-            clients_with_title[0].workspace.name,
-            "special:".to_owned() + &resources.title
-        );
-
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "hide",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        resources
+            .into_scratchpad("hide")
+            .trigger(&vec![resources.title.clone()])
+            .unwrap();
         sleep(Duration::from_millis(500));
 
-        let clients_with_title: Vec<Client> = Clients::get()
-            .unwrap()
-            .into_iter()
-            .filter(|x| x.initial_title == resources.title)
-            .collect();
-
-        assert_eq!(clients_with_title.len(), 1);
-        assert_eq!(
-            clients_with_title[0].workspace.name,
-            "special:".to_owned() + &resources.title
-        );
+        resources.assert_not_active();
     }
 
     #[test]
     fn test_named_workspace() {
-        let resources = TestResources {
-            title: "test_named_workspace".to_string(),
-            command: "[size 30% 30%] kitty --title test_named_workspace".to_string(),
-        };
+        let resources = TestResources::new("named_workspace");
+        let mut scratchpad = resources.into_scratchpad("");
 
-        assert_eq!(
-            Clients::get()
-                .unwrap()
-                .iter()
-                .any(|x| x.initial_title == resources.title),
-            false
-        );
+        resources.assert_not_present();
 
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Name("test")).unwrap();
         sleep(Duration::from_millis(500));
         assert_eq!(Workspace::get_active().unwrap().name, "test");
 
-        Scratchpad::new(
-            &resources.title,
-            &resources.title,
-            &resources.command,
-            "summon",
-        )
-        .trigger(&vec![resources.title.clone()])
-        .unwrap();
+        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
         sleep(Duration::from_millis(1000));
 
-        assert_eq!(
-            Client::get_active().unwrap().unwrap().initial_title,
-            resources.title
-        );
+        resources.assert_active();
 
         assert_eq!(Workspace::get_active().unwrap().name, "test");
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Id(1)).unwrap();
