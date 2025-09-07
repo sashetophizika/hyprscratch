@@ -13,7 +13,7 @@ use std::path::Path;
 
 type ConfigData = (String, Vec<Scratchpad>);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Config {
     pub scratchpads: Vec<Scratchpad>,
     pub ephemeral_titles: Vec<String>,
@@ -498,102 +498,97 @@ mod tests {
         assert_eq!(scratchpads, expected_scratchpads);
     }
 
+    struct ReloadResources {
+        config_contents_a: &'static [u8],
+        config_contents_b: &'static [u8],
+        expected_config_a: Config,
+        expected_config_b: Config,
+    }
+
+    fn create_reosources(config_file: &str) -> ReloadResources {
+        ReloadResources {
+            config_contents_a: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
+    bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
+    bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
+    bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n",
+            config_contents_b: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
+    bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
+    bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
+    bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
+            expected_config_a: Config {
+                config_file: config_file.to_string(),
+                daemon_options: "".into(),
+                scratchpads: vec![
+                Scratchpad::new("firefox", "firefox", "firefox", "cover"),
+                Scratchpad::new(
+                    "btop",
+                    "btop",
+                    "kitty --title btop -e btop",
+                    "cover shiny eager show hide special sticky",
+                ),
+                Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "special"),
+                Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "eager"),
+            ],
+                normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
+                special_titles: vec!["btop".to_string(), "htop".to_string()],
+                slick_titles: vec![
+                    "firefox".to_string(),
+                    "htop".to_string(),
+                    "cmat".to_string(),
+                ],
+                dirty_titles: vec![
+                    "firefox".to_string(),
+                    "htop".to_string(),
+                    "cmat".to_string(),
+                ],
+                fickle_titles: vec![
+                    "firefox".to_string(),
+                    "cmat".to_string(),
+                ],
+                ephemeral_titles: vec![],
+            },
+            expected_config_b: Config {
+                config_file: config_file.to_string(),
+                daemon_options: "".into(),
+                scratchpads: vec![
+                Scratchpad::new(
+                    "firefox",
+                    "firefox",
+                    "firefox --private-window",
+                    "special sticky",
+                ),
+                Scratchpad::new("btop", "btop", "kitty --title btop -e btop", ""),
+                Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "cover shiny"),
+                Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "special"),
+            ],
+                normal_titles: vec!["btop".to_string(), "htop".to_string()],
+                special_titles: vec!["firefox".to_string(), "cmat".to_string()],
+                slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
+                dirty_titles: vec!["btop".to_string(), "cmat".to_string()],
+                fickle_titles: vec![
+                    "btop".to_string(),
+                    "htop".to_string(),
+                ],
+                ephemeral_titles: vec![],
+            }
+        }
+    }
+
     #[test]
     fn test_reload() {
-        let mut config_file = File::create("./test_configs/test_config2.txt").unwrap();
-        config_file.write(b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
-bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n").unwrap();
+        let config_path = "./test_configs/test_config2.txt";
+        let mut config_file = File::create(config_path).unwrap();
+        let resources = create_reosources(config_path);
+        config_file.write(resources.config_contents_a).unwrap();
 
-        let config_file = "./test_configs/test_config2.txt".to_string();
-        let mut config = Config::new(Some(config_file.clone())).unwrap();
-        let scratchpads = vec![
-            Scratchpad::new("firefox", "firefox", "firefox", "cover"),
-            Scratchpad::new(
-                "btop",
-                "btop",
-                "kitty --title btop -e btop",
-                "cover shiny eager show hide special sticky",
-            ),
-            Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "special"),
-            Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "eager"),
-        ];
-        let expected_config = Config {
-            config_file,
-            daemon_options: "".into(),
-            scratchpads,
-            normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
-            special_titles: vec!["btop".to_string(), "htop".to_string()],
-            slick_titles: vec![
-                "firefox".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            dirty_titles: vec![
-                "firefox".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            fickle_titles: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            ephemeral_titles: vec![],
-        };
+        let mut config = Config::new(Some(config_path.to_string())).unwrap();
+        assert_eq!(config, resources.expected_config_a);
 
-        assert_eq!(config.scratchpads, expected_config.scratchpads);
-        assert_eq!(config.normal_titles, expected_config.normal_titles);
-        assert_eq!(config.special_titles, expected_config.special_titles);
-        assert_eq!(config.slick_titles, expected_config.slick_titles);
-        assert_eq!(config.dirty_titles, expected_config.dirty_titles);
+        let mut config_file = File::create(config_path).unwrap();
+        config_file.write(resources.config_contents_b).unwrap();
 
-        let mut config_path = File::create("./test_configs/test_config2.txt").unwrap();
-        config_path
-            .write(
-                b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
-bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
-            )
-            .unwrap();
+        config.reload(Some(config_path.to_string())).unwrap();
 
-        let config_file = "./test_configs/test_config2.txt".to_string();
-        config.reload(Some(config_file.clone())).unwrap();
-        let scratchpads = vec![
-            Scratchpad::new(
-                "firefox",
-                "firefox",
-                "firefox --private-window",
-                "special sticky",
-            ),
-            Scratchpad::new("btop", "btop", "kitty --title btop -e btop", ""),
-            Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "cover shiny"),
-            Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "special"),
-        ];
-        let expected_config = Config {
-            config_file,
-            daemon_options: "".into(),
-            scratchpads,
-            normal_titles: vec!["btop".to_string(), "htop".to_string()],
-            special_titles: vec!["firefox".to_string(), "cmat".to_string()],
-            slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
-            dirty_titles: vec!["btop".to_string(), "cmat".to_string()],
-            fickle_titles: vec![
-                "firefox".to_string(),
-                "btop".to_string(),
-                "htop".to_string(),
-                "cmat".to_string(),
-            ],
-            ephemeral_titles: vec![],
-        };
-
-        assert_eq!(config.scratchpads, expected_config.scratchpads);
-        assert_eq!(config.normal_titles, expected_config.normal_titles);
-        assert_eq!(config.special_titles, expected_config.special_titles);
-        assert_eq!(config.slick_titles, expected_config.slick_titles);
-        assert_eq!(config.dirty_titles, expected_config.dirty_titles);
+        assert_eq!(config, resources.expected_config_b);
     }
 }
