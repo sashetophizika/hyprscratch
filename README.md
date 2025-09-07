@@ -28,7 +28,7 @@ cargo install hyprscratch
 paru -S hyprscratch
 ```
 
-### Nix:
+### [Nix](https://github.com/sashetophizika/hyprscratch/blob/master/NIX.md):
 
 Nix installation options can be found [here](https://github.com/sashetophizika/hyprscratch/blob/master/NIX.md).
 
