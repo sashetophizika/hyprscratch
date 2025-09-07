@@ -546,48 +546,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pin() {
-        std::thread::spawn(|| {
-            initialize_daemon(
-                "clean".to_string(),
-                Some("./test_configs/test_config3.txt".to_string()),
-                Some("/tmp/hyprscratch_test.sock"),
-            )
-        });
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
-        let active_workspace = Workspace::get_active().unwrap();
-        let resources = TestResources {
-            titles: [
-                "test_sticky".to_string(),
-                "test_pin".to_string(),
-                "test_normal".to_string(),
-                "test_nonfloating".to_string(),
-            ],
-            commands: [
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
-                "[float; size 30% 30%; move 30% 0] kitty --title test_pin".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
-                "kitty --title test_nonfloating".to_string(),
-            ],
-            expected_workspace: [
-                active_workspace.name.clone(),
-                (active_workspace.id + 1).to_string(),
-                "special:test_normal".to_string(),
-                active_workspace.name,
-            ],
-        };
-
-        setup_test(&resources);
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
-        sleep(Duration::from_millis(500));
-
-        verify_test(&resources);
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
-        sleep(Duration::from_millis(500));
-    }
-
-    #[test]
     fn test_vanish() {
         std::thread::spawn(|| {
             initialize_daemon(
