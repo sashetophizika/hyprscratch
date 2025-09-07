@@ -66,12 +66,12 @@ in {
     home.packages = [cfg.package];
 
     systemd.user.services.hyprscratch = {
-      Install = {
-        WantedBy = ["default.target"];
-      };
+      Install.WantedBy = ["hyprland-session.target"];
 
       Unit = {
         Description = "Hyprscratch: Improved scratchpad functionality for Hyprland";
+        PartOf = ["hyprland-session.target"];
+        After = ["hyprland-session.target"];
       };
 
       Service = {
