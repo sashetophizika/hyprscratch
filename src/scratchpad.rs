@@ -185,7 +185,7 @@ impl Scratchpad {
     }
 
     fn spawn_special(&self) {
-        prepare_commands(&self, Some(false)).iter().for_each(|cmd| {
+        prepare_commands(self, Some(false)).iter().for_each(|cmd| {
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }
@@ -227,7 +227,7 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        prepare_commands(&self, None).iter().for_each(|cmd| {
+        prepare_commands(self, None).iter().for_each(|cmd| {
             hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
         });
     }

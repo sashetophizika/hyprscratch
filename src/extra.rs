@@ -103,7 +103,7 @@ pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
 
     let sep = if raw { "" } else { "│" };
     print_border("┌", "─", "┐");
-    println!("{sep} {} {sep}", config_str);
+    println!("{sep} {config_str} {sep}",);
 
     print_border("├", "┬", "┤");
     if !raw {
@@ -124,7 +124,7 @@ pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
         ];
 
         let c = if raw { c } else { color(c) };
-        println!("{sep} {} {sep} {} {sep} {} {sep}", t, c, o);
+        println!("{sep} {t} {sep} {c} {sep} {o} {sep}");
     }
 
     print_border("└", "┴", "┘");
