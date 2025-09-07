@@ -347,7 +347,6 @@ mod tests {
             ephemeral_titles: Vec::new(),
             special_titles: Vec::new(),
             normal_titles: Vec::new(),
-            pinned_titles: Vec::new(),
             slick_titles: Vec::new(),
             dirty_titles: Vec::new(),
             fickle_titles: resources.titles.to_vec(),

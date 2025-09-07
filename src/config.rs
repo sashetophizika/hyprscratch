@@ -508,13 +508,13 @@ mod tests {
     fn create_reosources(config_file: &str) -> ReloadResources {
         ReloadResources {
             config_contents_a: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
-    bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
-    bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-    bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n",
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n",
             config_contents_b: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
-    bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
-    bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
-    bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
+bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
             expected_config_a: Config {
                 config_file: config_file.to_string(),
                 daemon_options: "".into(),
