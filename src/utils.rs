@@ -98,7 +98,20 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
     Ok(())
 }
 
+pub fn set_pin(client: &Client, set_to: bool) -> Result<()> {
+    if client.pinned != set_to {
+        hyprland::dispatch!(
+            Custom,
+            "pin",
+            format!("address:{}", client.address).as_str()
+        )?;
+    }
+    Ok(())
+}
+
 pub fn move_to_special(cl: &Client) {
+    set_pin(cl, false).log_err(file!(), line!());
+
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
         WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title.clone())),
@@ -156,33 +169,27 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
     command.split("?").map(|c| prepend(c, rules)).collect()
 }
 
-pub fn prepare_commands(
-    command: &str,
-    workspace: Option<&str>,
-    silent: bool,
-    pinned: bool,
-    float: bool,
-) -> Vec<String> {
+pub fn prepare_commands(scratchpad: &Scratchpad, on_special: Option<bool>) -> Vec<String> {
     let mut rules = String::from("[");
-    if let Some(workspace) = workspace {
-        let silent = if silent { "silent" } else { "" };
-        rules += &format!("workspace special:{workspace} {silent};");
+    if let Some(sil) = on_special {
+        let silent = if sil { "silent" } else { "" };
+        rules += &format!("workspace special:{} {silent};", &scratchpad.name);
     }
 
-    if float {
-        rules += "float;";
-    }
-
-    if pinned {
+    if scratchpad.options.pin && on_special.is_none() {
         rules += "pin;";
     }
 
-    prepend_rules(command, &rules)
+    if !scratchpad.options.tiled {
+        rules += "float;";
+    }
+
+    prepend_rules(&scratchpad.command, &rules)
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |sc: &Scratchpad| {
-        prepare_commands(&sc.command, Some(&sc.name), true, false, !sc.options.tiled)
+        prepare_commands(sc, Some(true))
             .iter()
             .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
     };
