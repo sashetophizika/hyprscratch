@@ -101,9 +101,8 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
 pub fn set_pin(client: &Client, set_to: bool) -> Result<()> {
     if client.pinned != set_to {
         hyprland::dispatch!(
-            Custom,
-            "pin",
-            format!("address:{}", client.address).as_str()
+            TogglePinWindow,
+            WindowIdentifier::Address(client.address.clone())
         )?;
     }
     Ok(())
