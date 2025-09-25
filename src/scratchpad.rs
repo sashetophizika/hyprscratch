@@ -249,8 +249,12 @@ impl Scratchpad {
                 WindowIdentifier::Address(client.address.clone())
             )?;
 
-            if self.options.pin {
-                set_pin(client, true)?;
+            if self.options.pin && !client.pinned {
+                hyprland::dispatch!(
+                    TogglePinWindow,
+                    WindowIdentifier::Address(client.address.clone())
+                )
+                .log_err(file!(), line!());
             }
 
             if !self.options.poly {

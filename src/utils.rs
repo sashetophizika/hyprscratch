@@ -98,18 +98,14 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
     Ok(())
 }
 
-pub fn set_pin(client: &Client, set_to: bool) -> Result<()> {
-    if client.pinned != set_to {
+pub fn move_to_special(cl: &Client) {
+    if cl.pinned {
         hyprland::dispatch!(
             TogglePinWindow,
-            WindowIdentifier::Address(client.address.clone())
-        )?;
+            WindowIdentifier::Address(cl.address.clone())
+        )
+        .log_err(file!(), line!());
     }
-    Ok(())
-}
-
-pub fn move_to_special(cl: &Client) {
-    set_pin(cl, false).log_err(file!(), line!());
 
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
