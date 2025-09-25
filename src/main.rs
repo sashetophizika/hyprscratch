@@ -10,7 +10,7 @@ use crate::daemon::initialize_daemon;
 use crate::extra::*;
 use crate::logs::*;
 use crate::utils::*;
-use hyprland::shared::HyprError;
+use hyprland::error::HyprError;
 use hyprland::Result;
 use std::env::args;
 

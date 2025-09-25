@@ -8,7 +8,7 @@ use crate::HYPRSCRATCH_DIR;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::prelude::*;
-use hyprland::shared::HyprError;
+use hyprland::error::HyprError;
 use hyprland::Result;
 use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
