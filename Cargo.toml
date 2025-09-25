@@ -13,7 +13,7 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 chrono = "0.4.38"
-hyprland = "0.4.0-beta.2"
+hyprland = "0.4.0-beta.3"
 notify = "8.1.0"
 
 [dev-dependencies]
