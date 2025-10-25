@@ -1,6 +1,7 @@
 use crate::logs::*;
 use crate::{DEFAULT_LOGFILE, DEFAULT_SOCKET};
 use hyprland::Result;
+use std::cmp::max;
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::Shutdown;
@@ -81,17 +82,24 @@ pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
 
     let get_centered_conf = || {
         let table_width = max_titles + max_commands + max_options + 6;
-        let center_fix = if table_width % 2 == 0 {
-            conf.len() + conf.len() % 2
+
+        let c = if table_width <= conf.len() {
+            conf.split("/").last().unwrap_log(file!(), line!())
         } else {
-            conf.len() - 1
+            conf
+        };
+
+        let center_fix = if table_width % 2 == 0 {
+            c.len() + c.len() % 2
+        } else {
+            c.len() - 1
         };
 
         format!(
             "{}\x1b[0;35m{}\x1b[0;0m{}",
-            " ".repeat(table_width / 2 - conf.len() / 2),
-            conf,
-            " ".repeat((table_width - center_fix) / 2)
+            " ".repeat(max(table_width / 2 - c.len() / 2, 0)),
+            c,
+            " ".repeat(max((table_width - center_fix) / 2, 0))
         )
     };
 
@@ -158,6 +166,7 @@ pub fn print_logs(raw: bool) -> Result<()> {
 }
 
 pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
+    println!("Hyprscratch v{}", env!("CARGO_PKG_VERSION"));
     println!("### LOGS ###\n");
     print_logs(true)?;
     println!("\n### CONFIGURATION ###\n");
