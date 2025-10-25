@@ -102,11 +102,12 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
 
     for config in config_files {
         let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
+        let parent = Path::new(config).parent().unwrap_log(file!(), line!());
         let mut content = String::new();
         File::open(config)?.read_to_string(&mut content)?;
 
         let (options, mut config_data) = if config.contains("hyprland.conf") || ext == "txt" {
-            parse_config(&content)?
+            parse_config(&content, parent)?
         } else {
             parse_hyprlang(&content)?
         };
@@ -168,14 +169,14 @@ fn split_args(line: String) -> Vec<String> {
     args
 }
 
-fn get_hyprscratch_lines(config: &str) -> Vec<String> {
+fn get_lines_with(pat: &str, config: &str) -> Vec<String> {
     let mut lines = vec![];
     for line in config.lines() {
         if line.trim().starts_with("#") {
             continue;
         }
 
-        if let Some(l) = line.find("hyprscratch") {
+        if let Some(l) = line.find(pat) {
             lines.push(line.split_at(l).1.to_string());
         }
     }
@@ -244,15 +245,41 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
     }
 }
 
-fn parse_config(config: &str) -> Result<ConfigData> {
-    let lines: Vec<String> = get_hyprscratch_lines(config);
+fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
+    let source_path = match source.split_once("=") {
+        Some((_, s)) => s.trim(),
+        None => return Ok(vec![]),
+    };
 
+    let path = parent.join(source_path);
+
+    if let Ok(mut conf_file) = File::open(&path) {
+        let mut config = String::new();
+        conf_file.read_to_string(&mut config)?;
+        let parent = path.parent().unwrap_log(file!(), line!());
+
+        let (_, scratchpads) = parse_config(&config, parent)?;
+        return Ok(scratchpads);
+    } else {
+        let _ = log(format!("Source file not found: {source}"), Warn);
+        return Ok(vec![]);
+    }
+}
+
+fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
     let mut scratchpads: Vec<Scratchpad> = vec![];
+
+    let lines = get_lines_with("hyprscratch", config);
     for line in lines {
         let args = split_args(line);
         if let Some([title, command, opts]) = parse_args(&args) {
             scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
         }
+    }
+
+    for source in get_lines_with("source", config).iter() {
+        let mut scr = parse_source_config(source, parent).unwrap_log(file!(), line!());
+        scratchpads.append(&mut scr);
     }
 
     Ok(("".into(), scratchpads))
@@ -490,7 +517,11 @@ mod tests {
 
     #[test]
     fn test_parse_config() {
-        let (_, scratchpads) = parse_config(&open_conf("./test_configs/test_config1.txt")).unwrap();
+        let (_, scratchpads) = parse_config(
+            &open_conf("./test_configs/test_config1.txt"),
+            Path::new("./test_configs"),
+        )
+        .unwrap();
         let mut expected_scratchpads = expected_scratchpads();
         for sc in expected_scratchpads.iter_mut() {
             sc.name = sc.title.clone();
