@@ -259,10 +259,10 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
         let parent = path.parent().unwrap_log(file!(), line!());
 
         let (_, scratchpads) = parse_config(&config, parent)?;
-        return Ok(scratchpads);
+        Ok(scratchpads)
     } else {
         let _ = log(format!("Source file not found: {source}"), Warn);
-        return Ok(vec![]);
+        Ok(vec![])
     }
 }
 
@@ -521,10 +521,12 @@ mod tests {
             Path::new("./test_configs"),
         )
         .unwrap();
+
         let mut expected_scratchpads = expected_scratchpads();
         for sc in expected_scratchpads.iter_mut() {
             sc.name = sc.title.clone();
         }
+
         assert_eq!(scratchpads, expected_scratchpads);
     }
 
