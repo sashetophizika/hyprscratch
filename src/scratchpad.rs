@@ -556,7 +556,7 @@ mod tests {
         let resources = [TestResources::new("tiled"), TestResources::new("floating")];
         let mut scratchpad = [
             resources[0].into_scratchpad("tiled"),
-            resources[0].into_scratchpad(""),
+            resources[1].into_scratchpad(""),
         ];
 
         resources.iter().for_each(|r| r.assert_not_present());
