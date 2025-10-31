@@ -509,7 +509,6 @@ mod tests {
     }
     #[test]
     fn test_parse_hyprlang() {
-        println!("{}", &open_conf("./test_configs/test_hyprlang.conf"));
         let (_, scratchpads) =
             parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
         assert_eq!(scratchpads, expected_scratchpads());
@@ -526,6 +525,23 @@ mod tests {
         for sc in expected_scratchpads.iter_mut() {
             sc.name = sc.title.clone();
         }
+        assert_eq!(scratchpads, expected_scratchpads);
+    }
+
+    #[test]
+    fn test_recursive_config() {
+        let (_, scratchpads) = parse_config(
+            &open_conf("./test_configs/test_nested/config_main.txt"),
+            Path::new("./test_configs/test_nested"),
+        )
+        .unwrap();
+
+        let mut expected_scratchpads = vec![];
+        for i in 1..=11 {
+            let title = format!("scratch{i}");
+            expected_scratchpads.push(Scratchpad::new(&title, &title, "noop", ""))
+        }
+
         assert_eq!(scratchpads, expected_scratchpads);
     }
 
