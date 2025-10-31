@@ -1,0 +1,3 @@
+source = ./config5.txt
+source = ./config6.txt
+source = ./more_configs/config7.txt

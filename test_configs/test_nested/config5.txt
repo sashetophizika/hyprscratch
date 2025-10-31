@@ -1,0 +1,1 @@
+hyprscratch scratch8 noop

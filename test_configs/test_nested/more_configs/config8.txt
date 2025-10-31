@@ -1,0 +1,2 @@
+hyprscratch scratch10 noop 
+hyprscratch scratch11 noop 

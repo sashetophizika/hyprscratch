@@ -1,0 +1,2 @@
+source = ./config4.txt
+hyprscratch scratch1 noop 
