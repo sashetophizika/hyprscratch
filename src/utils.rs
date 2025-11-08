@@ -204,6 +204,7 @@ mod tests {
     use super::*;
     use crate::scratchpad::Scratchpad;
     use hyprland::data::{Client, Workspace};
+    use std::collections::HashMap;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -337,6 +338,7 @@ mod tests {
 
         let mut config = Config {
             scratchpads,
+            groups: HashMap::new(),
             daemon_options: "".into(),
             config_file: "".to_string(),
             ephemeral_titles: Vec::new(),

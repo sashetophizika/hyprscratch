@@ -73,6 +73,28 @@ fn handle_scratchpad(config: &mut Config, state: &mut DaemonState, index: usize)
     Ok(())
 }
 
+fn handle_group(config: &mut Config, state: &mut DaemonState, name: &str) -> Result<()> {
+    let mut group = config.groups[name].clone();
+    if group.is_empty() {
+        return Ok(());
+    }
+
+    state.update_prev_titles(&group.last().unwrap().title);
+    let set_opts = |group: &mut Vec<Scratchpad>, val| {
+        for sc in group {
+            sc.options.cover = val;
+            sc.options.persist = val;
+        }
+    };
+
+    set_opts(&mut group, true);
+    for sc in &mut group {
+        sc.trigger(&config.fickle_titles)?
+    }
+    set_opts(&mut group, false);
+    Ok(())
+}
+
 fn get_cycle_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let len = config.scratchpads.len();
     let mut current_index = (state.cycle_index + 1) % len;
@@ -161,8 +183,11 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         return log(format!("No scratchpad title given to '{req}'"), Warn);
     }
 
-    let index = config.scratchpads.iter().position(|x| x.name == msg);
+    if config.groups.contains_key(msg) {
+        return handle_group(config, state, msg);
+    }
 
+    let index = config.scratchpads.iter().position(|x| x.name == msg);
     let toggle_opts = |sc: &mut Scratchpad| {
         sc.options.toggle(req);
     };
