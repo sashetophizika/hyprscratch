@@ -11,11 +11,175 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-type ConfigData = (String, Vec<Scratchpad>);
+struct ConfigData {
+    daemon_options: String,
+    scratchpads: Vec<Scratchpad>,
+    groups: HashMap<String, Vec<Scratchpad>>,
+}
+
+impl ConfigData {
+    fn new() -> ConfigData {
+        ConfigData {
+            daemon_options: String::new(),
+            scratchpads: Vec::new(),
+            groups: HashMap::new(),
+        }
+    }
+
+    fn from_scratchpads(scratchpads: Vec<Scratchpad>) -> ConfigData {
+        ConfigData {
+            daemon_options: String::new(),
+            scratchpads,
+            groups: HashMap::new(),
+        }
+    }
+
+    fn append(&mut self, new_data: &mut ConfigData) {
+        self.daemon_options.push_str(&new_data.daemon_options);
+        self.scratchpads.append(&mut new_data.scratchpads);
+        self.groups.extend(new_data.groups.clone());
+    }
+
+    fn add_scratchpad(&mut self, scratchpad: Scratchpad) {
+        self.scratchpads.push(scratchpad);
+    }
+
+    fn add_group(&mut self, name: String, scratchpads: Vec<Scratchpad>) {
+        self.groups.insert(name, scratchpads);
+    }
+
+    fn add_globals(&mut self, state: &ParserState) {
+        self.daemon_options
+            .push_str(&state.scratchpad_data["daemon_options"]);
+        self.scratchpads.iter_mut().for_each(|sc| {
+            sc.add_opts(&state.scratchpad_data["global_options"]);
+            sc.add_rules(&state.scratchpad_data["global_rules"]);
+        });
+    }
+}
+
+struct ParserState {
+    scratchpad_data: HashMap<String, String>,
+    group_data: Vec<Scratchpad>,
+    active_group: Option<String>,
+    in_scope: bool,
+}
+
+impl ParserState {
+    fn new() -> ParserState {
+        let mut state = ParserState {
+            scratchpad_data: HashMap::new(),
+            group_data: vec![],
+            active_group: None,
+            in_scope: false,
+        };
+
+        let global_keys = ["daemon_options", "global_options", "global_rules"];
+        for key in global_keys {
+            state.scratchpad_data.insert(key.into(), "".into());
+        }
+        state
+    }
+
+    fn open_scratchpad(&mut self, line: &str) {
+        if self.in_scope {
+            warn_syntax_err(Unclosed);
+            return;
+        }
+
+        if let Some(n) = line.split_whitespace().next() {
+            if n == "{" {
+                warn_syntax_err(Nameless);
+            } else {
+                self.in_scope = true;
+                self.scratchpad_data.insert("name".into(), n.into());
+                for f in ["title", "class", "command", "rules", "options"] {
+                    self.scratchpad_data.insert(f.into(), String::new());
+                }
+            }
+        }
+    }
+
+    fn open_group(&mut self, line: &str) {
+        let s = line.find(":");
+        let e = line.find(" ");
+        if let (Some(s), Some(e)) = (s, e) {
+            self.active_group = Some(line[s..e].into());
+        } else {
+            warn_syntax_err(Nameless);
+        }
+    }
+
+    fn validate_data(&mut self) -> bool {
+        let warn_empty = |fields: &[&str]| -> bool {
+            if fields.iter().all(|&f| self.scratchpad_data[f].is_empty()) {
+                warn_syntax_err(MissingField(fields, &self.scratchpad_data["name"]));
+                return true;
+            }
+            false
+        };
+
+        if warn_empty(&["title", "class"]) {
+            return false;
+        }
+
+        warn_unknown_options(&self.scratchpad_data["options"]);
+        true
+    }
+
+    fn create_scratchpad(&mut self) -> Scratchpad {
+        let command = &prepend_rules(
+            &self.scratchpad_data["command"],
+            &self.scratchpad_data["rules"].replace(",", ";"),
+        )
+        .join("?");
+
+        let title = if self.scratchpad_data["title"].is_empty() {
+            &self.scratchpad_data["class"]
+        } else {
+            &self.scratchpad_data["title"]
+        };
+
+        let [name, options] = [
+            &self.scratchpad_data["name"],
+            &self.scratchpad_data["options"],
+        ];
+        Scratchpad::new(name, title, command, options)
+    }
+
+    fn append_to_field(&mut self, k: &str, v: &str) {
+        let field = self.scratchpad_data.get_mut(k).unwrap();
+
+        if field.is_empty() {
+            field.push_str(v);
+            return;
+        }
+
+        let sep = match k {
+            "command" => "?",
+            "rules" => ";",
+            "options" => "",
+            _ => return,
+        };
+
+        field.push_str(&format!("{sep} {v}"));
+    }
+
+    fn close_group(&mut self, config_data: &mut ConfigData) {
+        if let Some(name) = self.active_group.clone() {
+            config_data.add_group(name, self.group_data.clone());
+            self.active_group = None;
+            self.group_data = vec![];
+        } else {
+            warn_syntax_err(Unopened);
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Config {
     pub scratchpads: Vec<Scratchpad>,
+    pub groups: HashMap<String, Vec<Scratchpad>>,
     pub ephemeral_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
@@ -29,7 +193,7 @@ pub struct Config {
 impl Config {
     pub fn new(config_path: Option<String>) -> Result<Config> {
         let config_files = get_config_files(config_path)?;
-        let (daemon_options, scratchpads) = get_config_data(&config_files)?;
+        let config_data = get_config_data(&config_files)?;
 
         log(
             format!(
@@ -40,7 +204,8 @@ impl Config {
         )?;
 
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
-            scratchpads
+            config_data
+                .scratchpads
                 .clone()
                 .into_iter()
                 .filter(|scratchpad| cond(&scratchpad.options))
@@ -56,8 +221,9 @@ impl Config {
             slick_titles: filter_titles(&|opts| !opts.sticky && !opts.pin),
             dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
             config_file: config_files[0].clone(),
-            daemon_options,
-            scratchpads,
+            daemon_options: config_data.daemon_options,
+            scratchpads: config_data.scratchpads,
+            groups: config_data.groups,
         })
     }
 
@@ -97,8 +263,7 @@ fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
 }
 
 fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
-    let mut scratchpads: Vec<Scratchpad> = vec![];
-    let mut daemon_options = String::new();
+    let mut config_data = ConfigData::new();
 
     for config in config_files {
         let ext = Path::new(&config).extension().unwrap_or(OsStr::new("conf"));
@@ -106,17 +271,16 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
         let mut content = String::new();
         File::open(config)?.read_to_string(&mut content)?;
 
-        let (options, mut config_data) = if config.contains("hyprland.conf") || ext == "txt" {
-            parse_config(&content, parent)?
+        let mut new_data = if config.contains("hyprland.conf") || ext == "txt" {
+            ConfigData::from_scratchpads(parse_config(&content, parent)?)
         } else {
             parse_hyprlang(&content)?
         };
 
-        daemon_options.push_str(&options);
-        scratchpads.append(&mut config_data);
+        config_data.append(&mut new_data);
     }
 
-    Ok((daemon_options, scratchpads))
+    Ok(config_data)
 }
 
 fn split_args(line: String) -> Vec<String> {
@@ -248,7 +412,10 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
 fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
     let source_path = match source.split_once("=") {
         Some((_, s)) => s.trim(),
-        None => return Ok(vec![]),
+        None => {
+            let _ = log(format!("No filename given to source in {source}"), Warn);
+            return Ok(vec![]);
+        }
     };
 
     let path = parent.join(source_path);
@@ -258,15 +425,15 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
         conf_file.read_to_string(&mut config)?;
         let parent = path.parent().unwrap_log(file!(), line!());
 
-        let (_, scratchpads) = parse_config(&config, parent)?;
+        let scratchpads = parse_config(&config, parent)?;
         Ok(scratchpads)
     } else {
-        let _ = log(format!("Source file not found: {source}"), Warn);
+        let _ = log(format!("Source file not found: {source_path}"), Warn);
         Ok(vec![])
     }
 }
 
-fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
+fn parse_config(config: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
     let mut scratchpads: Vec<Scratchpad> = vec![];
 
     let lines = get_lines_with("hyprscratch", config);
@@ -278,17 +445,18 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
     }
 
     for source in get_lines_with("source", config).iter() {
-        let mut scr = parse_source_config(source, parent).unwrap_log(file!(), line!());
+        let mut scr = parse_source_config(source, parent)?;
         scratchpads.append(&mut scr);
     }
 
-    Ok(("".into(), scratchpads))
+    Ok(scratchpads)
 }
 
 use SyntaxErr::*;
 enum SyntaxErr<'a> {
     MissingField(&'a [&'a str], &'a str),
     UnknownField(&'a str),
+    NameOutsideGroup,
     GlobalInScope,
     NotInScope,
     Unopened,
@@ -300,178 +468,110 @@ fn warn_syntax_err(err: SyntaxErr) {
     let msg = match err {
         MissingField(f, n) => &format!("Field '{}' not found for scratchpad '{n}'", f.join(" or ")),
         UnknownField(f) => &format!("Unknown scratchpad field '{f}'"),
+        NameOutsideGroup => "Name defined outside of a group scope",
         GlobalInScope => "Global variable defined inside scratchpad",
         NotInScope => "Field set outside of scratchpad",
+        Nameless => "Scratchpad or group with no name",
         Unclosed => "Unclosed '{'",
         Unopened => "Unopened '}'",
-        Nameless => "Scratchpad with no name",
     };
     let _ = log(format!("Syntax error in configuration: {msg}"), Warn);
 }
 
-fn open_scope(scratchpad_data: &mut HashMap<&str, String>, in_scope: &mut bool, line: &str) {
-    if *in_scope {
-        warn_syntax_err(Unclosed);
-        return;
-    }
-
-    if let Some(n) = line.split_whitespace().next() {
-        if n == "{" {
-            warn_syntax_err(Nameless);
-        } else {
-            *in_scope = true;
-            scratchpad_data.insert("name", n.into());
-            for f in ["title", "class", "command", "rules", "options"] {
-                scratchpad_data.insert(f, String::new());
-            }
-        }
-    }
-}
-
-fn validate_data(scratchpad_data: &HashMap<&str, String>) -> bool {
-    let warn_empty = |fields: &[&str]| -> bool {
-        if fields.iter().all(|f| scratchpad_data[f].is_empty()) {
-            warn_syntax_err(MissingField(fields, &scratchpad_data["name"]));
-            return true;
-        }
-        false
-    };
-
-    if warn_empty(&["title", "class"]) {
-        return false;
-    }
-
-    warn_unknown_options(&scratchpad_data["options"]);
-    true
-}
-
-fn close_scope(
-    scratchpad_data: &HashMap<&str, String>,
-    in_scope: &mut bool,
-    scratchpads: &mut Vec<Scratchpad>,
-) {
-    if !*in_scope {
-        warn_syntax_err(Unopened);
-        return;
-    }
-
-    *in_scope = false;
-    if !validate_data(scratchpad_data) {
-        return;
-    }
-
-    let command = &prepend_rules(
-        &scratchpad_data["command"],
-        &scratchpad_data["rules"].replace(",", ";"),
-    )
-    .join("?");
-
-    let title = if scratchpad_data["title"].is_empty() {
-        &scratchpad_data["class"]
+fn open_scope(line: &str, state: &mut ParserState) {
+    if line.starts_with("group:") {
+        state.open_group(line);
     } else {
-        &scratchpad_data["title"]
-    };
+        state.open_scratchpad(line);
+    }
+}
 
-    let [name, options] = [&scratchpad_data["name"], &scratchpad_data["options"]];
+fn close_scope(state: &mut ParserState, config_data: &mut ConfigData) {
+    if !state.in_scope {
+        state.close_group(config_data);
+        return;
+    }
 
-    scratchpads.push(Scratchpad::new(name, title, command, options));
+    state.in_scope = false;
+    if !state.validate_data() {
+        return;
+    }
+
+    let scratchpad = state.create_scratchpad();
+    config_data.add_scratchpad(scratchpad.clone());
+
+    if state.active_group.is_some() {
+        state.group_data.push(scratchpad);
+    }
+}
+
+fn add_copy_to_group(name: String, config_data: &mut ConfigData, state: &mut ParserState) {
+    if state.in_scope || state.active_group.is_none() {
+        warn_syntax_err(NameOutsideGroup);
+        return;
+    }
+
+    if let Some(sc) = config_data.scratchpads.iter().find(|sc| sc.name == name) {
+        state.group_data.push(sc.clone());
+    }
 }
 
 fn escape(s: &str) -> String {
     dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
 }
 
-fn set_global<'a>(
-    scratchpad_data: &mut HashMap<&'a str, String>,
-    in_scope: bool,
-    (k, v): (&'a str, &'a str),
-) {
-    if in_scope {
+fn set_global(state: &mut ParserState, (k, v): (&str, String)) {
+    if state.in_scope {
         warn_syntax_err(GlobalInScope);
         return;
     }
 
-    scratchpad_data.insert(k, escape(v));
+    state.scratchpad_data.insert(k.into(), v);
 }
 
-fn append_to_field(field: &mut String, k: &str, v: &str) {
-    if field.is_empty() {
-        field.push_str(v);
-        return;
-    }
-
-    let sep = match k {
-        "command" => "?",
-        "rules" => ";",
-        "options" => "",
-        _ => return,
-    };
-
-    field.push_str(&format!("{sep} {v}"));
-}
-
-fn set_field<'a>(
-    scratchpad_data: &mut HashMap<&'a str, String>,
-    in_scope: bool,
-    (k, v): (&'a str, &'a str),
-) {
-    if !in_scope {
+fn set_field<'a>(state: &mut ParserState, (k, v): (&'a str, &'a str)) {
+    if !state.in_scope {
         warn_syntax_err(NotInScope);
         return;
     }
 
-    if scratchpad_data.contains_key(k) {
-        append_to_field(scratchpad_data.get_mut(k).unwrap(), k, &escape(v));
+    if state.scratchpad_data.contains_key(k) {
+        state.append_to_field(k, v);
     } else {
         warn_syntax_err(UnknownField(k));
     }
 }
 
-fn set_var<'a>(
-    scratchpad_data: &mut HashMap<&'a str, String>,
-    in_scope: bool,
-    split: (&'a str, &'a str),
-) {
-    let k = split.0.trim();
-    if k.contains("global") || k.contains("daemon") {
-        set_global(scratchpad_data, in_scope, (k, split.1));
-    } else {
-        set_field(scratchpad_data, in_scope, (k, split.1));
-    }
-}
-
-fn initialize_globals(scratchpad_data: &mut HashMap<&str, String>) {
-    let global_keys = ["daemon_options", "global_options", "global_rules"];
-    for key in global_keys {
-        scratchpad_data.insert(key, "".into());
+fn set_var<'a>(split: (&'a str, &'a str), config_data: &mut ConfigData, state: &mut ParserState) {
+    let (k, v) = (split.0.trim(), escape(split.1));
+    match k {
+        "global_options" | "global_rules" | "daemon_options" => set_global(state, (k, v)),
+        "name" => add_copy_to_group(v, config_data, state),
+        _ => set_field(state, (k, &v)),
     }
 }
 
 fn parse_hyprlang(config: &str) -> Result<ConfigData> {
-    let mut scratchpad_data: HashMap<&str, String> = HashMap::new();
-    initialize_globals(&mut scratchpad_data);
-
-    let mut scratchpads = vec![];
-    let mut in_scope = false;
+    let mut state = ParserState::new();
+    let mut config_data = ConfigData::new();
 
     for line in config.lines() {
-        if line.trim().starts_with("#") {
+        let line = line.trim();
+        if line.starts_with("#") {
             continue;
         } else if let Some("{") = line.split_whitespace().last() {
-            open_scope(&mut scratchpad_data, &mut in_scope, line)
+            open_scope(line, &mut state)
         } else if let Some(split) = line.split_once("=") {
-            set_var(&mut scratchpad_data, in_scope, split);
-        } else if line.trim() == "}" {
-            close_scope(&scratchpad_data, &mut in_scope, &mut scratchpads);
+            set_var(split, &mut config_data, &mut state);
+        } else if line == "}" {
+            close_scope(&mut state, &mut config_data);
         }
     }
 
-    warn_unknown_options(&scratchpad_data["global_options"]);
-    scratchpads.iter_mut().for_each(|sc| {
-        sc.add_opts(&scratchpad_data["global_options"]);
-        sc.add_rules(&scratchpad_data["global_rules"]);
-    });
-    Ok((scratchpad_data["daemon_options"].clone(), scratchpads))
+    warn_unknown_options(&state.scratchpad_data["global_options"]);
+    config_data.add_globals(&state);
+
+    Ok(config_data)
 }
 
 #[cfg(test)]
@@ -509,14 +609,13 @@ mod tests {
     }
     #[test]
     fn test_parse_hyprlang() {
-        let (_, scratchpads) =
-            parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
-        assert_eq!(scratchpads, expected_scratchpads());
+        let config_data = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
+        assert_eq!(config_data.scratchpads, expected_scratchpads());
     }
 
     #[test]
     fn test_parse_config() {
-        let (_, scratchpads) = parse_config(
+        let scratchpads = parse_config(
             &open_conf("./test_configs/test_config1.txt"),
             Path::new("./test_configs"),
         )
@@ -532,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_recursive_config() {
-        let (_, scratchpads) = parse_config(
+        let scratchpads = parse_config(
             &open_conf("./test_configs/test_nested/config_main.txt"),
             Path::new("./test_configs/test_nested"),
         )
@@ -567,6 +666,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             expected_config_a: Config {
                 config_file: config_file.to_string(),
                 daemon_options: "".into(),
+                groups: HashMap::new(),
                 scratchpads: vec![
                 Scratchpad::new("firefox", "firefox", "firefox", "cover"),
                 Scratchpad::new(
@@ -599,6 +699,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             expected_config_b: Config {
                 config_file: config_file.to_string(),
                 daemon_options: "".into(),
+                groups: HashMap::new(),
                 scratchpads: vec![
                 Scratchpad::new(
                     "firefox",
