@@ -18,7 +18,7 @@ Hyprscratch makes scratchpads in Hyprland painless in a well-integrated and flex
 * Supports many scratchpads active at the same time.
 
 ## Installation
-### [Cargo](https://crates.io/crates/hyprscratch):
+### [Crates](https://crates.io/crates/hyprscratch):
 
 ```bash
 cargo install hyprscratch
@@ -63,7 +63,7 @@ daemon_options = clean
 global_options = special
 global_rules = size 90% 90%
 
-name {
+scratchpad1 {
     # Mandatory fields
     command = command
 
@@ -75,6 +75,18 @@ name {
     options = option1 option2 option3
     rules = rule1;rule2;rule3
 }
+
+# Groups that manage multiple scratchpads are also supported
+group:group1 {
+    # Add the already defined scratchpad to the group
+    name = scratchpad1
+
+    # Define a new scratchpad that can also be used independently
+    scratchpad2 {
+        title = title
+        command = command
+    }
+}
 ```
 
 And in `hyprland.conf`, using the given name:
@@ -82,9 +94,11 @@ And in `hyprland.conf`, using the given name:
 ```bash
 exec-once = hyprscratch init
 
-bind = $mainMod, t, hyprscratch toggle name
-bind = $mainMod, s, hyprscratch show name
-bind = $mainMod, h, hyprscratch hide name
+bind = $mainMod, t, hyprscratch toggle scratchpad1
+bind = $mainMod, s, hyprscratch show scratchpad1
+bind = $mainMod, h, hyprscratch hide scratchpad1
+
+bind = $mainMod, g, hyprscratch toggle group1
 ```
 
 Using a configuration file can be combined with normally configured scratchpads.
