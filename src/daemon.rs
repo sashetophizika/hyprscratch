@@ -10,6 +10,7 @@ use hyprland::dispatch::*;
 use hyprland::error::HyprError;
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::collections::HashMap;
 use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
 use std::io::Write;
@@ -227,7 +228,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
-fn split_commands(config: &mut Config) -> Vec<[String; 3]> {
+fn split_commands(scratchpads: &Vec<Scratchpad>) -> Vec<[String; 3]> {
     let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
         sc.command
             .split("?")
@@ -235,25 +236,60 @@ fn split_commands(config: &mut Config) -> Vec<[String; 3]> {
             .collect()
     };
 
-    config.scratchpads.iter().flat_map(split).collect()
+    scratchpads.iter().flat_map(split).collect()
 }
 
-fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    let scratchpads = split_commands(config);
-
+fn format_scratchpads(scratchpads: &Vec<Scratchpad>, config_file: &String) -> String {
+    let scratchpads = split_commands(scratchpads);
     let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
-        scratchpads.iter().map(field).collect::<Vec<_>>().join("^")
+        scratchpads
+            .iter()
+            .map(field)
+            .collect::<Vec<_>>()
+            .join("\u{2C02}")
     };
 
-    let config = format!(
-        "{}#{}|{}|{}",
-        config.config_file,
+    format!(
+        "{}\u{2C00}{}\u{2C01}{}\u{2C01}{}",
+        config_file,
         format_field(&|x| &x[0]),
         format_field(&|x| &x[1]),
         format_field(&|x| &x[2]),
-    );
+    )
+}
 
-    stream.write_all(config.as_bytes())?;
+fn format_groups(groups: &HashMap<String, Vec<Scratchpad>>) -> String {
+    let format_group = |field: &dyn Fn((String, Vec<Scratchpad>)) -> String| {
+        groups
+            .clone()
+            .into_iter()
+            .map(field)
+            .collect::<Vec<_>>()
+            .join("\u{2C02}")
+    };
+
+    let get_titles = |scratchpads: Vec<Scratchpad>| {
+        scratchpads
+            .into_iter()
+            .map(|sc| sc.title)
+            .collect::<Vec<String>>()
+            .join(",")
+    };
+
+    format!(
+        "\u{2C00}{}\u{2C01}{}",
+        format_group(&|(x, _)| x),
+        format_group(&|(_, x)| get_titles(x))
+    )
+}
+
+fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
+    let mut config_str = format_scratchpads(&config.scratchpads, &config.config_file);
+    if !config.groups.is_empty() {
+        config_str.push_str(&format_groups(&config.groups));
+    }
+
+    stream.write_all(config_str.as_bytes())?;
     Ok(())
 }
 

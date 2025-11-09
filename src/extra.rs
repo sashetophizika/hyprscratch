@@ -6,25 +6,74 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
+use std::vec;
+
+type ParsedConfig<'a> = (&'a str, Vec<Vec<&'a str>>, Vec<Vec<&'a str>>);
+
+fn print_table_outline(symbols: (char, char, char), widths: &Vec<usize>) {
+    let mut outline_str = format!("{}", symbols.0);
+    let length = widths.len();
+
+    for (i, width) in widths.iter().enumerate() {
+        outline_str.push_str(&"─".repeat(width + 2));
+        if i < length - 1 {
+            outline_str.push(symbols.1);
+        } else {
+            outline_str.push(symbols.2);
+        }
+    }
+    println!("{outline_str}");
+}
+
+fn color(str: String) -> String {
+    let col_titles = ["Title/Class", "Command", "Options", "Group", "Scratchpads"];
+    let mut colored_str = str
+        .replace(";", "?")
+        .replace("[", "[\x1b[0;36m")
+        .replace("]", "\x1b[0;0m]")
+        .replace("?", "\x1b[0;0m;\x1b[0;36m");
+
+    if str.contains(".conf") {
+        colored_str = colored_str.replace(&str, &format!("\x1b[0;35m{str}\x1b[0;0m"));
+    }
+
+    for title in col_titles {
+        colored_str = colored_str.replace(title, &format!("\x1b[0;33m{title}\x1b[0;0m"));
+    }
+    colored_str
+}
+
+fn fancify(x: usize, str: &str) -> String {
+    let str = if str.len() <= x {
+        str.to_string() + &" ".repeat(max(x - str.chars().count(), 0))
+    } else {
+        str[..x - 3].to_string() + "..."
+    };
+    color(str)
+}
+
+fn print_table_row(data: &Vec<&str>, widths: &Vec<usize>) {
+    if data.len() != widths.len() {
+        return;
+    }
+
+    let mut row_str = "│".to_string();
+    for (width, field) in widths.iter().zip(data) {
+        row_str.push(' ');
+        row_str.push_str(&fancify(*width, &field));
+        row_str.push(' ');
+        row_str.push('│');
+    }
+    println!("{row_str}");
+}
 
 fn max_len(xs: &Vec<&str>, min: usize, max: usize) -> usize {
     xs.iter()
         .map(|x| x.chars().count())
         .max()
-        .unwrap_or(0)
+        .unwrap_or_default()
         .max(min)
         .min(max)
-}
-
-fn pad(x: usize, str: &str) -> String {
-    str.to_string() + &" ".repeat(if x < str.len() { 0 } else { x - str.len() })
-}
-
-fn color(str: String) -> String {
-    str.replace(";", "?")
-        .replace("[", "[\x1b[0;36m")
-        .replace("]", "\x1b[0;0m]")
-        .replace("?", "\x1b[0;0m;\x1b[0;36m")
 }
 
 fn get_config_data(socket: Option<&str>) -> Result<String> {
@@ -37,105 +86,137 @@ fn get_config_data(socket: Option<&str>) -> Result<String> {
     Ok(buf)
 }
 
-pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
-    let data = get_config_data(socket)?;
-    let Some((conf, data)) = data.split_once('#') else {
-        log("Could not get configuration data".into(), Error)?;
-        return Ok(());
-    };
+fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
+    let parsed_data = &data
+        .splitn(field_num, '\u{2C01}')
+        .map(|x| x.split('\u{2C02}').collect::<Vec<_>>())
+        .collect::<Vec<_>>()[0..field_num];
 
-    let [titles, commands, options] = &data
-        .splitn(3, '|')
-        .map(|x| x.split('^').collect::<Vec<_>>())
-        .collect::<Vec<_>>()[0..3]
-    else {
-        log("Config data could not be parsed".into(), Error)?;
-        return Ok(());
+    if parsed_data.len() < field_num {
+        let _ = log("Config data could not be parsed".into(), Error);
+        return vec![];
+    }
+
+    parsed_data.to_vec()
+}
+
+fn print_group_table(group_data: &Vec<Vec<&str>>) {
+    let [names, scratchpadss] = &group_data[0..2] else {
+        return;
     };
 
     let max_chars = 80;
-    let max_titles = max_len(titles, 11, max_chars);
-    let max_commands = max_len(commands, 7, max_chars);
-    let max_options = max_len(options, 7, max_chars);
+    let field_widths = vec![
+        max_len(names, 5, max_chars),
+        max_len(scratchpadss, 11, max_chars),
+    ];
 
-    let print_border = |sep_l: &str, sep_c: &str, sep_r: &str| {
-        if raw {
-            return;
-        }
+    print_table_outline(('┌', '┬', '┐'), &field_widths);
+    print_table_row(&vec!["Group", "Scratchpads"], &field_widths);
 
-        println!(
-            "{}{}{}{}",
-            sep_l,
-            "─".repeat(max_titles + 2) + sep_c,
-            "─".repeat(max_commands + 2) + sep_c,
-            "─".repeat(max_options + 2) + sep_r,
-        );
-    };
+    print_table_outline(('├', '┼', '┤'), &field_widths);
+    for (name, scratchpads) in names.iter().zip(scratchpadss) {
+        print_table_row(&vec![name, &scratchpads], &field_widths);
+    }
+    print_table_outline(('└', '┴', '┘'), &field_widths);
+}
 
-    let truncate = |str: &str| -> String {
-        if str.len() < max_chars {
-            str.into()
-        } else {
-            str[..max_chars - 3].to_string() + "..."
-        }
-    };
-
-    let get_centered_conf = || {
-        let table_width = max_titles + max_commands + max_options + 6;
-
-        let c = if table_width <= conf.len() {
-            conf.split("/").last().unwrap_log(file!(), line!())
-        } else {
-            conf
-        };
-
-        let center_fix = if table_width % 2 == 0 {
-            c.len() + c.len() % 2
-        } else {
-            c.len() - 1
-        };
-
-        format!(
-            "{}\x1b[0;35m{}\x1b[0;0m{}",
-            " ".repeat(max(table_width / 2 - c.len() / 2, 0)),
-            c,
-            " ".repeat(max((table_width - center_fix) / 2, 0))
-        )
-    };
-
-    let config_str = if raw {
-        conf.to_string()
+fn get_centered_conf(conf: &str, width: usize) -> String {
+    let c = if width <= conf.len() {
+        conf.split("/").last().unwrap_log(file!(), line!())
     } else {
-        get_centered_conf()
+        conf
     };
 
-    let sep = if raw { "" } else { "│" };
-    print_border("┌", "─", "┐");
-    println!("{sep} {config_str} {sep}",);
+    let center_fix = if width % 2 == 0 {
+        c.len() + c.len() % 2
+    } else {
+        c.len() - 1
+    };
 
-    print_border("├", "┬", "┤");
-    if !raw {
-        println!(
-        "{sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep} \x1b[0;33m{}\x1b[0;0m {sep}",
-        pad(max_titles, "Title/Class"),
-        pad(max_commands, "Command"),
-        pad(max_options, "Options")
-        );
-    }
+    format!(
+        "{}{}{}",
+        " ".repeat(max(width / 2 - c.len() / 2, 0)),
+        c,
+        " ".repeat(max((width - center_fix) / 2, 0))
+    )
+}
 
-    print_border("├", "┼", "┤");
+fn print_scratchpad_table(scratchpad_data: &Vec<Vec<&str>>, conf: &str) {
+    let [titles, commands, options] = &scratchpad_data[0..3] else {
+        return;
+    };
+
+    let max_chars = 80;
+    let field_widths = vec![
+        max_len(titles, 11, max_chars),
+        max_len(commands, 7, max_chars),
+        max_len(options, 7, max_chars),
+    ];
+    let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 6);
+
+    print_table_outline(('┌', '─', '┐'), &vec![config_str.len()]);
+    print_table_row(&vec![&config_str], &vec![config_str.len()]);
+
+    print_table_outline(('├', '┬', '┤'), &field_widths);
+    print_table_row(&vec!["Title/Class", "Command", "Options"], &field_widths);
+
+    print_table_outline(('├', '┼', '┤'), &field_widths);
     for ((title, command), option) in titles.iter().zip(commands).zip(options) {
-        let [t, c, o] = [
-            pad(max_titles, &truncate(title)),
-            pad(max_commands, &(truncate(command))),
-            pad(max_options, &truncate(option)),
-        ];
-
-        let c = if raw { c } else { color(c) };
-        println!("{sep} {t} {sep} {c} {sep} {o} {sep}");
+        print_table_row(&vec![title, command, option], &field_widths);
     }
 
-    print_border("└", "┴", "┘");
+    print_table_outline(('└', '┴', '┘'), &field_widths);
+}
+
+fn print_raw_data(data: &Vec<Vec<&str>>) {
+    for row in (0..data[0].len())
+        .map(|i| data.iter().map(|inner| inner[i]).collect::<Vec<&str>>())
+        .collect::<Vec<Vec<&str>>>()
+    {
+        println!("{}", row.join("    "));
+    }
+}
+
+fn print_raw((conf, scratchpad_data, group_data): ParsedConfig) {
+    println!("{conf}\n");
+    println!("## SCRATCHPADS ##\n");
+    print_raw_data(&scratchpad_data);
+
+    if !group_data.is_empty() {
+        println!("\n## GROUPS ##\n");
+        print_raw_data(&group_data);
+    }
+}
+
+fn print_tables((conf, scratchpad_data, group_data): ParsedConfig) {
+    print_scratchpad_table(&scratchpad_data, conf);
+    if !group_data.is_empty() {
+        print_group_table(&group_data);
+    }
+}
+
+fn parse_config_data(data: &str) -> ParsedConfig {
+    match data.splitn(3, '\u{2C00}').collect::<Vec<_>>()[..] {
+        [c, scd, gd] => (c, parse_data(scd, 3), parse_data(gd, 2)),
+        [c, scd] => (c, parse_data(scd, 3), vec![]),
+        _ => {
+            let _ = log("Could not get configuration data".into(), Error);
+            return ("", vec![], vec![]);
+        }
+    }
+}
+
+pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
+    let data = get_config_data(socket)?;
+    let parsed_data = parse_config_data(&data);
+
+    if raw {
+        print_raw(parsed_data);
+    } else {
+        print_tables(parsed_data);
+    }
+
     Ok(())
 }
 
@@ -169,7 +250,7 @@ pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
     println!("Hyprscratch v{}", env!("CARGO_PKG_VERSION"));
     println!("### LOGS ###\n");
     print_logs(true)?;
-    println!("\n### CONFIGURATION ###\n");
+    println!("\n### CONFIGURATION ###");
     get_config(socket, true)?;
     Ok(())
 }

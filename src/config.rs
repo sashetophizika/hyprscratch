@@ -104,7 +104,7 @@ impl ParserState {
         let s = line.find(":");
         let e = line.find(" ");
         if let (Some(s), Some(e)) = (s, e) {
-            self.active_group = Some(line[s..e].into());
+            self.active_group = Some(line[s + 1..e].into());
         } else {
             warn_syntax_err(Nameless);
         }
