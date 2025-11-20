@@ -231,7 +231,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
-fn split_commands(scratchpads: &Vec<Scratchpad>) -> Vec<[String; 3]> {
+fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
     let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
         sc.command
             .split("?")
@@ -242,7 +242,7 @@ fn split_commands(scratchpads: &Vec<Scratchpad>) -> Vec<[String; 3]> {
     scratchpads.iter().flat_map(split).collect()
 }
 
-fn format_scratchpads(scratchpads: &Vec<Scratchpad>, config_file: &String) -> String {
+fn format_scratchpads(scratchpads: &[Scratchpad], config_file: &String) -> String {
     let scratchpads = split_commands(scratchpads);
     let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
         scratchpads
