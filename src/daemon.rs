@@ -81,18 +81,18 @@ fn handle_group(config: &mut Config, state: &mut DaemonState, name: &str) -> Res
     }
 
     state.update_prev_titles(&group.last().unwrap().title);
-    let set_opts = |group: &mut Vec<Scratchpad>, val| {
-        for sc in group {
-            sc.options.cover = val;
-            sc.options.persist = val;
-        }
-    };
 
-    set_opts(&mut group, true);
     for sc in &mut group {
-        sc.trigger(&config.fickle_titles)?
+        let cover = sc.options.cover;
+        if !cover {
+            sc.options.cover = true;
+        }
+
+        sc.trigger(&config.fickle_titles)?;
+        if cover != sc.options.cover {
+            sc.options.cover = false;
+        }
     }
-    set_opts(&mut group, false);
     Ok(())
 }
 
@@ -204,10 +204,13 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
     Ok(())
 }
 
-fn handle_manual(msg: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
+fn handle_manual(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     let args: Vec<&str> = msg.splitn(3, "^").collect();
     state.update_prev_titles(args[0]);
-    Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" ")).trigger(&config.fickle_titles)
+
+    let mut scratchpad = Scratchpad::new(args[0], args[0], args[1], &args[2..].join(" "));
+    config.add_scratchpad(&scratchpad);
+    scratchpad.trigger(&config.fickle_titles)
 }
 
 fn get_config_path(msg: &str) -> Option<String> {
