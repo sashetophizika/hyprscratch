@@ -10,7 +10,7 @@ use std::vec;
 
 type ParsedConfig<'a> = (&'a str, Vec<Vec<&'a str>>, Vec<Vec<&'a str>>);
 
-fn print_table_outline(symbols: (char, char, char), widths: &Vec<usize>) {
+fn print_table_outline(symbols: (char, char, char), widths: &[usize]) {
     let mut outline_str = format!("{}", symbols.0);
     let length = widths.len();
 
@@ -52,7 +52,7 @@ fn fancify(x: usize, str: &str) -> String {
     color(str)
 }
 
-fn print_table_row(data: &Vec<&str>, widths: &Vec<usize>) {
+fn print_table_row(data: &Vec<&str>, widths: &[usize]) {
     if data.len() != widths.len() {
         return;
     }
@@ -60,7 +60,7 @@ fn print_table_row(data: &Vec<&str>, widths: &Vec<usize>) {
     let mut row_str = "│".to_string();
     for (width, field) in widths.iter().zip(data) {
         row_str.push(' ');
-        row_str.push_str(&fancify(*width, &field));
+        row_str.push_str(&fancify(*width, field));
         row_str.push(' ');
         row_str.push('│');
     }
@@ -86,21 +86,7 @@ fn get_config_data(socket: Option<&str>) -> Result<String> {
     Ok(buf)
 }
 
-fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
-    let parsed_data = &data
-        .splitn(field_num, '\u{2C01}')
-        .map(|x| x.split('\u{2C02}').collect::<Vec<_>>())
-        .collect::<Vec<_>>()[0..field_num];
-
-    if parsed_data.len() < field_num {
-        let _ = log("Config data could not be parsed".into(), Error);
-        return vec![];
-    }
-
-    parsed_data.to_vec()
-}
-
-fn print_group_table(group_data: &Vec<Vec<&str>>) {
+fn print_group_table(group_data: &[Vec<&str>]) {
     let [names, scratchpadss] = &group_data[0..2] else {
         return;
     };
@@ -142,7 +128,7 @@ fn get_centered_conf(conf: &str, width: usize) -> String {
     )
 }
 
-fn print_scratchpad_table(scratchpad_data: &Vec<Vec<&str>>, conf: &str) {
+fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
     let [titles, commands, options] = &scratchpad_data[0..3] else {
         return;
     };
@@ -155,8 +141,8 @@ fn print_scratchpad_table(scratchpad_data: &Vec<Vec<&str>>, conf: &str) {
     ];
     let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 6);
 
-    print_table_outline(('┌', '─', '┐'), &vec![config_str.len()]);
-    print_table_row(&vec![&config_str], &vec![config_str.len()]);
+    print_table_outline(('┌', '─', '┐'), &[config_str.len()]);
+    print_table_row(&vec![&config_str], &[config_str.len()]);
 
     print_table_outline(('├', '┬', '┤'), &field_widths);
     print_table_row(&vec!["Title/Class", "Command", "Options"], &field_widths);
@@ -196,13 +182,27 @@ fn print_tables((conf, scratchpad_data, group_data): ParsedConfig) {
     }
 }
 
+fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
+    let parsed_data = &data
+        .splitn(field_num, '\u{2C01}')
+        .map(|x| x.split('\u{2C02}').collect::<Vec<_>>())
+        .collect::<Vec<_>>()[0..field_num];
+
+    if parsed_data.len() < field_num {
+        let _ = log("Config data could not be parsed".into(), Error);
+        return vec![];
+    }
+
+    parsed_data.to_vec()
+}
+
 fn parse_config_data(data: &str) -> ParsedConfig {
     match data.splitn(3, '\u{2C00}').collect::<Vec<_>>()[..] {
         [c, scd, gd] => (c, parse_data(scd, 3), parse_data(gd, 2)),
         [c, scd] => (c, parse_data(scd, 3), vec![]),
         _ => {
             let _ = log("Could not get configuration data".into(), Error);
-            return ("", vec![], vec![]);
+            ("", vec![], vec![])
         }
     }
 }

@@ -249,7 +249,7 @@ impl Config {
     }
 
     pub fn add_scratchpad(&mut self, scratchpad: &Scratchpad) {
-        if self.scratchpads.contains(&scratchpad) {
+        if self.scratchpads.contains(scratchpad) {
             return;
         }
 
