@@ -227,6 +227,36 @@ impl Config {
         })
     }
 
+    fn update_titles(&mut self, options: &ScratchpadOptions, title: &str) {
+        if options.ephemeral {
+            self.ephemeral_titles.push(title.into());
+        }
+        if options.special {
+            self.special_titles.push(title.into());
+        }
+        if !options.special {
+            self.normal_titles.push(title.into());
+        }
+        if !options.special && !options.persist {
+            self.fickle_titles.push(title.into());
+        }
+        if !options.pin && !options.sticky {
+            self.slick_titles.push(title.into());
+        }
+        if !options.shiny && !options.sticky && !options.pin {
+            self.dirty_titles.push(title.into());
+        }
+    }
+
+    pub fn add_scratchpad(&mut self, scratchpad: &Scratchpad) {
+        if self.scratchpads.contains(&scratchpad) {
+            return;
+        }
+
+        self.update_titles(&scratchpad.options, &scratchpad.title);
+        self.scratchpads.push(scratchpad.clone());
+    }
+
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
         *self = match config_path {
             Some(_) => Config::new(config_path)?,
@@ -599,6 +629,15 @@ mod tests {
         ]
     }
 
+    fn expected_groups() -> HashMap<String, Vec<Scratchpad>> {
+        let scs = expected_scratchpads();
+        let mut groups = HashMap::new();
+        groups.insert("one".into(), vec![scs[1].clone(), scs[2].clone()]);
+        groups.insert("two".into(), vec![scs[0].clone(), scs[3].clone()]);
+        groups.insert("three".into(), vec![scs[0].clone(), scs[2].clone()]);
+        groups
+    }
+
     fn open_conf(config_file: &str) -> String {
         let mut conf = String::new();
         File::open(config_file)
@@ -607,10 +646,17 @@ mod tests {
             .unwrap();
         conf
     }
+
     #[test]
     fn test_parse_hyprlang() {
         let config_data = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
         assert_eq!(config_data.scratchpads, expected_scratchpads());
+    }
+
+    #[test]
+    fn test_groups() {
+        let config_data = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
+        assert_eq!(config_data.groups, expected_groups());
     }
 
     #[test]
