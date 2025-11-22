@@ -34,6 +34,6 @@ inputs = {
 
 ### Non-NixOS:
 ```bash
-nix profile add github:sashetophizika/hyprscratch
+nix profile install github:sashetophizika/hyprscratch
 ```
 
