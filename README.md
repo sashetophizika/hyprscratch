@@ -147,15 +147,17 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 ### Extra subcommands:
 
-* `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
-
 * `toggle <name>`: toggles the scratchpad with the given name.
 
 * `show <name>`: shows the scratchpad with the given name.
 
 * `hide <name>`: hides the scratchpad with the given name.
 
-* `previous`: summons the last used scratchpad that is not currently active.
+* `cycle [normal|special]`: cycles between scratchpads (optionally only normal or special ones) in the order they are defined in the configuration file.
+
+* `previous [show|hide]`: toggles the last used scratchpad that is not currently active.
+
+* `rofi [show|hide]`: spawn a rofi menu to fuzzy search through scratchapads.
 
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
