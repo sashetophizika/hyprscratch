@@ -119,7 +119,7 @@ impl ScratchpadOptions {
     }
 }
 
-use TriggerMode::{Summon, Hide, Refocus};
+use TriggerMode::{Hide, Refocus, Summon};
 #[derive(PartialEq, Debug)]
 enum TriggerMode<T> {
     Hide(Vec<T>),
@@ -190,8 +190,8 @@ impl Scratchpad {
 
     fn spawn_special(&self, state: &HyprlandState) {
         for cmd in &prepare_commands(self, Some(false), &state.special_workspace) {
-                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-            }
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        }
     }
 
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
@@ -232,8 +232,8 @@ impl Scratchpad {
         }
 
         for cmd in &prepare_commands(self, None, &state.special_workspace) {
-                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-            }
+            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+        }
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
@@ -395,21 +395,17 @@ mod tests {
         }
 
         fn assert_present(&self) {
-            assert!(
-                Clients::get()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.initial_title == self.title)
-            );
+            assert!(Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == self.title));
         }
 
         fn assert_not_present(&self) {
-            assert!(
-                !Clients::get()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.initial_title == self.title)
-            );
+            assert!(!Clients::get()
+                .unwrap()
+                .iter()
+                .any(|x| x.initial_title == self.title));
         }
 
         fn assert_on_active(&self, count: usize) {

@@ -1,6 +1,7 @@
 use crate::config::Config;
+use crate::logs::*;
 use crate::scratchpad::Scratchpad;
-use crate::{logs::{log, Warn, LogErr, Debug}, DEFAULT_SOCKET};
+use crate::DEFAULT_SOCKET;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
