@@ -59,7 +59,9 @@ impl_logerr!(hyprland::Result<T>, io::Result<T>, notify::Result<T>,
 
 impl<T> LogErr<T> for Option<T> {
     fn unwrap_log(self, file: &str, line: u32) -> T {
-        if let Some(t) = self { t } else {
+        if let Some(t) = self {
+            t
+        } else {
             let _ = log(format!("Function returned None at {file}:{line}"), Error);
             exit(1)
         }
