@@ -109,7 +109,7 @@ pub fn move_to_special(cl: &Client) {
 
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title.clone())),
+        WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title)),
         Some(WindowIdentifier::Address(cl.address.clone()))
     )
     .unwrap_or_else(|e| {
@@ -164,27 +164,27 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
     command.split("?").map(|c| prepend(c, rules)).collect()
 }
 
-pub fn prepare_commands(scratchpad: &Scratchpad, on_special: Option<bool>) -> Vec<String> {
+pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
     let mut rules = String::from("[");
     if let Some(sil) = on_special {
         let silent = if sil { "silent" } else { "" };
-        rules += &format!("workspace special:{} {silent};", &scratchpad.name);
+        rules += &format!("workspace special:{} {silent};", &workspace);
     }
 
-    if scratchpad.options.pin && on_special.is_none() {
+    if sc.options.pin && on_special.is_none() {
         rules += "pin;";
     }
 
-    if !scratchpad.options.tiled {
+    if !sc.options.tiled {
         rules += "float;";
     }
 
-    prepend_rules(&scratchpad.command, &rules)
+    prepend_rules(&sc.command, &rules)
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
-    let spawn = |sc: &Scratchpad| {
-        prepare_commands(sc, Some(true))
+    let spawn = |(n, sc): (&String, &Scratchpad)| {
+        prepare_commands(&sc, Some(true), &n)
             .iter()
             .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
     };
@@ -193,7 +193,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
     config
         .scratchpads
         .iter()
-        .filter(|sc| !sc.options.lazy && !clients.iter().any(|cl| sc.matches_client(cl)))
+        .filter(|(_, sc)| !sc.options.lazy && !clients.iter().any(|cl| sc.matches_client(cl)))
         .for_each(spawn);
 
     Ok(())
@@ -328,17 +328,18 @@ mod tests {
             "lazy".to_string(),
         ];
 
-        let scratchpads: Vec<Scratchpad> = resources
+        let scratchpads: HashMap<String, Scratchpad> = resources
             .titles
             .iter()
             .zip(resources.commands.clone())
             .zip(options)
-            .map(|((t, c), o)| Scratchpad::new(&t, &t, &c, &o))
+            .map(|((t, c), o)| (t.clone(), Scratchpad::new(&t, &c, &o)))
             .collect();
 
         let mut config = Config {
             scratchpads,
             groups: HashMap::new(),
+            names: Vec::new(),
             daemon_options: "".into(),
             config_file: "".to_string(),
             ephemeral_titles: Vec::new(),

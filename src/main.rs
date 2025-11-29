@@ -96,9 +96,8 @@ fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&st
     let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
-        "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous" => {
-            send_request(socket, req, msg)?
-        }
+        "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous"
+        | "rofi" => send_request(socket, req, msg)?,
         "init" => initialize_daemon(args.join(" "), config, socket),
         "" => print_help(),
         _ => send_manual(args, socket)?,

@@ -7,14 +7,15 @@ use hyprland::Result;
 use std::collections::HashMap;
 
 struct HyprlandState {
-    active_client: Option<Client>,
     clients_with_title: Vec<Client>,
-    monitors: HashMap<String, String>,
+    special_workspace: String,
     active_workspace: Workspace,
+    active_client: Option<Client>,
+    monitors: HashMap<String, String>,
 }
 
 impl HyprlandState {
-    fn new(title: &str) -> Result<HyprlandState> {
+    fn new(title: &str, workspace: &str) -> Result<HyprlandState> {
         let mut monitors = HashMap::new();
         Monitors::get()?.into_iter().for_each(|x| {
             monitors.insert(x.name.clone(), x.active_workspace.name.clone());
@@ -30,11 +31,16 @@ impl HyprlandState {
             .collect();
 
         Ok(HyprlandState {
+            special_workspace: workspace.into(),
             clients_with_title,
             active_workspace,
             active_client,
             monitors,
         })
+    }
+
+    fn toggle_special(&self) -> Result<()> {
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.special_workspace.clone()))
     }
 }
 
@@ -123,16 +129,14 @@ enum TriggerMode<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scratchpad {
-    pub name: String,
     pub title: String,
     pub command: String,
     pub options: ScratchpadOptions,
 }
 
 impl Scratchpad {
-    pub fn new(name: &str, title: &str, command: &str, options: &str) -> Scratchpad {
+    pub fn new(title: &str, command: &str, options: &str) -> Scratchpad {
         Scratchpad {
-            name: name.into(),
             title: title.into(),
             command: command.into(),
             options: ScratchpadOptions::new(options),
@@ -165,7 +169,7 @@ impl Scratchpad {
         move_to_special(first_title);
 
         if !self.options.hide && first_title.workspace.id == state.active_workspace.id {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+            state.toggle_special()?;
         }
         Ok(())
     }
@@ -176,18 +180,20 @@ impl Scratchpad {
                 || (!self.matches_client(ac) && !self.options.hide);
 
             if should_toggle {
-                hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+                state.toggle_special()?;
             }
         } else if !self.options.hide {
-            hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.name.clone()))?;
+            state.toggle_special()?;
         }
         Ok(())
     }
 
-    fn spawn_special(&self) {
-        prepare_commands(self, Some(false)).iter().for_each(|cmd| {
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-        });
+    fn spawn_special(&self, state: &HyprlandState) {
+        prepare_commands(self, Some(false), &state.special_workspace)
+            .iter()
+            .for_each(|cmd| {
+                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            });
     }
 
     fn summon_special(&self, state: &HyprlandState) -> Result<()> {
@@ -198,7 +204,7 @@ impl Scratchpad {
             .collect();
 
         if state.clients_with_title.is_empty() {
-            self.spawn_special();
+            self.spawn_special(state);
         } else if special_with_title.is_empty() {
             self.capture_special(state)?;
         } else {
@@ -227,9 +233,11 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        prepare_commands(self, None).iter().for_each(|cmd| {
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
-        });
+        prepare_commands(self, None, &state.special_workspace)
+            .iter()
+            .for_each(|cmd| {
+                hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            });
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
@@ -265,7 +273,7 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn summon_normal(&mut self, state: &HyprlandState) -> Result<()> {
+    fn summon_normal(&self, state: &HyprlandState) -> Result<()> {
         if state.clients_with_title.is_empty() {
             self.spawn_normal(state);
         } else {
@@ -274,7 +282,7 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn summon(&mut self, state: &HyprlandState) -> Result<()> {
+    fn summon(&self, state: &HyprlandState) -> Result<()> {
         if self.options.special {
             self.summon_special(state)?;
         } else if !self.options.hide {
@@ -353,8 +361,8 @@ impl Scratchpad {
         clients.into_iter().for_each(move_to_special)
     }
 
-    pub fn trigger(&mut self, titles: &[String]) -> Result<()> {
-        let state = HyprlandState::new(&self.title)?;
+    pub fn trigger(&self, titles: &[String], name: &str) -> Result<()> {
+        let state = HyprlandState::new(&self.title, name)?;
         match self.get_mode(&state) {
             Refocus(client) => Self::refocus(client)?,
             Hide(clients) => self.hide(clients),
@@ -387,7 +395,7 @@ mod tests {
         }
 
         fn into_scratchpad(&self, options: &str) -> Scratchpad {
-            Scratchpad::new(&self.title, &self.title, &self.command, options)
+            Scratchpad::new(&self.title, &self.command, options)
         }
 
         fn assert_present(&self) {
@@ -461,22 +469,22 @@ mod tests {
     #[test]
     fn test_summon_normal() {
         let resources = TestResources::new("normal");
-        let mut scratchpad = resources.into_scratchpad("");
+        let scratchpad = resources.into_scratchpad("");
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_present();
         resources.assert_not_active();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
@@ -486,22 +494,22 @@ mod tests {
     #[test]
     fn test_summon_special() {
         let resources = TestResources::new("special");
-        let mut scratchpad = resources.into_scratchpad("special");
+        let scratchpad = resources.into_scratchpad("special");
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_present();
         resources.assert_not_active();
 
-        scratchpad.trigger(&[]).unwrap();
+        scratchpad.trigger(&[], &resources.title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
@@ -511,19 +519,19 @@ mod tests {
     #[test]
     fn test_persist() {
         let resources = [TestResources::new("persist"), TestResources::new("normal")];
-        let mut scratchpads = [
+        let scratchpads = [
             resources[0].into_scratchpad("persist"),
             resources[1].into_scratchpad(""),
         ];
 
         resources.iter().for_each(|r| r.assert_not_present());
 
-        scratchpads[0].trigger(&[]).unwrap();
+        scratchpads[0].trigger(&[], &resources[0].title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources[0].assert_active();
 
-        scratchpads[1].trigger(&[]).unwrap();
+        scratchpads[1].trigger(&[], &resources[0].title).unwrap();
         sleep(Duration::from_millis(500));
 
         resources[1].assert_active();
@@ -536,16 +544,20 @@ mod tests {
             title: "test_poly".to_string(),
             command: "[size 30% 30%; move 0 0] kitty --title test_poly ? [size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
         };
-        let mut scratchpad = resources.into_scratchpad("poly");
+        let scratchpad = resources.into_scratchpad("poly");
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
+        scratchpad
+            .trigger(&vec![resources.title.clone()], &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_on_active(2);
 
-        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
+        scratchpad
+            .trigger(&vec![resources.title.clone()], &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_on_active(0);
@@ -554,7 +566,7 @@ mod tests {
     #[test]
     fn test_tiled() {
         let resources = [TestResources::new("tiled"), TestResources::new("floating")];
-        let mut scratchpad = [
+        let scratchpad = [
             resources[0].into_scratchpad("tiled"),
             resources[1].into_scratchpad(""),
         ];
@@ -562,7 +574,7 @@ mod tests {
         resources.iter().for_each(|r| r.assert_not_present());
 
         scratchpad[0]
-            .trigger(&vec![resources[0].title.clone()])
+            .trigger(&vec![resources[0].title.clone()], &resources[0].title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -571,7 +583,7 @@ mod tests {
         assert_eq!(active_client.floating, false);
 
         scratchpad[1]
-            .trigger(&vec![resources[1].title.clone()])
+            .trigger(&vec![resources[1].title.clone()], &resources[0].title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -583,11 +595,13 @@ mod tests {
     #[test]
     fn test_pin() {
         let resources = TestResources::new("pin");
-        let mut scratchpad = resources.into_scratchpad("pin");
+        let scratchpad = resources.into_scratchpad("pin");
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
+        scratchpad
+            .trigger(&vec![resources.title.clone()], &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
@@ -607,7 +621,7 @@ mod tests {
 
         resources
             .into_scratchpad("summon")
-            .trigger(&vec![resources.title.clone()])
+            .trigger(&vec![resources.title.clone()], &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -615,7 +629,7 @@ mod tests {
 
         resources
             .into_scratchpad("summon")
-            .trigger(&vec![resources.title.clone()])
+            .trigger(&vec![resources.title.clone()], &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -624,7 +638,7 @@ mod tests {
 
         resources
             .into_scratchpad("hide")
-            .trigger(&vec![resources.title.clone()])
+            .trigger(&vec![resources.title.clone()], &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -633,7 +647,7 @@ mod tests {
 
         resources
             .into_scratchpad("hide")
-            .trigger(&vec![resources.title.clone()])
+            .trigger(&vec![resources.title.clone()], &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -643,7 +657,7 @@ mod tests {
     #[test]
     fn test_named_workspace() {
         let resources = TestResources::new("named_workspace");
-        let mut scratchpad = resources.into_scratchpad("");
+        let scratchpad = resources.into_scratchpad("");
 
         resources.assert_not_present();
 
@@ -651,7 +665,9 @@ mod tests {
         sleep(Duration::from_millis(500));
         assert_eq!(Workspace::get_active().unwrap().name, "test");
 
-        scratchpad.trigger(&vec![resources.title.clone()]).unwrap();
+        scratchpad
+            .trigger(&vec![resources.title.clone()], &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(1000));
 
         resources.assert_active();
