@@ -86,7 +86,7 @@ impl ParserState {
 
         let global_keys = ["daemon_options", "global_options", "global_rules"];
         for key in global_keys {
-            state.scratchpad_data.insert(key.into(), "".into());
+            state.scratchpad_data.insert(key.into(), String::new());
         }
         state
     }
@@ -111,8 +111,8 @@ impl ParserState {
     }
 
     fn open_group(&mut self, line: &str) {
-        let s = line.find(":");
-        let e = line.find(" ");
+        let s = line.find(':');
+        let e = line.find(' ');
         if let (Some(s), Some(e)) = (s, e) {
             self.active_group = Some(line[s + 1..e].into());
         } else {
@@ -140,7 +140,7 @@ impl ParserState {
     fn create_scratchpad(&mut self) -> Scratchpad {
         let command = &prepend_rules(
             &self.scratchpad_data["command"],
-            &self.scratchpad_data["rules"].replace(",", ";"),
+            &self.scratchpad_data["rules"].replace(',', ";"),
         )
         .join("?");
 
@@ -258,7 +258,7 @@ impl Config {
     }
 
     pub fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
-        if self.scratchpads.get(name).is_some() {
+        if self.scratchpads.contains_key(name) {
             return;
         }
 
@@ -375,7 +375,7 @@ fn split_args(line: &str) -> Vec<String> {
 fn get_lines_with(pat: &str, config: &str) -> Vec<String> {
     let mut lines = vec![];
     for line in config.lines() {
-        if line.trim().starts_with("#") {
+        if line.trim().starts_with('#') {
             continue;
         }
 
@@ -411,9 +411,8 @@ fn warn_unknown_options(opts: &str) {
         if !known_options.contains(&opt) {
             if known_arg_options.contains(&opt) {
                 return true;
-            } else {
-                let _ = log(format!("Unknown scratchpad option: {opt}"), Warn);
             }
+            let _ = log(format!("Unknown scratchpad option: {opt}"), Warn);
         }
         false
     };
@@ -433,7 +432,7 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
             warn_unknown_options(&opts);
             Some([dequote(&args[1]), dequote(&args[2]), opts])
         }
-        3 => Some([dequote(&args[1]), dequote(&args[2]), "".into()]),
+        3 => Some([dequote(&args[1]), dequote(&args[2]), String::new()]),
         2 => {
             let _ = log(
                 format!("Unknown command or no command after title: {}", args[1]),
@@ -449,12 +448,11 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
 }
 
 fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
-    let source_path = match source.split_once("=") {
-        Some((_, s)) => s.trim(),
-        None => {
-            let _ = log(format!("No filename given to source in {source}"), Warn);
-            return Ok(ConfigData::new());
-        }
+    let source_path = if let Some((_, s)) = source.split_once('=') {
+        s.trim()
+    } else {
+        let _ = log(format!("No filename given to source in {source}"), Warn);
+        return Ok(ConfigData::new());
     };
 
     let path = parent.join(source_path);
@@ -485,7 +483,7 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
         }
     }
 
-    for source in get_lines_with("source", config).iter() {
+    for source in &get_lines_with("source", config) {
         let mut data = parse_source_config(source, parent)?;
         scratchpads.extend(data.scratchpads);
         names.append(&mut data.names);
@@ -494,7 +492,10 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
     Ok(ConfigData::from_scratchpads(scratchpads, names))
 }
 
-use SyntaxErr::*;
+use SyntaxErr::{
+    GlobalInScope, MissingField, NameOutsideGroup, Nameless, NotInScope, Unclosed, UnknownField,
+    Unopened,
+};
 enum SyntaxErr<'a> {
     MissingField(&'a [&'a str], &'a str),
     UnknownField(&'a str),
@@ -562,7 +563,7 @@ fn add_copy_to_group(name: &str, config_data: &mut ConfigData, state: &mut Parse
 }
 
 fn escape(s: &str) -> String {
-    dequote(&s.replace("\\\\", "^").replace("\\", "").replace("^", "\\"))
+    dequote(&s.replace("\\\\", "^").replace('\\', "").replace('^', "\\"))
 }
 
 fn set_global(state: &mut ParserState, (k, v): (&str, String)) {
@@ -602,11 +603,11 @@ fn parse_hyprlang(config: &str) -> Result<ConfigData> {
 
     for line in config.lines() {
         let line = line.trim();
-        if line.starts_with("#") {
+        if line.starts_with('#') {
             continue;
         } else if let Some("{") = line.split_whitespace().last() {
-            open_scope(line, &mut state)
-        } else if let Some(split) = line.split_once("=") {
+            open_scope(line, &mut state);
+        } else if let Some(split) = line.split_once('=') {
             set_var(split, &mut config_data, &mut state);
         } else if line == "}" {
             close_scope(&mut state, &mut config_data);
@@ -735,11 +736,10 @@ mod tests {
     }
 
     fn create_scratchpads(scratchpads: Vec<Scratchpad>) -> Scratchpads {
-        let scs = scratchpads
+        scratchpads
             .into_iter()
             .map(|sc| (sc.title.clone(), sc))
-            .collect();
-        scs
+            .collect()
     }
 
     fn create_reosources(config_file: &str) -> ReloadResources {
@@ -754,7 +754,7 @@ bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover sh
 bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\n",
             expected_config_a: Config {
                 config_file: config_file.to_string(),
-                daemon_options: "".into(),
+                daemon_options: String::new(),
                 groups: HashMap::new(),
                 names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
                 scratchpads: create_scratchpads(vec![
@@ -787,7 +787,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             },
             expected_config_b: Config {
                 config_file: config_file.to_string(),
-                daemon_options: "".into(),
+                daemon_options: String::new(),
                 groups: HashMap::new(),
                 names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
                 scratchpads: create_scratchpads(vec![
@@ -818,13 +818,13 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
         let config_path = "./test_configs/test_config2.txt";
         let mut config_file = File::create(config_path).unwrap();
         let resources = create_reosources(config_path);
-        config_file.write(resources.config_contents_a).unwrap();
+        config_file.write_all(resources.config_contents_a).unwrap();
 
         let mut config = Config::new(Some(config_path.to_string())).unwrap();
         assert_eq!(config.scratchpads, resources.expected_config_a.scratchpads);
 
         let mut config_file = File::create(config_path).unwrap();
-        config_file.write(resources.config_contents_b).unwrap();
+        config_file.write_all(resources.config_contents_b).unwrap();
 
         config.reload(Some(config_path.to_string())).unwrap();
 

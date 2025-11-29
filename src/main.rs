@@ -64,7 +64,7 @@ fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>)
         "logs" => print_logs(false),
         "help" => Ok(print_help()),
         "version" => Ok(println!("hyprscratch v{}", env!("CARGO_PKG_VERSION"))),
-        "reload" => send_request(socket, "reload", &config.unwrap_or("".into())),
+        "reload" => send_request(socket, "reload", &config.unwrap_or_default()),
         _ => Ok(()),
     }
 }
@@ -73,7 +73,7 @@ fn get_cli_command(args: &[String]) -> Option<&str> {
     for arg in args {
         if let Some(flag) = get_flag_name(arg, &KNOWN_COMMAND_FLAGS) {
             return Some(flag);
-        } else if arg.starts_with("-") {
+        } else if arg.starts_with('-') {
             let _ = log(format!("Unknown flag: {arg}"), Warn);
         }
     }

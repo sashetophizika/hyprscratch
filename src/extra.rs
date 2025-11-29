@@ -28,13 +28,13 @@ fn print_table_outline(symbols: (char, char, char), widths: &[usize]) {
 fn color(str: &str) -> String {
     let col_titles = ["Title/Class", "Command", "Options", "Group", "Scratchpads"];
     let mut colored_str = str
-        .replace(";", "?")
-        .replace("[", "[\x1b[0;36m")
-        .replace("]", "\x1b[0;0m]")
-        .replace("?", "\x1b[0;0m;\x1b[0;36m");
+        .replace(';', "?")
+        .replace('[', "[\x1b[0;36m")
+        .replace(']', "\x1b[0;0m]")
+        .replace('?', "\x1b[0;0m;\x1b[0;36m");
 
     if str.contains(".conf") {
-        colored_str = colored_str.replace(&str, &format!("\x1b[0;35m{str}\x1b[0;0m"));
+        colored_str = colored_str.replace(str, &format!("\x1b[0;35m{str}\x1b[0;0m"));
     }
 
     for title in col_titles {
@@ -102,14 +102,14 @@ fn print_group_table(group_data: &[Vec<&str>]) {
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
     for (name, scratchpads) in names.iter().zip(scratchpadss) {
-        print_table_row(&[name, &scratchpads], &field_widths);
+        print_table_row(&[name, scratchpads], &field_widths);
     }
     print_table_outline(('└', '┴', '┘'), &field_widths);
 }
 
 fn get_centered_conf(conf: &str, width: usize) -> String {
     let c = if width <= conf.len() {
-        conf.split("/").last().unwrap_log(file!(), line!())
+        conf.split('/').next_back().unwrap_log(file!(), line!())
     } else {
         conf
     };
@@ -145,7 +145,7 @@ fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
     print_table_row(&[&config_str], &[config_str.len()]);
 
     print_table_outline(('├', '┬', '┤'), &field_widths);
-    print_table_row(&vec!["Title/Class", "Command", "Options"], &field_widths);
+    print_table_row(&["Title/Class", "Command", "Options"], &field_widths);
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
     for ((title, command), option) in titles.iter().zip(commands).zip(options) {
@@ -307,5 +307,5 @@ FLAG ALIASES
   -k, --kill
   -l, --logs
   -v, --version
-  -h, --help")
+  -h, --help");
 }

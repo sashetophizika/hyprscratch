@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::scratchpad::Scratchpad;
-use crate::{logs::*, DEFAULT_SOCKET};
+use crate::{logs::{log, Warn, LogErr, Debug}, DEFAULT_SOCKET};
 use hyprland::data::{Client, Clients};
-use hyprland::dispatch::*;
+use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::io::Write;
@@ -20,8 +20,8 @@ fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
     let is_short = |x: &str| {
         x.len() > 1
             && !x.contains('=')
-            && x.starts_with("-")
-            && !x[1..].starts_with("-")
+            && x.starts_with('-')
+            && !x[1..].starts_with('-')
             && x.contains(flag.as_bytes()[0] as char)
     };
 
@@ -82,7 +82,7 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
 pub fn dequote(s: &str) -> String {
     let tr = s.trim();
     if tr.is_empty() {
-        return "".into();
+        return String::new();
     }
 
     match &tr[..1] {
@@ -161,7 +161,7 @@ fn prepend(command: &str, rules: &str) -> String {
 }
 
 pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
-    command.split("?").map(|c| prepend(c, rules)).collect()
+    command.split('?').map(|c| prepend(c, rules)).collect()
 }
 
 pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
@@ -184,9 +184,9 @@ pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &s
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |(n, sc): (&String, &Scratchpad)| {
-        prepare_commands(&sc, Some(true), &n)
+        prepare_commands(sc, Some(true), n)
             .iter()
-            .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()))
+            .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()));
     };
 
     let clients = Clients::get()?;
@@ -223,7 +223,7 @@ mod tests {
                 .zip(self.spawned)
                 .filter(|(_, spawned)| *spawned == 1)
                 .for_each(|(title, _)| {
-                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
+                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap();
                 });
             sleep(Duration::from_millis(500));
         }
@@ -255,7 +255,7 @@ mod tests {
         resources
             .titles
             .clone()
-            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
+            .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
         resources
             .commands
@@ -267,7 +267,7 @@ mod tests {
         resources
             .titles
             .clone()
-            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), true));
+            .map(|title| assert!(clients.clone().any(|x| x.initial_title == title)));
 
         move_floating(&[
             "test_nonfloating_move".to_owned(),
@@ -311,7 +311,7 @@ mod tests {
             expected_workspace: [
                 "special:test_normal_autospawn".to_string(),
                 "special:test_special_autospawn".to_string(),
-                "".to_string(),
+                String::new(),
             ],
             spawned: [1, 1, 0],
         };
@@ -320,10 +320,10 @@ mod tests {
         resources
             .titles
             .clone()
-            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
+            .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
         let options = vec![
-            "".to_string(),
+            String::new(),
             "special eager".to_string(),
             "lazy".to_string(),
         ];
@@ -333,15 +333,15 @@ mod tests {
             .iter()
             .zip(resources.commands.clone())
             .zip(options)
-            .map(|((t, c), o)| (t.clone(), Scratchpad::new(&t, &c, &o)))
+            .map(|((t, c), o)| (t.clone(), Scratchpad::new(t, &c, &o)))
             .collect();
 
         let mut config = Config {
             scratchpads,
             groups: HashMap::new(),
             names: Vec::new(),
-            daemon_options: "".into(),
-            config_file: "".to_string(),
+            daemon_options: String::new(),
+            config_file: String::new(),
             ephemeral_titles: Vec::new(),
             special_titles: Vec::new(),
             normal_titles: Vec::new(),

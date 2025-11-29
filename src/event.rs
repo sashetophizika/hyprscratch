@@ -122,7 +122,7 @@ fn reload_on_modify(res: notify::Result<Event>, config: ConfigMutex) {
         Ok(e) if e.paths.contains(&config_path) => {
             if let EventKind::Modify(ModifyKind::Data(_)) = e.kind {
                 sleep(Duration::from_millis(100));
-                config_guard.reload(None).log_err(f, l)
+                config_guard.reload(None).log_err(f, l);
             }
         }
         Err(err) => {

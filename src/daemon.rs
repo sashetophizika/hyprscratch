@@ -1,7 +1,7 @@
-use crate::config::*;
-use crate::event::*;
+use crate::config::Config;
+use crate::event::start_event_listeners;
 use crate::logs::*;
-use crate::scratchpad::*;
+use crate::scratchpad::Scratchpad;
 use crate::utils::*;
 use crate::DEFAULT_SOCKET;
 use crate::HYPRSCRATCH_DIR;
@@ -120,9 +120,10 @@ fn get_cycle_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option
     };
 
     let find_next = |mode, current_index: &mut usize| {
-        let name = &config.names[*current_index];
+        let mut name = &config.names[*current_index];
         while mode == config.scratchpads[name].options.special {
             *current_index = (*current_index + 1) % len;
+            name = &config.names[*current_index];
         }
     };
 
@@ -194,7 +195,7 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
 }
 
 fn handle_manual(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let args: Vec<&str> = msg.splitn(3, "^").collect();
+    let args: Vec<&str> = msg.splitn(3, '^').collect();
     state.update_prev_titles(args[0]);
 
     let scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
@@ -223,7 +224,7 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
 fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
     let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
         sc.command
-            .split("?")
+            .split('?')
             .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.as_string()])
             .collect()
     };
@@ -349,15 +350,14 @@ fn handle_request(
 }
 
 fn get_sock(socket_path: Option<&str>) -> &Path {
-    match socket_path {
-        Some(sp) => Path::new(sp),
-        None => {
-            let temp_dir = Path::new(HYPRSCRATCH_DIR);
-            if !temp_dir.exists() {
-                create_dir(temp_dir).log_err(file!(), line!());
-            }
-            Path::new(DEFAULT_SOCKET)
+    if let Some(sp) = socket_path {
+        Path::new(sp)
+    } else {
+        let temp_dir = Path::new(HYPRSCRATCH_DIR);
+        if !temp_dir.exists() {
+            create_dir(temp_dir).log_err(file!(), line!());
         }
+        Path::new(DEFAULT_SOCKET)
     }
 }
 
@@ -385,7 +385,7 @@ fn start_unix_listener(
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf)?;
 
-                let (req, msg) = buf.split_once("?").unwrap_log(file!(), line!());
+                let (req, msg) = buf.split_once('?').unwrap_log(file!(), line!());
                 let conf = &mut config.lock().unwrap_log(file!(), line!());
 
                 match handle_request((req, msg), &mut stream, state, conf) {
@@ -397,7 +397,7 @@ fn start_unix_listener(
             Err(_) => {
                 continue;
             }
-        };
+        }
     }
 
     Ok(())
@@ -439,12 +439,12 @@ mod tests {
     #[test]
     fn test_handlers() {
         std::thread::spawn(|| {
-            let args = "".to_string();
+            let args = String::new();
             initialize_daemon(
                 args,
                 Some("./test_configs/test_config2.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
-            )
+            );
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -458,7 +458,7 @@ mod tests {
     #[test]
     fn test_state() {
         let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
-        let mut state = DaemonState::new("".into(), &config);
+        let mut state = DaemonState::new("", &config);
 
         assert_eq!(
             get_cycle_name("special", &config, &mut state),
@@ -499,7 +499,7 @@ mod tests {
                 .zip(&self.expected_workspace)
                 .for_each(|(title, ws)| {
                     if ws != "none" {
-                        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap()
+                        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(title)).unwrap();
                     }
                 });
             sleep(Duration::from_millis(500));
@@ -511,7 +511,7 @@ mod tests {
         resources
             .titles
             .clone()
-            .map(|title| assert_eq!(clients.clone().any(|x| x.initial_title == title), false));
+            .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
         resources
             .commands
@@ -549,7 +549,7 @@ mod tests {
                 "clean".to_string(),
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
-            )
+            );
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -591,7 +591,7 @@ mod tests {
                 "spotless".to_string(),
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
-            )
+            );
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -638,7 +638,7 @@ mod tests {
                 "clean".into(),
                 Some("./test_configs/test_config3.txt".to_string()),
                 Some("/tmp/hyprscratch_test.sock"),
-            )
+            );
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -676,7 +676,7 @@ mod tests {
     #[test]
     fn test_auto_reload() {
         let config_path = "./test_configs/test_hyprlang.conf".replacen(
-            ".",
+            '.',
             env::current_dir().unwrap().as_os_str().to_str().unwrap(),
             1,
         );
@@ -710,6 +710,6 @@ mod tests {
             .any(|n| n == "test_reload"));
 
         let mut config_file = File::create(config_path).unwrap();
-        config_file.write(content.as_bytes()).unwrap();
+        config_file.write_all(content.as_bytes()).unwrap();
     }
 }
