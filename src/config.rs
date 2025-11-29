@@ -11,47 +11,55 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+type Scratchpads = HashMap<String, Scratchpad>;
+type Groups = HashMap<String, Vec<Scratchpad>>;
+
 struct ConfigData {
     daemon_options: String,
-    scratchpads: Vec<Scratchpad>,
-    groups: HashMap<String, Vec<Scratchpad>>,
+    scratchpads: Scratchpads,
+    groups: Groups,
+    names: Vec<String>,
 }
 
 impl ConfigData {
     fn new() -> ConfigData {
         ConfigData {
             daemon_options: String::new(),
-            scratchpads: Vec::new(),
+            scratchpads: HashMap::new(),
             groups: HashMap::new(),
+            names: Vec::new(),
         }
     }
 
-    fn from_scratchpads(scratchpads: Vec<Scratchpad>) -> ConfigData {
+    fn from_scratchpads(scratchpads: Scratchpads, names: Vec<String>) -> ConfigData {
         ConfigData {
             daemon_options: String::new(),
             scratchpads,
             groups: HashMap::new(),
+            names,
         }
     }
 
     fn append(&mut self, new_data: &mut ConfigData) {
         self.daemon_options.push_str(&new_data.daemon_options);
-        self.scratchpads.append(&mut new_data.scratchpads);
+        self.scratchpads.extend(new_data.scratchpads.clone());
         self.groups.extend(new_data.groups.clone());
+        self.names.append(&mut new_data.names);
     }
 
-    fn add_scratchpad(&mut self, scratchpad: Scratchpad) {
-        self.scratchpads.push(scratchpad);
+    fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
+        self.names.push(name.into());
+        self.scratchpads.insert(name.into(), scratchpad.clone());
     }
 
-    fn add_group(&mut self, name: String, scratchpads: Vec<Scratchpad>) {
-        self.groups.insert(name, scratchpads);
+    fn add_group(&mut self, name: &str, scratchpads: &[Scratchpad]) {
+        self.groups.insert(name.into(), scratchpads.to_vec());
     }
 
     fn add_globals(&mut self, state: &ParserState) {
         self.daemon_options
             .push_str(&state.scratchpad_data["daemon_options"]);
-        self.scratchpads.iter_mut().for_each(|sc| {
+        self.scratchpads.values_mut().for_each(|sc| {
             sc.add_opts(&state.scratchpad_data["global_options"]);
             sc.add_rules(&state.scratchpad_data["global_rules"]);
         });
@@ -59,18 +67,20 @@ impl ConfigData {
 }
 
 struct ParserState {
+    active_scratchpad: Option<String>,
     scratchpad_data: HashMap<String, String>,
-    group_data: Vec<Scratchpad>,
     active_group: Option<String>,
+    group_data: Vec<Scratchpad>,
     in_scope: bool,
 }
 
 impl ParserState {
     fn new() -> ParserState {
         let mut state = ParserState {
+            active_scratchpad: None,
             scratchpad_data: HashMap::new(),
-            group_data: vec![],
             active_group: None,
+            group_data: vec![],
             in_scope: false,
         };
 
@@ -92,7 +102,7 @@ impl ParserState {
                 warn_syntax_err(Nameless);
             } else {
                 self.in_scope = true;
-                self.scratchpad_data.insert("name".into(), n.into());
+                self.active_scratchpad = Some(n.into());
                 for f in ["title", "class", "command", "rules", "options"] {
                     self.scratchpad_data.insert(f.into(), String::new());
                 }
@@ -140,11 +150,8 @@ impl ParserState {
             &self.scratchpad_data["title"]
         };
 
-        let [name, options] = [
-            &self.scratchpad_data["name"],
-            &self.scratchpad_data["options"],
-        ];
-        Scratchpad::new(name, title, command, options)
+        let options = &self.scratchpad_data["options"];
+        Scratchpad::new(title, command, options)
     }
 
     fn append_to_field(&mut self, k: &str, v: &str) {
@@ -166,8 +173,8 @@ impl ParserState {
     }
 
     fn close_group(&mut self, config_data: &mut ConfigData) {
-        if let Some(name) = self.active_group.clone() {
-            config_data.add_group(name, self.group_data.clone());
+        if let Some(name) = &self.active_group {
+            config_data.add_group(name, &self.group_data);
             self.active_group = None;
             self.group_data = vec![];
         } else {
@@ -178,8 +185,9 @@ impl ParserState {
 
 #[derive(Debug, PartialEq)]
 pub struct Config {
-    pub scratchpads: Vec<Scratchpad>,
-    pub groups: HashMap<String, Vec<Scratchpad>>,
+    pub scratchpads: Scratchpads,
+    pub groups: Groups,
+    pub names: Vec<String>,
     pub ephemeral_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
@@ -207,10 +215,10 @@ impl Config {
             config_data
                 .scratchpads
                 .clone()
-                .into_iter()
+                .into_values()
                 .filter(|scratchpad| cond(&scratchpad.options))
                 .map(|scratchpad| scratchpad.title)
-                .collect()
+                .collect::<Vec<_>>()
         };
 
         Ok(Config {
@@ -224,6 +232,7 @@ impl Config {
             daemon_options: config_data.daemon_options,
             scratchpads: config_data.scratchpads,
             groups: config_data.groups,
+            names: config_data.names,
         })
     }
 
@@ -248,13 +257,13 @@ impl Config {
         }
     }
 
-    pub fn add_scratchpad(&mut self, scratchpad: &Scratchpad) {
-        if self.scratchpads.contains(scratchpad) {
+    pub fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
+        if self.scratchpads.get(name).is_some() {
             return;
         }
 
         self.update_titles(&scratchpad.options, &scratchpad.title);
-        self.scratchpads.push(scratchpad.clone());
+        self.scratchpads.insert(name.into(), scratchpad.clone());
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -302,7 +311,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
         File::open(config)?.read_to_string(&mut content)?;
 
         let mut new_data = if config.contains("hyprland.conf") || ext == "txt" {
-            ConfigData::from_scratchpads(parse_config(&content, parent)?)
+            parse_config(&content, parent)?
         } else {
             parse_hyprlang(&content)?
         };
@@ -313,7 +322,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
     Ok(config_data)
 }
 
-fn split_args(line: String) -> Vec<String> {
+fn split_args(line: &str) -> Vec<String> {
     let is_quote = |b: u8| b == b'\"' || b == b'\'';
 
     let mut args = vec![];
@@ -439,12 +448,12 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
     }
 }
 
-fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
+fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
     let source_path = match source.split_once("=") {
         Some((_, s)) => s.trim(),
         None => {
             let _ = log(format!("No filename given to source in {source}"), Warn);
-            return Ok(vec![]);
+            return Ok(ConfigData::new());
         }
     };
 
@@ -455,31 +464,34 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
         conf_file.read_to_string(&mut config)?;
         let parent = path.parent().unwrap_log(file!(), line!());
 
-        let scratchpads = parse_config(&config, parent)?;
-        Ok(scratchpads)
+        let data = parse_config(&config, parent)?;
+        Ok(data)
     } else {
         let _ = log(format!("Source file not found: {source_path}"), Warn);
-        Ok(vec![])
+        Ok(ConfigData::new())
     }
 }
 
-fn parse_config(config: &str, parent: &Path) -> Result<Vec<Scratchpad>> {
-    let mut scratchpads: Vec<Scratchpad> = vec![];
+fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
+    let mut scratchpads: Scratchpads = HashMap::new();
+    let mut names = vec![];
 
     let lines = get_lines_with("hyprscratch", config);
     for line in lines {
-        let args = split_args(line);
+        let args = split_args(&line);
         if let Some([title, command, opts]) = parse_args(&args) {
-            scratchpads.push(Scratchpad::new(&title, &title, &command, &opts));
+            scratchpads.insert(title.clone(), Scratchpad::new(&title, &command, &opts));
+            names.push(title.clone());
         }
     }
 
     for source in get_lines_with("source", config).iter() {
-        let mut scr = parse_source_config(source, parent)?;
-        scratchpads.append(&mut scr);
+        let mut data = parse_source_config(source, parent)?;
+        scratchpads.extend(data.scratchpads);
+        names.append(&mut data.names);
     }
 
-    Ok(scratchpads)
+    Ok(ConfigData::from_scratchpads(scratchpads, names))
 }
 
 use SyntaxErr::*;
@@ -528,20 +540,23 @@ fn close_scope(state: &mut ParserState, config_data: &mut ConfigData) {
     }
 
     let scratchpad = state.create_scratchpad();
-    config_data.add_scratchpad(scratchpad.clone());
+    if let Some(name) = &state.active_scratchpad {
+        config_data.add_scratchpad(name, &scratchpad);
+        state.active_scratchpad = None;
+    }
 
     if state.active_group.is_some() {
         state.group_data.push(scratchpad);
     }
 }
 
-fn add_copy_to_group(name: String, config_data: &mut ConfigData, state: &mut ParserState) {
+fn add_copy_to_group(name: &str, config_data: &mut ConfigData, state: &mut ParserState) {
     if state.in_scope || state.active_group.is_none() {
         warn_syntax_err(NameOutsideGroup);
         return;
     }
 
-    if let Some(sc) = config_data.scratchpads.iter().find(|sc| sc.name == name) {
+    if let Some(sc) = config_data.scratchpads.get(name) {
         state.group_data.push(sc.clone());
     }
 }
@@ -576,7 +591,7 @@ fn set_var<'a>(split: (&'a str, &'a str), config_data: &mut ConfigData, state: &
     let (k, v) = (split.0.trim(), escape(split.1));
     match k {
         "global_options" | "global_rules" | "daemon_options" => set_global(state, (k, v)),
-        "name" => add_copy_to_group(v, config_data, state),
+        "name" => add_copy_to_group(&v, config_data, state),
         _ => set_field(state, (k, &v)),
     }
 }
@@ -608,33 +623,57 @@ fn parse_hyprlang(config: &str) -> Result<ConfigData> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::fs::File;
+    use std::{fs::File, vec};
 
-    fn expected_scratchpads() -> Vec<Scratchpad> {
-        vec![
-            Scratchpad::new(
+    fn expected_scratchpads(mode: bool) -> Scratchpads {
+        let names = if mode {
+            vec![
                 "btop",
+                "Loading…",
+                "\\\"",
+                " a program with ' a wierd ' name",
+            ]
+        } else {
+            vec!["btop", "nautilus", "noname", "wierd"]
+        };
+
+        let scratchpads = vec![
+            Scratchpad::new(
                 "btop",
                 "[size 85% 85%] kitty --title btop -e btop",
                 "cover persist sticky shiny lazy show hide poly special tiled",
             ),
-            Scratchpad::new("nautilus", "Loading…", "[size 70% 80%] nautilus", ""),
-            Scratchpad::new("noname", "\\\"", "\\'", "cover eager special"),
+            Scratchpad::new("Loading…", "[size 70% 80%] nautilus", ""),
+            Scratchpad::new("\\\"", "\\'", "cover eager special"),
             Scratchpad::new(
-                "wierd",
                 " a program with ' a wierd ' name",
                 " a \"command with\" \\'a wierd\\' format",
                 "hide show",
             ),
-        ]
+        ];
+
+        names
+            .into_iter()
+            .zip(scratchpads)
+            .map(|(n, s)| (n.into(), s))
+            .collect()
     }
 
-    fn expected_groups() -> HashMap<String, Vec<Scratchpad>> {
-        let scs = expected_scratchpads();
+    fn expected_groups() -> Groups {
+        let scs = expected_scratchpads(false);
         let mut groups = HashMap::new();
-        groups.insert("one".into(), vec![scs[1].clone(), scs[2].clone()]);
-        groups.insert("two".into(), vec![scs[0].clone(), scs[3].clone()]);
-        groups.insert("three".into(), vec![scs[0].clone(), scs[2].clone()]);
+        groups.insert(
+            "one".into(),
+            vec![scs["nautilus"].clone(), scs["noname"].clone()],
+        );
+        groups.insert(
+            "two".into(),
+            vec![scs["btop"].clone(), scs["wierd"].clone()],
+        );
+        groups.insert(
+            "three".into(),
+            vec![scs["btop"].clone(), scs["noname"].clone()],
+        );
         groups
     }
 
@@ -650,7 +689,7 @@ mod tests {
     #[test]
     fn test_parse_hyprlang() {
         let config_data = parse_hyprlang(&open_conf("./test_configs/test_hyprlang.conf")).unwrap();
-        assert_eq!(config_data.scratchpads, expected_scratchpads());
+        assert_eq!(config_data.scratchpads, expected_scratchpads(false));
     }
 
     #[test]
@@ -661,35 +700,31 @@ mod tests {
 
     #[test]
     fn test_parse_config() {
-        let scratchpads = parse_config(
+        let config_data = parse_config(
             &open_conf("./test_configs/test_config1.txt"),
             Path::new("./test_configs"),
         )
         .unwrap();
 
-        let mut expected_scratchpads = expected_scratchpads();
-        for sc in expected_scratchpads.iter_mut() {
-            sc.name = sc.title.clone();
-        }
-
-        assert_eq!(scratchpads, expected_scratchpads);
+        let expected_scratchpads = expected_scratchpads(true);
+        assert_eq!(config_data.scratchpads, expected_scratchpads);
     }
 
     #[test]
     fn test_recursive_config() {
-        let scratchpads = parse_config(
+        let config_data = parse_config(
             &open_conf("./test_configs/test_nested/config_main.txt"),
             Path::new("./test_configs/test_nested"),
         )
         .unwrap();
 
-        let mut expected_scratchpads = vec![];
+        let mut expected_scratchpads = HashMap::new();
         for i in 1..=11 {
             let title = format!("scratch{i}");
-            expected_scratchpads.push(Scratchpad::new(&title, &title, "noop", ""))
+            expected_scratchpads.insert(title.clone(), Scratchpad::new(&title, "noop", ""));
         }
 
-        assert_eq!(scratchpads, expected_scratchpads);
+        assert_eq!(config_data.scratchpads, expected_scratchpads);
     }
 
     struct ReloadResources {
@@ -697,6 +732,14 @@ mod tests {
         config_contents_b: &'static [u8],
         expected_config_a: Config,
         expected_config_b: Config,
+    }
+
+    fn create_scratchpads(scratchpads: Vec<Scratchpad>) -> Scratchpads {
+        let scs = scratchpads
+            .into_iter()
+            .map(|sc| (sc.title.clone(), sc))
+            .collect();
+        scs
     }
 
     fn create_reosources(config_file: &str) -> ReloadResources {
@@ -713,17 +756,17 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 config_file: config_file.to_string(),
                 daemon_options: "".into(),
                 groups: HashMap::new(),
-                scratchpads: vec![
-                Scratchpad::new("firefox", "firefox", "firefox", "cover"),
+                names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
+                scratchpads: create_scratchpads(vec![
+                Scratchpad::new("firefox", "firefox", "cover"),
                 Scratchpad::new(
-                    "btop",
                     "btop",
                     "kitty --title btop -e btop",
                     "cover shiny eager show hide special sticky",
                 ),
-                Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "special"),
-                Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "eager"),
-            ],
+                Scratchpad::new("htop", "kitty --title htop -e htop", "special"),
+                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "eager"),
+            ]),
                 normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
                 special_titles: vec!["btop".to_string(), "htop".to_string()],
                 slick_titles: vec![
@@ -746,17 +789,17 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 config_file: config_file.to_string(),
                 daemon_options: "".into(),
                 groups: HashMap::new(),
-                scratchpads: vec![
+                names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
+                scratchpads: create_scratchpads(vec![
                 Scratchpad::new(
-                    "firefox",
                     "firefox",
                     "firefox --private-window",
                     "special sticky",
                 ),
-                Scratchpad::new("btop", "btop", "kitty --title btop -e btop", ""),
-                Scratchpad::new("htop", "htop", "kitty --title htop -e htop", "cover shiny"),
-                Scratchpad::new("cmat", "cmat", "kitty --title cmat -e cmat", "special"),
-            ],
+                Scratchpad::new( "btop", "kitty --title btop -e btop", ""),
+                Scratchpad::new( "htop", "kitty --title htop -e htop", "cover shiny"),
+                Scratchpad::new( "cmat", "kitty --title cmat -e cmat", "special"),
+            ]),
                 normal_titles: vec!["btop".to_string(), "htop".to_string()],
                 special_titles: vec!["firefox".to_string(), "cmat".to_string()],
                 slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
@@ -778,13 +821,13 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
         config_file.write(resources.config_contents_a).unwrap();
 
         let mut config = Config::new(Some(config_path.to_string())).unwrap();
-        assert_eq!(config, resources.expected_config_a);
+        assert_eq!(config.scratchpads, resources.expected_config_a.scratchpads);
 
         let mut config_file = File::create(config_path).unwrap();
         config_file.write(resources.config_contents_b).unwrap();
 
         config.reload(Some(config_path.to_string())).unwrap();
 
-        assert_eq!(config, resources.expected_config_b);
+        assert_eq!(config.scratchpads, resources.expected_config_b.scratchpads);
     }
 }

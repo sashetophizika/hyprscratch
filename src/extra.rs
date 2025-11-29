@@ -25,7 +25,7 @@ fn print_table_outline(symbols: (char, char, char), widths: &[usize]) {
     println!("{outline_str}");
 }
 
-fn color(str: String) -> String {
+fn color(str: &str) -> String {
     let col_titles = ["Title/Class", "Command", "Options", "Group", "Scratchpads"];
     let mut colored_str = str
         .replace(";", "?")
@@ -49,10 +49,10 @@ fn fancify(x: usize, str: &str) -> String {
     } else {
         str[..x - 3].to_string() + "..."
     };
-    color(str)
+    color(&str)
 }
 
-fn print_table_row(data: &Vec<&str>, widths: &[usize]) {
+fn print_table_row(data: &[&str], widths: &[usize]) {
     if data.len() != widths.len() {
         return;
     }
@@ -98,11 +98,11 @@ fn print_group_table(group_data: &[Vec<&str>]) {
     ];
 
     print_table_outline(('┌', '┬', '┐'), &field_widths);
-    print_table_row(&vec!["Group", "Scratchpads"], &field_widths);
+    print_table_row(&["Group", "Scratchpads"], &field_widths);
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
     for (name, scratchpads) in names.iter().zip(scratchpadss) {
-        print_table_row(&vec![name, &scratchpads], &field_widths);
+        print_table_row(&[name, &scratchpads], &field_widths);
     }
     print_table_outline(('└', '┴', '┘'), &field_widths);
 }
@@ -142,20 +142,20 @@ fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
     let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 6);
 
     print_table_outline(('┌', '─', '┐'), &[config_str.len()]);
-    print_table_row(&vec![&config_str], &[config_str.len()]);
+    print_table_row(&[&config_str], &[config_str.len()]);
 
     print_table_outline(('├', '┬', '┤'), &field_widths);
     print_table_row(&vec!["Title/Class", "Command", "Options"], &field_widths);
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
     for ((title, command), option) in titles.iter().zip(commands).zip(options) {
-        print_table_row(&vec![title, command, option], &field_widths);
+        print_table_row(&[title, command, option], &field_widths);
     }
 
     print_table_outline(('└', '┴', '┘'), &field_widths);
 }
 
-fn print_raw_data(data: &Vec<Vec<&str>>) {
+fn print_raw_data(data: &[Vec<&str>]) {
     for row in (0..data[0].len())
         .map(|i| data.iter().map(|inner| inner[i]).collect::<Vec<&str>>())
         .collect::<Vec<Vec<&str>>>()
