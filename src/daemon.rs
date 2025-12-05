@@ -10,14 +10,15 @@ use hyprland::dispatch::*;
 use hyprland::error::HyprError;
 use hyprland::prelude::*;
 use hyprland::Result;
-use rofi::Rofi;
 use std::collections::HashMap;
 use std::fs::{create_dir, remove_file};
 use std::io::prelude::*;
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::thread::spawn;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
@@ -41,6 +42,7 @@ impl DaemonOptions {
     }
 }
 
+#[derive(Clone)]
 pub struct DaemonState {
     pub cycle_index: usize,
     pub prev_titles: [String; 2],
@@ -109,7 +111,6 @@ fn handle_group(name: &str, mode: &str, config: &Config, state: &mut DaemonState
 
 fn get_cycle_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
     let len = config.scratchpads.len();
-    let mut current_index = (state.cycle_index + 1) % len;
 
     let warn_empty = |titles: &[_]| {
         if titles.is_empty() {
@@ -119,29 +120,33 @@ fn get_cycle_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option
         false
     };
 
-    let find_next = |mode, current_index: &mut usize| {
-        let mut name = &config.names[*current_index];
-        while mode == config.scratchpads[name].options.special {
-            *current_index = (*current_index + 1) % len;
-            name = &config.names[*current_index];
+    let find_next = |mode| -> usize {
+        let mut index = (state.cycle_index + 1) % len;
+        while mode == config.scratchpads[&config.names[index]].options.special {
+            index = (index + 1) % len;
         }
+        index
     };
 
     if msg.contains("special") {
         if warn_empty(&config.special_titles) {
             return None;
         }
-        find_next(false, &mut current_index);
+        state.cycle_index = find_next(false);
     } else if msg.contains("normal") {
         if warn_empty(&config.normal_titles) {
             return None;
         }
-        find_next(true, &mut current_index);
+        state.cycle_index = find_next(true);
+    } else {
+        if warn_empty(&config.names) {
+            return None;
+        }
+        state.cycle_index = (state.cycle_index + 1) % len;
     }
 
     let name = &config.names[state.cycle_index];
     state.update_prev_titles(&config.scratchpads[name].title);
-    state.cycle_index = current_index;
 
     Some(name.into())
 }
@@ -252,26 +257,26 @@ fn format_scratchpads(scratchpads: &[Scratchpad], config_file: &String) -> Strin
 }
 
 fn format_groups(groups: &HashMap<String, Vec<Scratchpad>>) -> String {
-    let format_group = |field: &dyn Fn((String, Vec<Scratchpad>)) -> String| {
+    type GroupField<'a> = &'a dyn Fn((&String, &Vec<Scratchpad>)) -> String;
+    let format_group = |field: GroupField| {
         groups
-            .clone()
-            .into_iter()
+            .iter()
             .map(field)
             .collect::<Vec<_>>()
             .join("\u{2C02}")
     };
 
-    let get_titles = |scratchpads: Vec<Scratchpad>| {
+    let get_titles = |scratchpads: &Vec<Scratchpad>| {
         scratchpads
-            .into_iter()
-            .map(|sc| sc.title)
+            .iter()
+            .map(|sc| sc.title.clone())
             .collect::<Vec<String>>()
             .join(",")
     };
 
     format!(
         "\u{2C00}{}\u{2C01}{}",
-        format_group(&|(x, _)| x),
+        format_group(&|(x, _)| x.clone()),
         format_group(&|(_, x)| get_titles(x))
     )
 }
@@ -317,12 +322,35 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_rofi(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    match Rofi::new(&config.names).run() {
-        Ok(title) => handle_scratchpad(&title, msg, config, state),
-        Err(rofi::Error::Interrupted) => log("No scratchpad for rofi selected".into(), Info),
-        Err(e) => log(format!("{e}"), Warn),
+fn run_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    let mut rofi = Command::new("rofi")
+        .args(["-dmenu", "-i", "-p", "Scratchpads"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    if let Some(ref mut stdin) = rofi.stdin {
+        stdin.write_all(config.names.join("\n").as_bytes())?;
     }
+
+    let output = rofi.wait_with_output()?;
+    if output.status.success() {
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !name.is_empty() {
+            handle_scratchpad(&name, mode, config, state)?;
+        } else {
+            let _ = log("No scratchpad selected for rofi".into(), Warn);
+        }
+    }
+    Ok(())
+}
+
+fn handle_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    let mode = mode.to_string();
+    let mut config = config.clone();
+    let mut state = state.clone();
+    spawn(move || run_rofi(&mode, &mut config, &mut state).log_err(file!(), line!()));
+    Ok(())
 }
 
 fn handle_request(
@@ -482,7 +510,7 @@ mod tests {
         );
         assert_eq!(
             get_cycle_name("unknown", &config, &mut state),
-            Some("test_nofloating".into())
+            Some("test_nonfloating".into())
         );
     }
 
