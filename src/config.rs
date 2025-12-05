@@ -42,8 +42,8 @@ impl ConfigData {
 
     fn append(&mut self, new_data: &mut ConfigData) {
         self.daemon_options.push_str(&new_data.daemon_options);
-        self.scratchpads.extend(new_data.scratchpads.clone());
-        self.groups.extend(new_data.groups.clone());
+        self.scratchpads.extend(new_data.scratchpads.drain());
+        self.groups.extend(new_data.groups.drain());
         self.names.append(&mut new_data.names);
     }
 
@@ -183,7 +183,7 @@ impl ParserState {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     pub scratchpads: Scratchpads,
     pub groups: Groups,
@@ -214,10 +214,9 @@ impl Config {
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
             config_data
                 .scratchpads
-                .clone()
-                .into_values()
+                .values()
                 .filter(|scratchpad| cond(&scratchpad.options))
-                .map(|scratchpad| scratchpad.title)
+                .map(|scratchpad| scratchpad.title.clone())
                 .collect::<Vec<_>>()
         };
 
