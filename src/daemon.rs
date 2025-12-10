@@ -561,6 +561,7 @@ mod tests {
                         hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(title)).unwrap();
                     }
                 });
+
             sleep(Duration::from_millis(500));
         }
     }
@@ -635,11 +636,13 @@ mod tests {
         };
 
         setup_test(&resources);
+
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
         sleep(Duration::from_millis(500));
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
 
         verify_test(&resources);
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some("special:test_special".into())).unwrap();
         sleep(Duration::from_millis(500));
     }
 

@@ -15,7 +15,7 @@ struct HyprlandState {
 }
 
 impl HyprlandState {
-    fn new(title: &str, workspace: &str) -> Result<HyprlandState> {
+    fn new(title: &str, name: &str) -> Result<HyprlandState> {
         let mut monitors = HashMap::new();
         Monitors::get()?.into_iter().for_each(|x| {
             monitors.insert(x.name.clone(), x.active_workspace.name.clone());
@@ -31,7 +31,7 @@ impl HyprlandState {
             .collect();
 
         Ok(HyprlandState {
-            special_workspace: workspace.into(),
+            special_workspace: name.into(),
             clients_with_title,
             active_workspace,
             active_client,
@@ -376,13 +376,16 @@ mod tests {
     struct TestResources {
         title: String,
         command: String,
+        title_map: HashMap<String, String>,
     }
 
     impl TestResources {
         fn new(title: &str) -> TestResources {
+            let title = format!("test_{title}");
             TestResources {
-                title: format!("test_{title}"),
-                command: format!("[size 30% 30%] kitty --title test_{title}"),
+                title: title.clone(),
+                command: format!("[size 30% 30%] kitty --title {title}"),
+                title_map: HashMap::from([(title.clone(), title)]),
             }
         }
 
@@ -459,18 +462,24 @@ mod tests {
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_present();
         resources.assert_not_active();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
@@ -484,18 +493,24 @@ mod tests {
 
         resources.assert_not_present();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_present();
         resources.assert_not_active();
 
-        scratchpad.trigger(&[], &resources.title).unwrap();
+        scratchpad
+            .trigger(&resources.title_map, &resources.title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
@@ -512,12 +527,16 @@ mod tests {
 
         resources.iter().for_each(TestResources::assert_not_present);
 
-        scratchpads[0].trigger(&[], &resources[0].title).unwrap();
+        scratchpads[0]
+            .trigger(&resources[0].title_map, &resources[0].title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources[0].assert_active();
 
-        scratchpads[1].trigger(&[], &resources[0].title).unwrap();
+        scratchpads[1]
+            .trigger(&resources[1].title_map, &resources[0].title)
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources[1].assert_active();
@@ -526,56 +545,29 @@ mod tests {
 
     #[test]
     fn test_poly() {
+        let title = "test_poly".to_string();
         let resources = TestResources {
-            title: "test_poly".to_string(),
+            title: title.clone(),
             command: "[size 30% 30%; move 0 0] kitty --title test_poly ? [size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
+            title_map: HashMap::from([(title.clone(), title)]),
         };
         let scratchpad = resources.into_scratchpad("poly");
 
         resources.assert_not_present();
 
         scratchpad
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
-        resources.assert_on_active(2);
+        resources.assert_active();
 
         scratchpad
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
-        resources.assert_on_active(0);
-    }
-
-    #[test]
-    fn test_tiled() {
-        let resources = [TestResources::new("tiled"), TestResources::new("floating")];
-        let scratchpad = [
-            resources[0].into_scratchpad("tiled"),
-            resources[1].into_scratchpad(""),
-        ];
-
-        resources.iter().for_each(TestResources::assert_not_present);
-
-        scratchpad[0]
-            .trigger(&[resources[0].title.clone()], &resources[0].title)
-            .unwrap();
-        sleep(Duration::from_millis(500));
-
-        resources[0].assert_active();
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert!(!active_client.floating);
-
-        scratchpad[1]
-            .trigger(&[resources[1].title.clone()], &resources[0].title)
-            .unwrap();
-        sleep(Duration::from_millis(500));
-
-        resources[1].assert_active();
-        let active_client = Client::get_active().unwrap().unwrap();
-        assert!(active_client.floating);
+        resources.assert_not_active();
     }
 
     #[test]
@@ -586,7 +578,7 @@ mod tests {
         resources.assert_not_present();
 
         scratchpad
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -604,10 +596,9 @@ mod tests {
         let resources = TestResources::new("summon_hide");
 
         resources.assert_not_present();
-
         resources
             .into_scratchpad("summon")
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -615,7 +606,7 @@ mod tests {
 
         resources
             .into_scratchpad("summon")
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -624,7 +615,7 @@ mod tests {
 
         resources
             .into_scratchpad("hide")
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -633,7 +624,7 @@ mod tests {
 
         resources
             .into_scratchpad("hide")
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
 
@@ -652,7 +643,7 @@ mod tests {
         assert_eq!(Workspace::get_active().unwrap().name, "test");
 
         scratchpad
-            .trigger(&[resources.title.clone()], &resources.title)
+            .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(1000));
 

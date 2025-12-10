@@ -793,23 +793,29 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 Scratchpad::new("htop", "kitty --title htop -e htop", "special"),
                 Scratchpad::new("cmat", "kitty --title cmat -e cmat", "eager"),
             ]),
-                normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
-                special_titles: vec!["btop".to_string(), "htop".to_string()],
-                slick_map: vec![
-                    "firefox".to_string(),
-                    "htop".to_string(),
-                    "cmat".to_string(),
-                ],
-                dirty_map: vec![
-                    "firefox".to_string(),
-                    "htop".to_string(),
-                    "cmat".to_string(),
-                ],
-                fickle_map: vec![
-                    "firefox".to_string(),
-                    "cmat".to_string(),
-                ],
-                ephemeral_titles: vec![],
+                cache: ConfigCache {
+                    normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
+                    special_titles: vec!["btop".to_string(), "htop".to_string()],
+                    ephemeral_titles: vec![],
+                    normal_map: HashMap::from([
+                        ("firefox".to_string(), "firefox".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                    fickle_map: HashMap::from([
+                        ("firefox".to_string(), "firefox".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                    slick_map: HashMap::from([
+                        ("firefox".to_string(), "firefox".to_string()),
+                        ("htop".to_string(), "htop".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                    dirty_map: HashMap::from([
+                        ("firefox".to_string(), "firefox".to_string()),
+                        ("htop".to_string(), "htop".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                },
             },
             expected_config_b: Config {
                 config_file: config_file.to_string(),
@@ -826,15 +832,28 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 Scratchpad::new( "htop", "kitty --title htop -e htop", "cover shiny"),
                 Scratchpad::new( "cmat", "kitty --title cmat -e cmat", "special"),
             ]),
-                normal_titles: vec!["btop".to_string(), "htop".to_string()],
-                special_titles: vec!["firefox".to_string(), "cmat".to_string()],
-                slick_map: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
-                dirty_map: vec!["btop".to_string(), "cmat".to_string()],
-                fickle_map: vec![
-                    "btop".to_string(),
-                    "htop".to_string(),
-                ],
-                ephemeral_titles: vec![],
+                cache: ConfigCache {
+                    normal_titles: vec!["btop".to_string(), "htop".to_string()],
+                    special_titles: vec!["firefox".to_string(), "cmat".to_string()],
+                    ephemeral_titles: vec![],
+                    normal_map: HashMap::from([
+                        ("btop".to_string(), "btop".to_string()),
+                        ("htop".to_string(), "htop".to_string()),
+                    ]),
+                    fickle_map: HashMap::from([
+                        ("btop".to_string(), "btop".to_string()),
+                        ("htop".to_string(), "htop".to_string()),
+                    ]),
+                    slick_map: HashMap::from([
+                        ("btop".to_string(), "btop".to_string()),
+                        ("htop".to_string(), "htop".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                    dirty_map: HashMap::from([
+                        ("btop".to_string(), "btop".to_string()),
+                        ("cmat".to_string(), "cmat".to_string()),
+                    ]),
+                },
             }
         }
     }
@@ -847,13 +866,13 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
         config_file.write_all(resources.config_contents_a).unwrap();
 
         let mut config = Config::new(Some(config_path.to_string())).unwrap();
-        assert_eq!(config.scratchpads, resources.expected_config_a.scratchpads);
+        assert_eq!(config, resources.expected_config_a);
 
         let mut config_file = File::create(config_path).unwrap();
         config_file.write_all(resources.config_contents_b).unwrap();
 
         config.reload(Some(config_path.to_string())).unwrap();
 
-        assert_eq!(config.scratchpads, resources.expected_config_b.scratchpads);
+        assert_eq!(config, resources.expected_config_b);
     }
 }
