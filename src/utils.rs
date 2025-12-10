@@ -100,7 +100,7 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
     Ok(())
 }
 
-pub fn move_to_special(cl: &Client, w_name: &str) {
+pub fn move_to_special(cl: &Client, workspace: &str) {
     if cl.pinned {
         hyprland::dispatch!(
             TogglePinWindow,
@@ -111,7 +111,7 @@ pub fn move_to_special(cl: &Client, w_name: &str) {
 
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(w_name)),
+        WorkspaceIdentifierWithSpecial::Special(Some(&workspace)),
         Some(WindowIdentifier::Address(cl.address.clone()))
     )
     .unwrap_or_else(|e| {
@@ -213,6 +213,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ConfigCache;
     use crate::scratchpad::Scratchpad;
     use hyprland::data::{Client, Workspace};
     use std::collections::HashMap;
@@ -280,11 +281,11 @@ mod tests {
             .clone()
             .map(|title| assert!(clients.clone().any(|x| x.initial_title == title)));
 
-        move_floating(&[
-            "test_nonfloating_move".to_owned(),
-            "test_scratchpad_move".to_owned(),
-        ])
-        .unwrap();
+        let titles = HashMap::from([(
+            "test_scratchpad_move".to_string(),
+            "test_scratchpad_move".to_string(),
+        )]);
+        move_floating(&titles).unwrap();
         sleep(Duration::from_millis(500));
 
         clients = Clients::get().unwrap().into_iter();
@@ -348,17 +349,12 @@ mod tests {
             .collect();
 
         let mut config = Config {
+            daemon_options: String::new(),
+            config_file: String::new(),
             scratchpads,
             groups: HashMap::new(),
             names: Vec::new(),
-            daemon_options: String::new(),
-            config_file: String::new(),
-            ephemeral_titles: Vec::new(),
-            special_titles: Vec::new(),
-            normal_titles: Vec::new(),
-            slick_map: Vec::new(),
-            dirty_map: Vec::new(),
-            fickle_map: resources.titles.to_vec(),
+            cache: ConfigCache::new(&HashMap::new()),
         };
 
         autospawn(&mut config).unwrap();
