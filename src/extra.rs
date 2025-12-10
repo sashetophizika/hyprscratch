@@ -264,48 +264,40 @@ pub fn print_help() {
     hyprscratch title command [options...]
 
 DAEMON OPTIONS
-  clean                       Hide scratchpads on workspace change
-  spotless                    Hide scratchpads on focus change
-  eager                       Spawn scratchpads hidden on start
-  no-auto-reload              Don't reload the configuration when the configuration file is updated
-  config </path/to/config>    Specify a path to the configuration file
+  clean                      Hide scratchpads on workspace change
+  spotless                   Hide scratchpads on focus change
+  eager                      Spawn scratchpads hidden on start
+  no-auto-reload             Don't reload the configuration when the configuration file is updated
+  config </path/to/config>   Specify a path to the configuration file
 
 SCRATCHPAD OPTIONS
-  ephemeral                   Close the scratchpad when it is hidden
-  persist                     Prevent the scratchpad from being replaced when a new one is summoned
-  cover                       Prevent the scratchpad from replacing another one if one is already present
-  sticky                      Prevent the scratchpad from being hidden by 'clean'
-  shiny                       Prevent the scratchpad from being hidden by 'spotless'
-  lazy                        Prevent the scratchpad from being spawned by 'eager'
-  show                        Only creates or brings up the scratchpad
-  hide                        Only hides the scratchpad
-  poly                        Toggle all scratchpads matching the title simultaneously
-  pin                         Keep the scratchpad active through workspace changes
-  tiled                       Makes a tiled scratchpad instead of a floating one
-  special                     Use Hyprland's special workspace, ignores most other options
-  monitor <id|name>           Restrict the scratchpad to a specified monitor
+  ephemeral                  Close the scratchpad when it is hidden
+  persist                    Prevent the scratchpad from being replaced when a new one is summoned
+  cover                      Prevent the scratchpad from replacing another one if one is already present
+  sticky                     Prevent the scratchpad from being hidden by 'clean'
+  shiny                      Prevent the scratchpad from being hidden by 'spotless'
+  lazy                       Prevent the scratchpad from being spawned by 'eager'
+  show                       Only creates or brings up the scratchpad
+  hide                       Only hides the scratchpad
+  poly                       Toggle all scratchpads matching the title simultaneously
+  pin                        Keep the scratchpad active through workspace changes
+  tiled                      Makes a tiled scratchpad instead of a floating one
+  special                    Use Hyprland's special workspace, ignores most other options
+  monitor <id|name>          Restrict the scratchpad to a specified monitor
 
 EXTRA COMMANDS
-  cycle [normal|special]      Cycle between [only normal | only special] scratchpads
-  toggle <name>               Toggles the scratchpad with the given name
-  show <name>                 Shows the scratchpad with the given name
-  hide <name>                 Hides the scratchpad with the given name
-  previous                    Summon the previous non-active scratchpad
-  hide-all                    Hide all scratchpads
-  kill-all                    Close all scratchpads
-  reload                      Reparse config file
-  get-config                  Print parsed config file
-  kill                        Kill the hyprscratch daemon
-  logs                        Print log file contents
-  version                     Print current version
-  help                        Print this help message
-
-FLAG ALIASES
-  -c, --config
-  -r, --reload
-  -g, --get-config
-  -k, --kill
-  -l, --logs
-  -v, --version
-  -h, --help");
+  cycle [normal|special]     Cycle between [only normal | only special] scratchpads
+  toggle <name>              Toggles the scratchpad with the given name
+  show <name>                Shows the scratchpad with the given name
+  hide <name>                Hides the scratchpad with the given name
+  previous [show|hide]       Spawn the previous non-active scratchpad
+  rofi [show|hide]           Spawn a rofi menu to fuzzy search through scratchpads
+  hide-all                   Hide all scratchpads
+  kill-all                   Close all scratchpads
+  reload (-r)                Reparse config file
+  get-config (-g)            Print parsed config file
+  kill (-k)                  Kill the hyprscratch daemon
+  logs (-l)                  Print log file contents
+  version (-v)               Print current version
+  help (-h)                  Print this help message");
 }
