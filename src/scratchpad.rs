@@ -166,7 +166,7 @@ impl Scratchpad {
 
     fn capture_special(&self, state: &HyprlandState) -> Result<()> {
         let first_title = &state.clients_with_title[0];
-        move_to_special(first_title);
+        move_to_special(first_title, &state.special_workspace);
 
         if !self.options.hide && first_title.workspace.id == state.active_workspace.id {
             state.toggle_special()?;
@@ -287,21 +287,17 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide_active(&self, titles: &[String], state: &HyprlandState) {
+    fn hide_active(&self, titles: &HashMap<String, String>, state: &HyprlandState) {
         if self.options.cover || self.options.hide {
             return;
         }
 
-        let should_hide = |cl: &&Client| {
-            is_known(titles, cl)
-                && !self.matches_client(cl)
-                && cl.workspace.id == state.active_workspace.id
-                && cl.floating
-        };
-
         if let Some(ac) = &state.active_client {
-            if should_hide(&ac) {
-                move_to_special(ac);
+            if !self.matches_client(ac)
+                && ac.workspace.id == state.active_workspace.id
+                && ac.floating
+            {
+                auto_hide(ac, titles);
             }
         }
     }
@@ -353,15 +349,15 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide(&self, clients: Vec<&Client>) {
-        clients.into_iter().for_each(move_to_special);
+    fn hide(&self, clients: Vec<&Client>, titles: &HashMap<String, String>) {
+        clients.into_iter().for_each(|c| auto_hide(c, titles));
     }
 
-    pub fn trigger(&self, titles: &[String], name: &str) -> Result<()> {
+    pub fn trigger(&self, titles: &HashMap<String, String>, name: &str) -> Result<()> {
         let state = HyprlandState::new(&self.title, name)?;
         match self.get_mode(&state) {
             Refocus(client) => Self::refocus(client)?,
-            Hide(clients) => self.hide(clients),
+            Hide(clients) => self.hide(clients, titles),
             Summon => self.summon(&state)?,
         }
 

@@ -6,6 +6,7 @@ use hyprland::data::{Client, Clients};
 use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
+use std::collections::HashMap;
 use std::io::Write;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -99,7 +100,7 @@ pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Resul
     Ok(())
 }
 
-pub fn move_to_special(cl: &Client) {
+pub fn move_to_special(cl: &Client, w_name: &str) {
     if cl.pinned {
         hyprland::dispatch!(
             TogglePinWindow,
@@ -110,7 +111,7 @@ pub fn move_to_special(cl: &Client) {
 
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(&cl.initial_title)),
+        WorkspaceIdentifierWithSpecial::Special(Some(w_name)),
         Some(WindowIdentifier::Address(cl.address.clone()))
     )
     .unwrap_or_else(|e| {
@@ -118,9 +119,22 @@ pub fn move_to_special(cl: &Client) {
     });
 }
 
+pub fn is_known(titles: &[&String], client: &Client) -> bool {
+    titles.contains(&&client.initial_title) || titles.contains(&&client.initial_class)
+}
+
+pub fn auto_hide(cl: &Client, title_names: &HashMap<String, String>) {
+    let titles: Vec<String> = title_names.keys().cloned().collect();
+    if titles.contains(&cl.initial_title) {
+        move_to_special(cl, &title_names[&cl.initial_title]);
+    } else if titles.contains(&cl.initial_title) {
+        move_to_special(cl, &title_names[&cl.initial_class]);
+    }
+}
+
 pub fn hide_special(cl: &Client) {
     if is_on_special(cl) {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.initial_title.clone()))
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.workspace.name.clone()))
             .log_err(file!(), line!());
     }
 }
@@ -129,15 +143,11 @@ pub fn is_on_special(cl: &Client) -> bool {
     cl.workspace.name.contains("special")
 }
 
-pub fn is_known(titles: &[String], client: &Client) -> bool {
-    titles.contains(&client.initial_title) || titles.contains(&client.initial_class)
-}
-
-pub fn move_floating(titles: &[String]) -> Result<()> {
+pub fn move_floating(titles: &HashMap<String, String>) -> Result<()> {
     Clients::get()?
         .iter()
-        .filter(|cl| cl.floating && !is_on_special(cl) && is_known(titles, cl))
-        .for_each(move_to_special);
+        .filter(|cl| cl.floating && !is_on_special(cl))
+        .for_each(|cl| auto_hide(cl, titles));
     Ok(())
 }
 
@@ -346,9 +356,9 @@ mod tests {
             ephemeral_titles: Vec::new(),
             special_titles: Vec::new(),
             normal_titles: Vec::new(),
-            slick_titles: Vec::new(),
-            dirty_titles: Vec::new(),
-            fickle_titles: resources.titles.to_vec(),
+            slick_map: Vec::new(),
+            dirty_map: Vec::new(),
+            fickle_map: resources.titles.to_vec(),
         };
 
         autospawn(&mut config).unwrap();
