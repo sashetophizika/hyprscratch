@@ -184,18 +184,76 @@ impl ParserState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Config {
-    pub scratchpads: Scratchpads,
-    pub groups: Groups,
-    pub names: Vec<String>,
+pub struct ConfigCache {
     pub ephemeral_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
-    pub fickle_titles: Vec<String>,
-    pub slick_titles: Vec<String>,
-    pub dirty_titles: Vec<String>,
+    pub normal_map: HashMap<String, String>,
+    pub fickle_map: HashMap<String, String>,
+    pub slick_map: HashMap<String, String>,
+    pub dirty_map: HashMap<String, String>,
+}
+
+impl ConfigCache {
+    pub fn new(scratchpads: &Scratchpads) -> ConfigCache {
+        let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
+            scratchpads
+                .values()
+                .filter(|scratchpad| cond(&scratchpad.options))
+                .map(|scratchpad| scratchpad.title.clone())
+                .collect::<Vec<_>>()
+        };
+
+        let filter_maps = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
+            scratchpads
+                .clone()
+                .into_iter()
+                .filter(|(_, scratchpad)| cond(&scratchpad.options))
+                .map(|(name, scratchpad)| (scratchpad.title, name))
+                .collect::<HashMap<_, _>>()
+        };
+
+        ConfigCache {
+            ephemeral_titles: filter_titles(&|opts| opts.ephemeral),
+            special_titles: filter_titles(&|opts| opts.special),
+            normal_titles: filter_titles(&|opts| !opts.special),
+            normal_map: filter_maps(&|opts| !opts.special),
+            fickle_map: filter_maps(&|opts| !opts.persist && !opts.special),
+            slick_map: filter_maps(&|opts| !opts.sticky && !opts.pin),
+            dirty_map: filter_maps(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
+        }
+    }
+
+    fn update_titles(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
+        if options.ephemeral {
+            self.ephemeral_titles.push(title.into());
+        }
+        if options.special {
+            self.special_titles.push(title.into());
+        }
+        if !options.special {
+            self.normal_titles.push(title.into());
+        }
+        if !options.special && !options.persist {
+            self.fickle_map.insert(name.into(), title.into());
+        }
+        if !options.pin && !options.sticky {
+            self.slick_map.insert(name.into(), title.into());
+        }
+        if !options.shiny && !options.sticky && !options.pin {
+            self.dirty_map.insert(name.into(), title.into());
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Config {
     pub daemon_options: String,
     pub config_file: String,
+    pub scratchpads: Scratchpads,
+    pub groups: Groups,
+    pub names: Vec<String>,
+    pub cache: ConfigCache,
 }
 
 impl Config {
@@ -211,49 +269,18 @@ impl Config {
             Info,
         )?;
 
-        let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
-            config_data
-                .scratchpads
-                .values()
-                .filter(|scratchpad| cond(&scratchpad.options))
-                .map(|scratchpad| scratchpad.title.clone())
-                .collect::<Vec<_>>()
-        };
-
         Ok(Config {
-            ephemeral_titles: filter_titles(&|opts| opts.ephemeral),
-            special_titles: filter_titles(&|opts| opts.special),
-            normal_titles: filter_titles(&|opts| !opts.special),
-            fickle_titles: filter_titles(&|opts| !opts.persist && !opts.special),
-            slick_titles: filter_titles(&|opts| !opts.sticky && !opts.pin),
-            dirty_titles: filter_titles(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
-            config_file: config_files[0].clone(),
+            cache: ConfigCache::new(&config_data.scratchpads),
             daemon_options: config_data.daemon_options,
+            config_file: config_files[0].clone(),
             scratchpads: config_data.scratchpads,
             groups: config_data.groups,
             names: config_data.names,
         })
     }
 
-    fn update_titles(&mut self, options: &ScratchpadOptions, title: &str) {
-        if options.ephemeral {
-            self.ephemeral_titles.push(title.into());
-        }
-        if options.special {
-            self.special_titles.push(title.into());
-        }
-        if !options.special {
-            self.normal_titles.push(title.into());
-        }
-        if !options.special && !options.persist {
-            self.fickle_titles.push(title.into());
-        }
-        if !options.pin && !options.sticky {
-            self.slick_titles.push(title.into());
-        }
-        if !options.shiny && !options.sticky && !options.pin {
-            self.dirty_titles.push(title.into());
-        }
+    fn update_cache(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
+        self.cache.update_titles(options, name, title);
     }
 
     pub fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
@@ -261,7 +288,7 @@ impl Config {
             return;
         }
 
-        self.update_titles(&scratchpad.options, &scratchpad.title);
+        self.update_cache(&scratchpad.options, name, &scratchpad.title);
         self.scratchpads.insert(name.into(), scratchpad.clone());
     }
 
@@ -473,7 +500,7 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
     let mut scratchpads: Scratchpads = HashMap::new();
     let mut names = vec![];
 
-    let lines = get_lines_with("hyprscratch", config);
+    let lines = get_lines_with("hyprscratch ", config);
     for line in lines {
         let args = split_args(&line);
         if let Some([title, command, opts]) = parse_args(&args) {
@@ -482,7 +509,7 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
         }
     }
 
-    for source in &get_lines_with("source", config) {
+    for source in &get_lines_with("source ", config) {
         let mut data = parse_source_config(source, parent)?;
         scratchpads.extend(data.scratchpads);
         names.append(&mut data.names);
@@ -768,17 +795,17 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             ]),
                 normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
                 special_titles: vec!["btop".to_string(), "htop".to_string()],
-                slick_titles: vec![
+                slick_map: vec![
                     "firefox".to_string(),
                     "htop".to_string(),
                     "cmat".to_string(),
                 ],
-                dirty_titles: vec![
+                dirty_map: vec![
                     "firefox".to_string(),
                     "htop".to_string(),
                     "cmat".to_string(),
                 ],
-                fickle_titles: vec![
+                fickle_map: vec![
                     "firefox".to_string(),
                     "cmat".to_string(),
                 ],
@@ -801,9 +828,9 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             ]),
                 normal_titles: vec!["btop".to_string(), "htop".to_string()],
                 special_titles: vec!["firefox".to_string(), "cmat".to_string()],
-                slick_titles: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
-                dirty_titles: vec!["btop".to_string(), "cmat".to_string()],
-                fickle_titles: vec![
+                slick_map: vec!["btop".to_string(), "htop".to_string(), "cmat".to_string()],
+                dirty_map: vec!["btop".to_string(), "cmat".to_string()],
+                fickle_map: vec![
                     "btop".to_string(),
                     "htop".to_string(),
                 ],

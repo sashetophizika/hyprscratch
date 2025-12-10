@@ -8,6 +8,7 @@ use crate::HYPRSCRATCH_DIR;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::*;
 use hyprland::error::HyprError;
+use hyprland::keyword::Keyword;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::collections::HashMap;
@@ -75,7 +76,7 @@ fn handle_scratchpad(
     if let Some(sc) = config.scratchpads.get_mut(name) {
         state.update_prev_titles(&sc.title);
         sc.options.toggle(mode);
-        sc.trigger(&config.fickle_titles, name)?;
+        sc.trigger(&config.cache.fickle_map, name)?;
         sc.options.toggle(mode);
         Ok(())
     } else {
@@ -99,7 +100,7 @@ fn handle_group(name: &str, mode: &str, config: &Config, state: &mut DaemonState
         }
 
         sc.options.toggle(mode);
-        sc.trigger(&config.fickle_titles, name)?;
+        sc.trigger(&config.cache.fickle_map, name)?;
         sc.options.toggle(mode);
 
         if cover != sc.options.cover {
@@ -129,12 +130,12 @@ fn get_cycle_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option
     };
 
     if msg.contains("special") {
-        if warn_empty(&config.special_titles) {
+        if warn_empty(&config.cache.special_titles) {
             return None;
         }
         state.cycle_index = find_next(false);
     } else if msg.contains("normal") {
-        if warn_empty(&config.normal_titles) {
+        if warn_empty(&config.cache.normal_titles) {
             return None;
         }
         state.cycle_index = find_next(true);
@@ -205,7 +206,7 @@ fn handle_manual(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
 
     let scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
     config.add_scratchpad(args[0], &scratchpad);
-    scratchpad.trigger(&config.fickle_titles, args[0])
+    scratchpad.trigger(&config.cache.fickle_map, args[0])
 }
 
 fn get_config_path(msg: &str) -> Option<String> {
@@ -315,7 +316,7 @@ fn handle_killall(config: &Config) -> Result<()> {
 }
 
 fn handle_hideall(config: &Config) -> Result<()> {
-    move_floating(&config.normal_titles)?;
+    move_floating(&config.cache.normal_map)?;
     if let Ok(Some(ac)) = Client::get_active() {
         hide_special(&ac);
     }
@@ -329,15 +330,27 @@ fn run_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<
         .stdout(Stdio::piped())
         .spawn()?;
 
+    let rofi_str = config.names.join("\n")
+        + "\n"
+        + &config
+            .groups
+            .keys()
+            .cloned()
+            .fold("".into(), |acc: String, k| acc + "group:" + &k + "\n");
+
     if let Some(ref mut stdin) = rofi.stdin {
-        stdin.write_all(config.names.join("\n").as_bytes())?;
+        stdin.write_all(rofi_str.as_bytes())?;
     }
 
     let output = rofi.wait_with_output()?;
     if output.status.success() {
         let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !name.is_empty() {
-            handle_scratchpad(&name, mode, config, state)?;
+            if let Some(("group", name)) = name.split_once(":") {
+                handle_group(&name, mode, config, state)?;
+            } else {
+                handle_scratchpad(&name, mode, config, state)?;
+            }
         } else {
             let _ = log("No scratchpad selected for rofi".into(), Warn);
         }
@@ -431,12 +444,30 @@ fn start_unix_listener(
     Ok(())
 }
 
+fn make_workspaces_persistent(config: &Config) -> Result<()> {
+    let make_persistent = |name| -> Result<()> {
+        let rule = format!("special:{}, persistent:true", name);
+        Keyword::set("workspace", rule)
+    };
+
+    for name in config.scratchpads.keys() {
+        make_persistent(name)?;
+    }
+
+    for name in config.groups.keys() {
+        make_persistent(name)?;
+    }
+
+    Ok(())
+}
+
 pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path: Option<&str>) {
     let _ = send_request(socket_path, "kill", "");
 
     let (f, l) = (file!(), line!());
     let config = Config::new(config_path).unwrap_log(f, l);
     let mut state = DaemonState::new(&args, &config);
+    make_workspaces_persistent(&config).unwrap_log(f, l);
 
     let config = Arc::new(Mutex::new(config));
     start_event_listeners(&config, &mut state);
