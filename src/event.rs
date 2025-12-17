@@ -19,8 +19,7 @@ type ConfigMutex = Arc<Mutex<Config>>;
 fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_window_moved_handler(move |data| {
         let (f, l) = (file!(), line!());
-        let conf = &config.lock().unwrap_log(f, l);
-        let ephemeral_titles: Vec<&String> = conf.cache.ephemeral_titles.iter().collect();
+        let ephemeral_titles = &config.lock().unwrap_log(f, l).cache.ephemeral_titles;
 
         if ephemeral_titles.is_empty() {
             return;
@@ -30,7 +29,7 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
             clients
                 .iter()
                 .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
-                .filter(|cl| is_known(&ephemeral_titles, cl))
+                .filter(|cl| is_known(ephemeral_titles, cl))
                 .for_each(|cl| {
                     hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&cl.title))
                         .log_err(f, l);
@@ -42,12 +41,11 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
 fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
-        let slick_titles = &config.lock().unwrap_log(f, l).cache.slick_map;
-        move_floating(slick_titles).log_err(f, l);
+        let slick_map = &config.lock().unwrap_log(f, l).cache.slick_map;
+        move_floating(slick_map).log_err(f, l);
 
         if let Ok(Some(ac)) = Client::get_active() {
-            let titles: Vec<&String> = slick_titles.keys().collect();
-            if is_known(&titles, &ac) {
+            if is_known_map(slick_map, &ac) {
                 hide_special(&ac);
             }
         }
@@ -60,8 +58,7 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
             let (f, l) = (file!(), line!());
             let conf = &config.lock().unwrap_log(f, l);
 
-            let titles: Vec<&String> = conf.names.iter().collect();
-            if !is_known(&titles, &cl) {
+            if !is_known(&conf.cache.normal_titles, &cl) {
                 move_floating(&conf.cache.dirty_map).log_err(f, l);
             }
         }
