@@ -26,7 +26,15 @@ fn print_table_outline(symbols: (char, char, char), widths: &[usize]) {
 }
 
 fn color(str: &str) -> String {
-    let col_titles = ["Title/Class", "Command", "Options", "Group", "Scratchpads"];
+    let col_titles = [
+        "Name",
+        "Title/Class",
+        "Command",
+        "Options",
+        "Group",
+        "Scratchpads",
+    ];
+
     let mut colored_str = str
         .replace(';', "?")
         .replace('[', "[\x1b[0;36m")
@@ -129,27 +137,32 @@ fn get_centered_conf(conf: &str, width: usize) -> String {
 }
 
 fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
-    let [titles, commands, options] = &scratchpad_data[0..3] else {
+    let [names, titles, commands, options] = &scratchpad_data[0..4] else {
         return;
     };
 
-    let max_chars = 80;
+    let max_chars = 60;
     let field_widths = vec![
+        max_len(names, 4, max_chars),
         max_len(titles, 11, max_chars),
         max_len(commands, 7, max_chars),
         max_len(options, 7, max_chars),
     ];
-    let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 6);
+
+    let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 9);
 
     print_table_outline(('┌', '─', '┐'), &[config_str.len()]);
     print_table_row(&[&config_str], &[config_str.len()]);
 
     print_table_outline(('├', '┬', '┤'), &field_widths);
-    print_table_row(&["Title/Class", "Command", "Options"], &field_widths);
+    print_table_row(
+        &["Name", "Title/Class", "Command", "Options"],
+        &field_widths,
+    );
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
-    for ((title, command), option) in titles.iter().zip(commands).zip(options) {
-        print_table_row(&[title, command, option], &field_widths);
+    for (((name, title), command), option) in names.iter().zip(titles).zip(commands).zip(options) {
+        print_table_row(&[name, title, command, option], &field_widths);
     }
 
     print_table_outline(('└', '┴', '┘'), &field_widths);
@@ -197,9 +210,10 @@ fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
 }
 
 fn parse_config_data(data: &str) -> ParsedConfig {
+    let (sc_fields, g_fields) = (4, 2);
     match data.splitn(3, '\u{2C00}').collect::<Vec<_>>()[..] {
-        [c, scd, gd] => (c, parse_data(scd, 3), parse_data(gd, 2)),
-        [c, scd] => (c, parse_data(scd, 3), vec![]),
+        [c, scd, gd] => (c, parse_data(scd, sc_fields), parse_data(gd, g_fields)),
+        [c, scd] => (c, parse_data(scd, sc_fields), vec![]),
         _ => {
             let _ = log("Could not get configuration data".into(), Error);
             ("", vec![], vec![])
@@ -250,7 +264,7 @@ pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
     println!("Hyprscratch v{}", env!("CARGO_PKG_VERSION"));
     println!("### LOGS ###\n");
     print_logs(true)?;
-    println!("\n### CONFIGURATION ###");
+    println!("\n### CONFIGURATION ###\n");
     get_config(socket, true)?;
     Ok(())
 }
@@ -291,7 +305,7 @@ EXTRA COMMANDS
   show <name>                Shows the scratchpad with the given name
   hide <name>                Hides the scratchpad with the given name
   previous [show|hide]       Spawn the previous non-active scratchpad
-  rofi [show|hide]           Spawn a rofi menu to fuzzy search through scratchpads
+  rofi [show|hide]           Spawn a rofi menu to search scratchpads
   hide-all                   Hide all scratchpads
   kill-all                   Close all scratchpads
   reload (-r)                Reparse config file
