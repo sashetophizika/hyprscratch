@@ -69,15 +69,15 @@ impl DaemonState {
 
 fn handle_scratchpad(
     name: &str,
-    mode: &str,
+    action: &str,
     config: &mut Config,
     state: &mut DaemonState,
 ) -> Result<()> {
     if let Some(sc) = config.scratchpads.get_mut(name) {
         state.update_prev_titles(&sc.title);
-        sc.options.toggle(mode);
+        sc.options.toggle(action);
         sc.trigger(&config.cache.fickle_map, name)?;
-        sc.options.toggle(mode);
+        sc.options.toggle(action);
         Ok(())
     } else {
         let _ = log(format!("Scratchpad or group '{name}' not found"), Warn);
@@ -85,7 +85,7 @@ fn handle_scratchpad(
     }
 }
 
-fn handle_group(name: &str, mode: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
+fn handle_group(name: &str, action: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
     let mut group = config.groups[name].clone();
 
     if group.is_empty() {
@@ -99,9 +99,9 @@ fn handle_group(name: &str, mode: &str, config: &Config, state: &mut DaemonState
             sc.options.cover = true;
         }
 
-        sc.options.toggle(mode);
+        sc.options.toggle(action);
         sc.trigger(&config.cache.fickle_map, name)?;
-        sc.options.toggle(mode);
+        sc.options.toggle(action);
 
         if cover != sc.options.cover {
             sc.options.cover = false;
@@ -110,7 +110,7 @@ fn handle_group(name: &str, mode: &str, config: &Config, state: &mut DaemonState
     Ok(())
 }
 
-fn get_cycle_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
+fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
     let len = config.scratchpads.len();
 
     let warn_empty = |titles: &[_]| {
@@ -157,7 +157,7 @@ fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Resu
         return log("No scratchpads configured for 'cycle'".into(), Warn);
     }
 
-    if let Some(name) = get_cycle_name(msg, config, state) {
+    if let Some(name) = get_next_name(msg, config, state) {
         handle_scratchpad(&name, "", config, state)?;
     }
 
@@ -193,8 +193,10 @@ fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonStat
         );
     }
 
-    if config.groups.contains_key(msg) {
-        return handle_group(msg, req, config, state);
+    if let Some(("group", name)) = msg.split_once(":") {
+        if config.groups.contains_key(name) {
+            return handle_group(name, req, config, state);
+        }
     }
 
     handle_scratchpad(msg, req, config, state)
@@ -238,8 +240,14 @@ fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
     scratchpads.iter().flat_map(split).collect()
 }
 
-fn format_scratchpads(scratchpads: &[Scratchpad], config_file: &String) -> String {
-    let scratchpads = split_commands(scratchpads);
+fn format_scratchpads(config: &Config) -> String {
+    let ordered_scratchpads: Vec<Scratchpad> = config
+        .names
+        .iter()
+        .map(|k| config.scratchpads[k].clone())
+        .collect();
+    let scratchpads = split_commands(&ordered_scratchpads);
+
     let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
         scratchpads
             .iter()
@@ -248,13 +256,15 @@ fn format_scratchpads(scratchpads: &[Scratchpad], config_file: &String) -> Strin
             .join("\u{2C02}")
     };
 
-    format!(
-        "{}\u{2C00}{}\u{2C01}{}\u{2C01}{}",
-        config_file,
+    let conf = &config.config_file;
+    let names = config.names.join("\u{2C02}");
+    let (titles, commands, options) = (
         format_field(&|x| &x[0]),
         format_field(&|x| &x[1]),
         format_field(&|x| &x[2]),
-    )
+    );
+
+    format!("{conf}\u{2C00}{names}\u{2C01}{titles}\u{2C01}{commands}\u{2C01}{options}")
 }
 
 fn format_groups(groups: &HashMap<String, Vec<Scratchpad>>) -> String {
@@ -283,13 +293,7 @@ fn format_groups(groups: &HashMap<String, Vec<Scratchpad>>) -> String {
 }
 
 fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    let scratchpads: Vec<Scratchpad> = config
-        .names
-        .iter()
-        .map(|k| config.scratchpads[k].clone())
-        .collect();
-
-    let mut config_str = format_scratchpads(&scratchpads, &config.config_file);
+    let mut config_str = format_scratchpads(config);
     if !config.groups.is_empty() {
         config_str.push_str(&format_groups(&config.groups));
     }
@@ -323,7 +327,7 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn run_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
+fn run_rofi(action: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
     let mut rofi = Command::new("rofi")
         .args(["-dmenu", "-i", "-p", "Scratchpads"])
         .stdin(Stdio::piped())
@@ -347,9 +351,9 @@ fn run_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<
         let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !name.is_empty() {
             if let Some(("group", name)) = name.split_once(":") {
-                handle_group(&name, mode, config, state)?;
+                handle_group(name, action, config, state)?;
             } else {
-                handle_scratchpad(&name, mode, config, state)?;
+                handle_scratchpad(&name, action, config, state)?;
             }
         } else {
             let _ = log("No scratchpad selected for rofi".into(), Warn);
@@ -358,11 +362,11 @@ fn run_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<
     Ok(())
 }
 
-fn handle_rofi(mode: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let mode = mode.to_string();
+fn handle_rofi(action: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
+    let action = action.to_string();
     let mut config = config.clone();
     let mut state = state.clone();
-    spawn(move || run_rofi(&mode, &mut config, &mut state).log_err(file!(), line!()));
+    spawn(move || run_rofi(&action, &mut config, &mut state).log_err(file!(), line!()));
     Ok(())
 }
 
@@ -446,7 +450,7 @@ fn start_unix_listener(
 
 fn make_workspaces_persistent(config: &Config) -> Result<()> {
     let make_persistent = |name| -> Result<()> {
-        let rule = format!("special:{}, persistent:true", name);
+        let rule = format!("special:{name}, persistent:true");
         Keyword::set("workspace", rule)
     };
 
@@ -467,7 +471,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
     let (f, l) = (file!(), line!());
     let config = Config::new(config_path).unwrap_log(f, l);
     let mut state = DaemonState::new(&args, &config);
-    make_workspaces_persistent(&config).unwrap_log(f, l);
+    make_workspaces_persistent(&config).log_err(f, l);
 
     let config = Arc::new(Mutex::new(config));
     start_event_listeners(&config, &mut state);
@@ -520,27 +524,27 @@ mod tests {
         let mut state = DaemonState::new("", &config);
 
         assert_eq!(
-            get_cycle_name("special", &config, &mut state),
+            get_next_name("special", &config, &mut state),
             Some("test_special".into())
         );
         assert_eq!(
-            get_cycle_name("normal", &config, &mut state),
+            get_next_name("normal", &config, &mut state),
             Some("test_sticky".into())
         );
         assert_eq!(
-            get_cycle_name("", &config, &mut state),
+            get_next_name("", &config, &mut state),
             Some("test_shiny".into())
         );
         assert_eq!(
-            get_cycle_name("", &config, &mut state),
+            get_next_name("", &config, &mut state),
             Some("test_pin".into())
         );
         assert_eq!(
-            get_cycle_name("", &config, &mut state),
+            get_next_name("", &config, &mut state),
             Some("test_normal".into())
         );
         assert_eq!(
-            get_cycle_name("unknown", &config, &mut state),
+            get_next_name("unknown", &config, &mut state),
             Some("test_nonfloating".into())
         );
     }

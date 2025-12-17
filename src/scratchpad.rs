@@ -23,16 +23,17 @@ impl HyprlandState {
         });
 
         let active_workspace = Workspace::get_active()?;
+        let special_workspace = name.into();
 
         let active_client = Client::get_active()?;
         let clients_with_title = Clients::get()?
             .into_iter()
-            .filter(|x| x.initial_title == title || x.initial_class == title)
+            .filter(|cl| is_known(&[title.into()], cl))
             .collect();
 
         Ok(HyprlandState {
-            special_workspace: name.into(),
             clients_with_title,
+            special_workspace,
             active_workspace,
             active_client,
             monitors,
@@ -349,19 +350,21 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide(&self, clients: Vec<&Client>, titles: &HashMap<String, String>) {
-        clients.into_iter().for_each(|c| auto_hide(c, titles));
+    fn hide(&self, clients: Vec<&Client>, state: &HyprlandState) {
+        clients
+            .into_iter()
+            .for_each(|c| move_to_special(c, &state.special_workspace));
     }
 
-    pub fn trigger(&self, titles: &HashMap<String, String>, name: &str) -> Result<()> {
+    pub fn trigger(&self, title_map: &HashMap<String, String>, name: &str) -> Result<()> {
         let state = HyprlandState::new(&self.title, name)?;
         match self.get_mode(&state) {
             Refocus(client) => Self::refocus(client)?,
-            Hide(clients) => self.hide(clients, titles),
+            Hide(clients) => self.hide(clients, &state),
             Summon => self.summon(&state)?,
         }
 
-        self.hide_active(titles, &state);
+        self.hide_active(title_map, &state);
         Dispatch::call(DispatchType::BringActiveToTop)?;
         Ok(())
     }

@@ -111,7 +111,7 @@ pub fn move_to_special(cl: &Client, workspace: &str) {
 
     hyprland::dispatch!(
         MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(&workspace)),
+        WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
         Some(WindowIdentifier::Address(cl.address.clone()))
     )
     .unwrap_or_else(|e| {
@@ -119,22 +119,25 @@ pub fn move_to_special(cl: &Client, workspace: &str) {
     });
 }
 
-pub fn is_known(titles: &[&String], client: &Client) -> bool {
-    titles.contains(&&client.initial_title) || titles.contains(&&client.initial_class)
+pub fn is_known(titles: &[String], cl: &Client) -> bool {
+    titles.contains(&cl.initial_title) || titles.contains(&cl.initial_class)
 }
 
-pub fn auto_hide(cl: &Client, title_names: &HashMap<String, String>) {
-    let titles: Vec<String> = title_names.keys().cloned().collect();
-    if titles.contains(&cl.initial_title) {
-        move_to_special(cl, &title_names[&cl.initial_title]);
-    } else if titles.contains(&cl.initial_title) {
-        move_to_special(cl, &title_names[&cl.initial_class]);
+pub fn is_known_map(map: &HashMap<String, String>, cl: &Client) -> bool {
+    map.contains_key(&cl.initial_title) || map.contains_key(&cl.initial_class)
+}
+
+pub fn auto_hide(cl: &Client, title_map: &HashMap<String, String>) {
+    if title_map.contains_key(&cl.initial_title) {
+        move_to_special(cl, &title_map[&cl.initial_title]);
+    } else if title_map.contains_key(&cl.initial_class) {
+        move_to_special(cl, &title_map[&cl.initial_class]);
     }
 }
 
 pub fn hide_special(cl: &Client) {
-    if is_on_special(cl) {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(cl.workspace.name.clone()))
+    if let Some(("special", workspace)) = cl.workspace.name.split_once(":") {
+        hyprland::dispatch!(ToggleSpecialWorkspace, Some(workspace.into()))
             .log_err(file!(), line!());
     }
 }
