@@ -25,7 +25,7 @@ const DEFAULT_CONFIG_FILES: [&str; 4] = [
     "hypr/hyprland.conf",
 ];
 
-const KNOWN_COMMAND_FLAGS: [&str; 7] = [
+const KNOWN_CLI_COMMANDS: [&str; 7] = [
     "get-config",
     "version",
     "reload",
@@ -35,7 +35,7 @@ const KNOWN_COMMAND_FLAGS: [&str; 7] = [
     "kill",
 ];
 
-const KNOWN_COMMANDS: [&str; 18] = [
+const KNOWN_COMMANDS: [&str; 19] = [
     "no-auto-reload",
     "get-config",
     "spotless",
@@ -51,6 +51,7 @@ const KNOWN_COMMANDS: [&str; 18] = [
     "init",
     "show",
     "hide",
+    "rofi",
     "kill",
     "logs",
     "help",
@@ -58,7 +59,7 @@ const KNOWN_COMMANDS: [&str; 18] = [
 
 fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>) -> Result<()> {
     match command {
-        "get-config" => get_config(socket, false),
+        "get-config" => print_config(socket, false),
         "kill" => send_request(socket, "kill", ""),
         "full" => print_full_raw(socket),
         "logs" => print_logs(false),
@@ -71,7 +72,7 @@ fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>)
 
 fn get_cli_command(args: &[String]) -> Option<&str> {
     for arg in args {
-        if let Some(flag) = get_flag_name(arg, &KNOWN_COMMAND_FLAGS) {
+        if let Some(flag) = get_flag_name(arg) {
             return Some(flag);
         } else if arg.starts_with('-') {
             let _ = log(format!("Unknown flag: {arg}"), Warn);
@@ -96,10 +97,9 @@ fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&st
     let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
-        "toggle" | "summon" | "show" | "hide" | "cycle" | "hide-all" | "kill-all" | "previous"
-        | "rofi" => send_request(socket, req, msg)?,
         "init" => initialize_daemon(args.join(" "), config, socket),
         "" => print_help(),
+        _ if KNOWN_COMMANDS.contains(&req) => send_request(socket, req, msg)?,
         _ => send_manual(args, socket)?,
     }
     Ok(())

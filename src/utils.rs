@@ -1,7 +1,7 @@
 use crate::config::Config;
-use crate::logs::*;
 use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
+use crate::{logs::*, KNOWN_CLI_COMMANDS};
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
@@ -40,7 +40,8 @@ fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
     None
 }
 
-pub fn get_flag_name<'a>(arg: &str, flags: &[&'a str]) -> Option<&'a str> {
+pub fn get_flag_name<'a>(arg: &str) -> Option<&'a str> {
+    let flags = &KNOWN_CLI_COMMANDS;
     if flags.is_empty() {
         return None;
     }

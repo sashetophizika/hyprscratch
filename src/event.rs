@@ -31,7 +31,7 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
                 .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
                 .filter(|cl| is_known(ephemeral_titles, cl))
                 .for_each(|cl| {
-                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&cl.title))
+                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address.clone()))
                         .log_err(f, l);
                 });
         }
@@ -41,7 +41,7 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
 fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
-        let slick_map = &config.lock().unwrap_log(f, l).cache.slick_map;
+        let slick_map = &config.lock().unwrap_log(f, l).cache.clean_map;
         move_floating(slick_map).log_err(f, l);
 
         if let Ok(Some(ac)) = Client::get_active() {
@@ -59,7 +59,7 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
             let conf = &config.lock().unwrap_log(f, l);
 
             if !is_known(&conf.cache.normal_titles, &cl) {
-                move_floating(&conf.cache.dirty_map).log_err(f, l);
+                move_floating(&conf.cache.spotless_map).log_err(f, l);
             }
         }
     });
@@ -138,10 +138,9 @@ fn start_auto_reload(config: ConfigMutex) -> notify::Result<()> {
     let mut watcher = notify::recommended_watcher(tx)?;
 
     let (f, l) = (file!(), line!());
+    let config_file = &config.lock().unwrap_log(f, l).config_file;
     watcher.watch(
-        Path::new(&config.lock().unwrap_log(f, l).config_file)
-            .parent()
-            .unwrap_log(f, l),
+        Path::new(&config_file).parent().unwrap_log(f, l),
         RecursiveMode::NonRecursive,
     )?;
 
