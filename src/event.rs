@@ -138,9 +138,10 @@ fn start_auto_reload(config: ConfigMutex) -> notify::Result<()> {
     let mut watcher = notify::recommended_watcher(tx)?;
 
     let (f, l) = (file!(), line!());
-    let config_file = &config.lock().unwrap_log(f, l).config_file;
     watcher.watch(
-        Path::new(&config_file).parent().unwrap_log(f, l),
+        Path::new(&config.lock().unwrap_log(f, l).config_file)
+            .parent()
+            .unwrap_log(f, l),
         RecursiveMode::NonRecursive,
     )?;
 
