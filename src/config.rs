@@ -188,10 +188,10 @@ pub struct ConfigCache {
     pub ephemeral_titles: Vec<String>,
     pub special_titles: Vec<String>,
     pub normal_titles: Vec<String>,
+    pub spotless_map: HashMap<String, String>,
+    pub replace_map: HashMap<String, String>,
     pub normal_map: HashMap<String, String>,
-    pub fickle_map: HashMap<String, String>,
-    pub slick_map: HashMap<String, String>,
-    pub dirty_map: HashMap<String, String>,
+    pub clean_map: HashMap<String, String>,
 }
 
 impl ConfigCache {
@@ -218,9 +218,9 @@ impl ConfigCache {
             special_titles: filter_titles(&|opts| opts.special),
             normal_titles: filter_titles(&|opts| !opts.special),
             normal_map: filter_maps(&|opts| !opts.special),
-            fickle_map: filter_maps(&|opts| !opts.persist && !opts.special),
-            slick_map: filter_maps(&|opts| !opts.sticky && !opts.pin),
-            dirty_map: filter_maps(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
+            replace_map: filter_maps(&|opts| !opts.persist && !opts.special),
+            clean_map: filter_maps(&|opts| !opts.sticky && !opts.pin),
+            spotless_map: filter_maps(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
         }
     }
 
@@ -235,13 +235,13 @@ impl ConfigCache {
             self.normal_titles.push(title.into());
         }
         if !options.special && !options.persist {
-            self.fickle_map.insert(name.into(), title.into());
+            self.replace_map.insert(name.into(), title.into());
         }
         if !options.pin && !options.sticky {
-            self.slick_map.insert(name.into(), title.into());
+            self.clean_map.insert(name.into(), title.into());
         }
         if !options.shiny && !options.sticky && !options.pin {
-            self.dirty_map.insert(name.into(), title.into());
+            self.spotless_map.insert(name.into(), title.into());
         }
     }
 }
@@ -801,16 +801,16 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                         ("firefox".to_string(), "firefox".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
                     ]),
-                    fickle_map: HashMap::from([
+                    replace_map: HashMap::from([
                         ("firefox".to_string(), "firefox".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
                     ]),
-                    slick_map: HashMap::from([
+                    clean_map: HashMap::from([
                         ("firefox".to_string(), "firefox".to_string()),
                         ("htop".to_string(), "htop".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
                     ]),
-                    dirty_map: HashMap::from([
+                    spotless_map: HashMap::from([
                         ("firefox".to_string(), "firefox".to_string()),
                         ("htop".to_string(), "htop".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
@@ -840,16 +840,16 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                         ("btop".to_string(), "btop".to_string()),
                         ("htop".to_string(), "htop".to_string()),
                     ]),
-                    fickle_map: HashMap::from([
+                    replace_map: HashMap::from([
                         ("btop".to_string(), "btop".to_string()),
                         ("htop".to_string(), "htop".to_string()),
                     ]),
-                    slick_map: HashMap::from([
+                    clean_map: HashMap::from([
                         ("btop".to_string(), "btop".to_string()),
                         ("htop".to_string(), "htop".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
                     ]),
-                    dirty_map: HashMap::from([
+                    spotless_map: HashMap::from([
                         ("btop".to_string(), "btop".to_string()),
                         ("cmat".to_string(), "cmat".to_string()),
                     ]),

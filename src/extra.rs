@@ -221,7 +221,7 @@ fn parse_config_data(data: &str) -> ParsedConfig {
     }
 }
 
-pub fn get_config(socket: Option<&str>, raw: bool) -> Result<()> {
+pub fn print_config(socket: Option<&str>, raw: bool) -> Result<()> {
     let data = get_config_data(socket)?;
     let parsed_data = parse_config_data(&data);
 
@@ -265,7 +265,7 @@ pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
     println!("### LOGS ###\n");
     print_logs(true)?;
     println!("\n### CONFIGURATION ###\n");
-    get_config(socket, true)?;
+    print_config(socket, true)?;
     Ok(())
 }
 
@@ -308,7 +308,7 @@ EXTRA COMMANDS
   rofi [show|hide]           Spawn a rofi menu to search scratchpads
   hide-all                   Hide all scratchpads
   kill-all                   Close all scratchpads
-  reload (-r)                Reparse config file
+  reload (-r) [config]       Update the config file
   get-config (-g)            Print parsed config file
   kill (-k)                  Kill the hyprscratch daemon
   logs (-l)                  Print log file contents

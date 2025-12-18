@@ -76,7 +76,7 @@ fn handle_scratchpad(
     if let Some(sc) = config.scratchpads.get_mut(name) {
         state.update_prev_titles(&sc.title);
         sc.options.toggle(action);
-        sc.trigger(&config.cache.fickle_map, name)?;
+        sc.trigger(&config.cache.replace_map, name)?;
         sc.options.toggle(action);
         Ok(())
     } else {
@@ -100,7 +100,7 @@ fn handle_group(name: &str, action: &str, config: &Config, state: &mut DaemonSta
         }
 
         sc.options.toggle(action);
-        sc.trigger(&config.cache.fickle_map, name)?;
+        sc.trigger(&config.cache.replace_map, name)?;
         sc.options.toggle(action);
 
         if cover != sc.options.cover {
@@ -208,7 +208,7 @@ fn handle_manual(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
 
     let scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
     config.add_scratchpad(args[0], &scratchpad);
-    scratchpad.trigger(&config.cache.fickle_map, args[0])
+    scratchpad.trigger(&config.cache.replace_map, args[0])
 }
 
 fn get_config_path(msg: &str) -> Option<String> {
@@ -390,7 +390,7 @@ fn handle_request(
             let _ = log("Recieved 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
         }
-        _ => log(format!("Unknown request: {req}?{msg}"), Warn),
+        _ => log(format!("Unknown request: '{req} {msg}'"), Warn),
     }
 }
 
@@ -430,13 +430,14 @@ fn start_unix_listener(
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf)?;
 
-                let (req, msg) = buf.split_once('?').unwrap_log(file!(), line!());
-                let conf = &mut config.lock().unwrap_log(file!(), line!());
+                let (f, l) = (file!(), line!());
+                let (req, msg) = buf.split_once('?').unwrap_log(f, l);
+                let conf = &mut config.lock().unwrap_log(f, l);
 
                 match handle_request((req, msg), &mut stream, state, conf) {
                     Ok(()) => (),
-                    Err(HyprError::Other(_)) => break,
-                    Err(e) => log(format!("{e} in {buf}"), Warn)?,
+                    Err(HyprError::Other(e)) if e == "kill" => break,
+                    Err(e) => log(format!("{e} in '{req} {msg}'"), Warn)?,
                 }
             }
             Err(_) => {
@@ -449,19 +450,10 @@ fn start_unix_listener(
 }
 
 fn make_workspaces_persistent(config: &Config) -> Result<()> {
-    let make_persistent = |name| -> Result<()> {
-        let rule = format!("special:{name}, persistent:true");
-        Keyword::set("workspace", rule)
-    };
-
     for name in config.scratchpads.keys() {
-        make_persistent(name)?;
+        let rule = format!("special:{name}, persistent:true");
+        Keyword::set("workspace", rule)?;
     }
-
-    for name in config.groups.keys() {
-        make_persistent(name)?;
-    }
-
     Ok(())
 }
 
@@ -469,16 +461,16 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
     let _ = send_request(socket_path, "kill", "");
 
     let (f, l) = (file!(), line!());
-    let config = Config::new(config_path).unwrap_log(f, l);
+    let mut config = Config::new(config_path).unwrap_log(f, l);
     let mut state = DaemonState::new(&args, &config);
     make_workspaces_persistent(&config).log_err(f, l);
 
+    if state.options.eager {
+        autospawn(&mut config).log_err(f, l);
+    }
+
     let config = Arc::new(Mutex::new(config));
     start_event_listeners(&config, &mut state);
-
-    if state.options.eager {
-        autospawn(&mut config.lock().unwrap_log(f, l)).log_err(f, l);
-    }
 
     start_unix_listener(socket_path, &mut state, config).unwrap_log(file!(), line!());
 }
