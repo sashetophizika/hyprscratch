@@ -299,6 +299,77 @@ impl Config {
         };
         Ok(())
     }
+
+    fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
+        let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
+            sc.command
+                .split('?')
+                .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.as_string()])
+                .collect()
+        };
+
+        scratchpads.iter().flat_map(split).collect()
+    }
+
+    fn format_scratchpads(&mut self) -> String {
+        let ordered_scratchpads: Vec<Scratchpad> = self
+            .names
+            .iter()
+            .map(|k| self.scratchpads[k].clone())
+            .collect();
+        let scratchpads = Self::split_commands(&ordered_scratchpads);
+
+        let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
+            scratchpads
+                .iter()
+                .map(field)
+                .collect::<Vec<_>>()
+                .join("\u{2C02}")
+        };
+
+        let conf = &self.config_file;
+        let names = self.names.join("\u{2C02}");
+        let (titles, commands, options) = (
+            format_field(&|x| &x[0]),
+            format_field(&|x| &x[1]),
+            format_field(&|x| &x[2]),
+        );
+
+        format!("{conf}\u{2C00}{names}\u{2C01}{titles}\u{2C01}{commands}\u{2C01}{options}")
+    }
+
+    fn format_groups(&self) -> String {
+        type GroupField<'a> = &'a dyn Fn((&String, &Vec<Scratchpad>)) -> String;
+        let format_group = |field: GroupField| {
+            self.groups
+                .iter()
+                .map(field)
+                .collect::<Vec<_>>()
+                .join("\u{2C02}")
+        };
+
+        let get_titles = |scratchpads: &Vec<Scratchpad>| {
+            scratchpads
+                .iter()
+                .map(|sc| sc.title.clone())
+                .collect::<Vec<String>>()
+                .join(",")
+        };
+
+        format!(
+            "\u{2C00}{}\u{2C01}{}",
+            format_group(&|(x, _)| x.clone()),
+            format_group(&|(_, x)| get_titles(x))
+        )
+    }
+
+    pub fn get_config_str(&mut self) -> String {
+        let mut config_str = self.format_scratchpads();
+        if !self.groups.is_empty() {
+            config_str.push_str(&self.format_groups());
+        }
+        config_str
+    }
 }
 
 fn find_config_files() -> Vec<String> {
@@ -518,10 +589,7 @@ fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
     Ok(ConfigData::from_scratchpads(scratchpads, names))
 }
 
-use SyntaxErr::{
-    GlobalInScope, MissingField, NameOutsideGroup, Nameless, NotInScope, Unclosed, UnknownField,
-    Unopened,
-};
+use SyntaxErr::*;
 enum SyntaxErr<'a> {
     MissingField(&'a [&'a str], &'a str),
     UnknownField(&'a str),
@@ -627,8 +695,7 @@ fn parse_hyprlang(config: &str) -> Result<ConfigData> {
     let mut state = ParserState::new();
     let mut config_data = ConfigData::new();
 
-    for line in config.lines() {
-        let line = line.trim();
+    for line in config.lines().map(|l| l.trim()) {
         if line.starts_with('#') {
             continue;
         } else if let Some("{") = line.split_whitespace().last() {
@@ -671,7 +738,7 @@ mod tests {
                 "cover persist sticky shiny lazy show hide poly special tiled",
             ),
             Scratchpad::new("Loading…", "[size 70% 80%] nautilus", ""),
-            Scratchpad::new("\\\"", "\\'", "cover eager special"),
+            Scratchpad::new("\\\"", "\\'", "cover lazy special"),
             Scratchpad::new(
                 " a program with ' a wierd ' name",
                 " a \"command with\" \\'a wierd\\' format",
@@ -771,9 +838,9 @@ mod tests {
     fn create_reosources(config_file: &str) -> ReloadResources {
         ReloadResources {
             config_contents_a: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
-bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny eager show hide special sticky
+bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny lazy show hide special sticky
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' special
-bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' eager\n",
+bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' lazy\n",
             config_contents_b: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox --private-window' special sticky
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop'
 bind = $mainMod, c, exec, hyprscratch htop 'kitty --title htop -e htop' cover shiny
@@ -788,10 +855,10 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 Scratchpad::new(
                     "btop",
                     "kitty --title btop -e btop",
-                    "cover shiny eager show hide special sticky",
+                    "cover shiny lazy show hide special sticky",
                 ),
                 Scratchpad::new("htop", "kitty --title htop -e htop", "special"),
-                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "eager"),
+                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "lazy"),
             ]),
                 cache: ConfigCache {
                     normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
@@ -858,21 +925,42 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
         }
     }
 
+    fn compare_unsorted(v1: &mut Vec<String>, v2: &mut Vec<String>) {
+        v1.sort();
+        v2.sort();
+        assert_eq!(v1, v2);
+    }
+
+    fn compare_configs(c1: &mut Config, c2: &mut Config) {
+        assert_eq!(c1.scratchpads, c2.scratchpads);
+        assert_eq!(c1.cache.clean_map, c2.cache.clean_map);
+        assert_eq!(c1.cache.normal_map, c2.cache.normal_map);
+        assert_eq!(c1.cache.replace_map, c2.cache.replace_map);
+        assert_eq!(c1.cache.spotless_map, c2.cache.spotless_map);
+        compare_unsorted(&mut c1.cache.normal_titles, &mut c2.cache.normal_titles);
+        compare_unsorted(&mut c1.cache.special_titles, &mut c2.cache.special_titles);
+        compare_unsorted(
+            &mut c1.cache.ephemeral_titles,
+            &mut c2.cache.ephemeral_titles,
+        );
+    }
+
     #[test]
     fn test_reload() {
         let config_path = "./test_configs/test_config2.txt";
         let mut config_file = File::create(config_path).unwrap();
-        let resources = create_reosources(config_path);
+        let mut resources = create_reosources(config_path);
         config_file.write_all(resources.config_contents_a).unwrap();
 
-        let mut config = Config::new(Some(config_path.to_string())).unwrap();
-        assert_eq!(config, resources.expected_config_a);
+        let mut config_b = Config::new(Some(config_path.to_string())).unwrap();
+        let mut config_a = config_b.clone();
 
         let mut config_file = File::create(config_path).unwrap();
         config_file.write_all(resources.config_contents_b).unwrap();
 
-        config.reload(Some(config_path.to_string())).unwrap();
+        config_b.reload(Some(config_path.to_string())).unwrap();
 
-        assert_eq!(config, resources.expected_config_b);
+        compare_configs(&mut config_a, &mut resources.expected_config_a);
+        compare_configs(&mut config_b, &mut resources.expected_config_b);
     }
 }
