@@ -163,7 +163,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `reload [config]`: re-parses the configuration file without restarting the daemon.
 
-* `menu [fzf|rofi] [show|hide]`: spawn a menu to search through and trigger scratchpads (recommended `rofi` for keybinds, `fzf` for cli).
+* `menu [fzf|rofi] [show|hide]`: spawn a menu to search through and trigger scratchpads (`rofi` for keybinds, `fzf` for cli).
 
 * `get-config`: prints out the parsed configuration.
 
