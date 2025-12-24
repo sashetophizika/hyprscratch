@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::config::ConfigCache;
 use crate::event::start_event_listeners;
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
@@ -11,15 +12,11 @@ use hyprland::error::HyprError;
 use hyprland::keyword::Keyword;
 use hyprland::prelude::*;
 use hyprland::Result;
-use std::collections::HashMap;
 use std::fs::{create_dir, remove_file};
-use std::io::prelude::*;
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::thread::spawn;
 
 type ConfigMutex = Arc<Mutex<Config>>;
 
@@ -67,41 +64,63 @@ impl DaemonState {
     }
 }
 
+fn trigger_action(
+    sc: &mut Scratchpad,
+    name: &str,
+    action: &str,
+    cache: &ConfigCache,
+) -> Result<()> {
+    sc.options.toggle(action);
+    sc.trigger(&cache.replace_map, name)?;
+    sc.options.toggle(action);
+    Ok(())
+}
+
 fn handle_scratchpad(
     name: &str,
     action: &str,
     config: &mut Config,
     state: &mut DaemonState,
 ) -> Result<()> {
-    if let Some(sc) = config.scratchpads.get_mut(name) {
-        state.update_prev_titles(&sc.title);
-        sc.options.toggle(action);
-        sc.trigger(&config.cache.replace_map, name)?;
-        sc.options.toggle(action);
-        Ok(())
-    } else {
-        let _ = log(format!("Scratchpad or group '{name}' not found"), Warn);
-        Ok(())
-    }
+    let sc = match config.scratchpads.get_mut(name) {
+        Some(sc) => sc,
+        None => {
+            let _ = log(format!("Scratchpad '{name}' not found"), Warn);
+            return Ok(());
+        }
+    };
+
+    state.update_prev_titles(&sc.title);
+    trigger_action(sc, name, action, &config.cache)
 }
 
-fn handle_group(name: &str, action: &str, config: &Config, state: &mut DaemonState) -> Result<()> {
-    let mut group = config.groups[name].clone();
+fn handle_group(
+    name: &str,
+    action: &str,
+    config: &mut Config,
+    state: &mut DaemonState,
+) -> Result<()> {
+    let group = match config.groups.get_mut(name) {
+        Some(group) => group,
+        None => {
+            let _ = log(format!("Group '{name}' not found"), Warn);
+            return Ok(());
+        }
+    };
 
     if group.is_empty() {
         return Ok(());
     }
+
     state.update_prev_titles(&group.last().unwrap().title);
 
-    for sc in &mut group {
+    for sc in group {
         let cover = sc.options.cover;
         if !cover {
             sc.options.cover = true;
         }
 
-        sc.options.toggle(action);
-        sc.trigger(&config.cache.replace_map, name)?;
-        sc.options.toggle(action);
+        trigger_action(sc, name, action, &config.cache)?;
 
         if cover != sc.options.cover {
             sc.options.cover = false;
@@ -110,9 +129,7 @@ fn handle_group(name: &str, action: &str, config: &Config, state: &mut DaemonSta
     Ok(())
 }
 
-fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
-    let len = config.scratchpads.len();
-
+fn get_new_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
     let warn_empty = |titles: &[_]| {
         if titles.is_empty() {
             let _ = log(format!("No {msg} scratchpads found"), Warn);
@@ -121,6 +138,7 @@ fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<
         false
     };
 
+    let len = config.scratchpads.len();
     let find_next = |mode| -> usize {
         let mut index = (state.cycle_index + 1) % len;
         while mode == config.scratchpads[&config.names[index]].options.special {
@@ -129,27 +147,30 @@ fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<
         index
     };
 
-    if msg.contains("special") {
+    let index = if msg.contains("special") {
         if warn_empty(&config.cache.special_titles) {
             return None;
         }
-        state.cycle_index = find_next(false);
+        find_next(false)
     } else if msg.contains("normal") {
         if warn_empty(&config.cache.normal_titles) {
             return None;
         }
-        state.cycle_index = find_next(true);
+        find_next(true)
     } else {
         if warn_empty(&config.names) {
             return None;
         }
-        state.cycle_index = (state.cycle_index + 1) % len;
-    }
+        (state.cycle_index + 1) % len
+    };
 
-    let name = &config.names[state.cycle_index];
-    state.update_prev_titles(&config.scratchpads[name].title);
+    Some(index)
+}
 
-    Some(name.into())
+fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
+    state.cycle_index = get_new_index(msg, config, state)?;
+    state.update_prev_titles(&config.scratchpads[&config.names[state.cycle_index]].title);
+    return Some((&config.names[state.cycle_index]).into());
 }
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
@@ -169,16 +190,13 @@ fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> R
         return log("No previous scratchpads exist".into(), Warn);
     }
 
-    let active_client = Client::get_active().unwrap_log(file!(), line!());
-    let name = match active_client {
-        Some(ac)
-            if ac.initial_class == state.prev_titles[0]
-                || ac.initial_title == state.prev_titles[0] =>
-        {
-            &state.prev_titles[1]
-        }
-        Some(_) => &state.prev_titles[0],
-        None => &state.prev_titles[0],
+    let is_prev = |ac: &Client| {
+        ac.initial_class == state.prev_titles[0] || ac.initial_title == state.prev_titles[0]
+    };
+
+    let name = match Client::get_active() {
+        Ok(Some(ac)) if is_prev(&ac) => &state.prev_titles[1],
+        _ => &state.prev_titles[0],
     };
 
     handle_scratchpad(&name.clone(), msg, config, state)?;
@@ -229,76 +247,8 @@ fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Res
     Ok(())
 }
 
-fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
-    let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
-        sc.command
-            .split('?')
-            .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.as_string()])
-            .collect()
-    };
-
-    scratchpads.iter().flat_map(split).collect()
-}
-
-fn format_scratchpads(config: &Config) -> String {
-    let ordered_scratchpads: Vec<Scratchpad> = config
-        .names
-        .iter()
-        .map(|k| config.scratchpads[k].clone())
-        .collect();
-    let scratchpads = split_commands(&ordered_scratchpads);
-
-    let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
-        scratchpads
-            .iter()
-            .map(field)
-            .collect::<Vec<_>>()
-            .join("\u{2C02}")
-    };
-
-    let conf = &config.config_file;
-    let names = config.names.join("\u{2C02}");
-    let (titles, commands, options) = (
-        format_field(&|x| &x[0]),
-        format_field(&|x| &x[1]),
-        format_field(&|x| &x[2]),
-    );
-
-    format!("{conf}\u{2C00}{names}\u{2C01}{titles}\u{2C01}{commands}\u{2C01}{options}")
-}
-
-fn format_groups(groups: &HashMap<String, Vec<Scratchpad>>) -> String {
-    type GroupField<'a> = &'a dyn Fn((&String, &Vec<Scratchpad>)) -> String;
-    let format_group = |field: GroupField| {
-        groups
-            .iter()
-            .map(field)
-            .collect::<Vec<_>>()
-            .join("\u{2C02}")
-    };
-
-    let get_titles = |scratchpads: &Vec<Scratchpad>| {
-        scratchpads
-            .iter()
-            .map(|sc| sc.title.clone())
-            .collect::<Vec<String>>()
-            .join(",")
-    };
-
-    format!(
-        "\u{2C00}{}\u{2C01}{}",
-        format_group(&|(x, _)| x.clone()),
-        format_group(&|(_, x)| get_titles(x))
-    )
-}
-
 fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    let mut config_str = format_scratchpads(config);
-    if !config.groups.is_empty() {
-        config_str.push_str(&format_groups(&config.groups));
-    }
-
-    stream.write_all(config_str.as_bytes())?;
+    stream.write_all(config.get_config_str().as_bytes())?;
     Ok(())
 }
 
@@ -306,10 +256,8 @@ fn handle_killall(config: &Config) -> Result<()> {
     let is_scratchpad = |cl: &Client| config.scratchpads.values().any(|sc| sc.matches_client(cl));
 
     let kill = |cl: Client| {
-        let res = hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address));
-        if let Err(e) = res {
-            let _ = log(format!("{e} in {} at {}", file!(), line!()), Warn);
-        }
+        hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address))
+            .log_err(file!(), line!());
     };
 
     Clients::get()?
@@ -327,46 +275,15 @@ fn handle_hideall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn run_rofi(action: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let mut rofi = Command::new("rofi")
-        .args(["-dmenu", "-i", "-p", "Scratchpads"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    let rofi_str = config.names.join("\n")
+fn handle_menu(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
+    let list = config.names.join("\n")
         + "\n"
         + &config
             .groups
             .keys()
             .cloned()
             .fold("".into(), |acc: String, k| acc + "group:" + &k + "\n");
-
-    if let Some(ref mut stdin) = rofi.stdin {
-        stdin.write_all(rofi_str.as_bytes())?;
-    }
-
-    let output = rofi.wait_with_output()?;
-    if output.status.success() {
-        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !name.is_empty() {
-            if let Some(("group", name)) = name.split_once(":") {
-                handle_group(name, action, config, state)?;
-            } else {
-                handle_scratchpad(&name, action, config, state)?;
-            }
-        } else {
-            let _ = log("No scratchpad selected for rofi".into(), Warn);
-        }
-    }
-    Ok(())
-}
-
-fn handle_rofi(action: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let action = action.to_string();
-    let mut config = config.clone();
-    let mut state = state.clone();
-    spawn(move || run_rofi(&action, &mut config, &mut state).log_err(file!(), line!()));
+    stream.write_all(list.as_bytes())?;
     Ok(())
 }
 
@@ -385,7 +302,7 @@ fn handle_request(
         "reload" => handle_reload(msg, config, state),
         "manual" => handle_manual(msg, config, state),
         "cycle" => handle_cycle(msg, config, state),
-        "rofi" => handle_rofi(msg, config, state),
+        "menu" => handle_menu(stream, config),
         "kill" => {
             let _ = log("Recieved 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
@@ -427,8 +344,7 @@ fn start_unix_listener(
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                let mut buf = String::new();
-                stream.read_to_string(&mut buf)?;
+                let buf = read_into_string(&mut stream)?;
 
                 let (f, l) = (file!(), line!());
                 let (req, msg) = buf.split_once('?').unwrap_log(f, l);
@@ -479,6 +395,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 mod tests {
     use super::*;
     use hyprland::data::{Clients, Workspace};
+    use std::io::prelude::*;
     use std::{env, fs::File, thread::sleep, time::Duration};
 
     fn test_handle(request: &str) {
@@ -638,7 +555,6 @@ mod tests {
         hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
 
         verify_test(&resources);
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some("special:test_special".into())).unwrap();
         sleep(Duration::from_millis(500));
     }
 
