@@ -51,7 +51,7 @@ const KNOWN_COMMANDS: [&str; 19] = [
     "init",
     "show",
     "hide",
-    "rofi",
+    "menu",
     "kill",
     "logs",
     "help",
@@ -98,6 +98,7 @@ fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&st
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
         "init" => initialize_daemon(args.join(" "), config, socket),
+        "menu" => menu(socket, msg, get_arg(3))?,
         "" => print_help(),
         _ if KNOWN_COMMANDS.contains(&req) => send_request(socket, req, msg)?,
         _ => send_manual(args, socket)?,
