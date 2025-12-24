@@ -120,7 +120,7 @@ impl ScratchpadOptions {
     }
 }
 
-use TriggerMode::{Hide, Refocus, Summon};
+use TriggerMode::*;
 #[derive(PartialEq, Debug)]
 enum TriggerMode<T> {
     Hide(Vec<T>),
@@ -156,10 +156,7 @@ impl Scratchpad {
     }
 
     pub fn matches_client(&self, client: &Client) -> bool {
-        let title = self.title.to_lowercase();
-        if title == client.initial_title.to_lowercase()
-            || title == client.initial_class.to_lowercase()
-        {
+        if self.title == client.initial_title || self.title == client.initial_class {
             return true;
         }
         false
@@ -258,8 +255,7 @@ impl Scratchpad {
                 hyprland::dispatch!(
                     TogglePinWindow,
                     WindowIdentifier::Address(client.address.clone())
-                )
-                .log_err(file!(), line!());
+                )?;
             }
 
             if !self.options.poly {
@@ -595,12 +591,12 @@ mod tests {
     }
 
     #[test]
-    fn test_summon_hide() {
+    fn test_show_hide() {
         let resources = TestResources::new("summon_hide");
 
         resources.assert_not_present();
         resources
-            .into_scratchpad("summon")
+            .into_scratchpad("show")
             .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
@@ -608,7 +604,7 @@ mod tests {
         resources.assert_active();
 
         resources
-            .into_scratchpad("summon")
+            .into_scratchpad("show")
             .trigger(&resources.title_map, &resources.title)
             .unwrap();
         sleep(Duration::from_millis(500));
