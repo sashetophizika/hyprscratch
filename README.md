@@ -9,12 +9,12 @@
 Hyprscratch makes scratchpads in Hyprland painless in a well-integrated and flexible way.
 
 ## Features
-* Scratchpads are part of your current workspace rather than the special one by default.
-* Can be configured entirely in `hyprland.conf` or a dedicated configuration file.
-* Makes special workspace scratchpads easier to configure.
+* Scratchpads are part of your current workspace by default.
+* Can be configured in `hyprland.conf` or a dedicated configuration file.
+* Makes special workspace scratchpads simpler to set up.
 * Many options to easily tweak behaviour of scratchpads.
-* Event listeners to allow automation of scratchpad management.
-* Includes cycling and restoring previous scratchpads.
+* Event listeners to automate scratchpad management.
+* Allows cycling and restoring previous scratchpads.
 * Supports many scratchpads active at the same time.
 
 ## Installation
@@ -55,7 +55,7 @@ bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 
 ```
 
 ### Optional Configuration File
-If you consider it more convenient to use a separate configuration file, you can create a  `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
+If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
 ```hyprlang
 # Optional globals that apply to all scratchpads
@@ -119,7 +119,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 ### Scratchpad options:
 
-* `ephemeral`: closes the scratchpad when it is hidden
+* `ephemeral`: closes the scratchpad when it is hidden.
 
 * `persist`: prevents the scratchpad from getting replaced when a new one is summoned.
 
@@ -137,7 +137,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `poly`: toggle all scratchpads with the same title simultaneously.
 
-* `pin`: keeps the scratchpad active through workspace changes
+* `pin`: keeps the scratchpad active through workspace changes.
 
 * `tiled`: spawns the scratchpad tiled instead of floating.
 
@@ -157,13 +157,13 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `previous [show|hide]`: toggles the last used scratchpad that is not currently active.
 
-* `rofi [show|hide]`: spawn a rofi menu to fuzzy search through scratchapads.
-
 * `hide-all`: hides all scratchpads, useful mostly when stacking multiple of them.
 
 * `kill-all`: closes all scratchpad clients that are open.
 
-* `reload`: re-parses the configuration file without restarting the daemon.
+* `reload [config]`: re-parses the configuration file without restarting the daemon.
+
+* `menu [fzf|rofi] [show|hide]`: spawn a menu to search through and trigger scratchpads (recommended `rofi` for keybinds, `fzf` for cli).
 
 * `get-config`: prints out the parsed configuration.
 
@@ -177,7 +177,7 @@ The title of a scratchpad has to be either the `initialTitle` or `initialClass` 
 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
-Multiple commands can be bound to a single scratchpad by separating them with `?`(e.g. `hyprscratch title "[rules1] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
+Multiple commands can be bound to a single scratchpad by separating them with `?` (e.g. `hyprscratch title "[rules1] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
 
 To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them.
 
