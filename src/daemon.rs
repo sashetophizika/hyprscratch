@@ -170,7 +170,7 @@ fn get_new_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<
 fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
     state.cycle_index = get_new_index(msg, config, state)?;
     state.update_prev_titles(&config.scratchpads[&config.names[state.cycle_index]].title);
-    return Some((&config.names[state.cycle_index]).into());
+    Some((&config.names[state.cycle_index]).into())
 }
 
 fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
