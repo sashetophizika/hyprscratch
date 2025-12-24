@@ -7,14 +7,20 @@ use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::collections::HashMap;
-use std::io::Write;
-use std::net::Shutdown;
+use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 
 pub fn warn_deprecated(feature: &str) -> Result<()> {
     log(format!("The '{feature}' feature is deprecated."), Warn)?;
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
+}
+
+pub fn read_into_string(stream: &mut UnixStream) -> Result<String> {
+    let mut buf = [0; 2048];
+    let count = stream.read(&mut buf)?;
+    let list = String::from_utf8(buf[..count].to_vec()).unwrap_or("invalid utf-8".into());
+    Ok(list)
 }
 
 fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
@@ -94,10 +100,9 @@ pub fn dequote(s: &str) -> String {
     }
 }
 
-pub fn send_request(socket: Option<&str>, request: &str, message: &str) -> Result<()> {
+pub fn send_request(socket: Option<&str>, req: &str, msg: &str) -> Result<()> {
     let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
-    stream.write_all(format!("{request}?{message}").as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
+    stream.write_all(format!("{req}?{msg}").as_bytes())?;
     Ok(())
 }
 

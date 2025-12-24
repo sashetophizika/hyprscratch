@@ -1,11 +1,12 @@
 use crate::logs::*;
+use crate::utils::*;
 use crate::{DEFAULT_LOGFILE, DEFAULT_SOCKET};
 use hyprland::Result;
 use std::cmp::max;
 use std::fs::File;
-use std::io::prelude::*;
-use std::net::Shutdown;
+use std::io::{self, prelude::*};
 use std::os::unix::net::UnixStream;
+use std::process::{Command, Stdio};
 use std::vec;
 
 type ParsedConfig<'a> = (&'a str, Vec<Vec<&'a str>>, Vec<Vec<&'a str>>);
@@ -87,7 +88,6 @@ fn max_len(xs: &Vec<&str>, min: usize, max: usize) -> usize {
 fn get_config_data(socket: Option<&str>) -> Result<String> {
     let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all("get-config?".as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
@@ -269,6 +269,66 @@ pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn run_basic_menu(socket: Option<&str>, list: &str, action: &str) -> Result<()> {
+    print!("Exisiting scratchpads:\n{list}\nEnter scratchpad: ");
+
+    io::stdout().flush()?;
+    let mut name = String::new();
+    io::stdin().read_line(&mut name)?;
+    send_request(socket, action, name.trim())
+}
+
+pub fn menu(socket: Option<&str>, mode: &str, action: &str) -> Result<()> {
+    let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
+    stream.write_all("menu?".as_bytes())?;
+    let list = read_into_string(&mut stream)?;
+
+    let action = if action.is_empty() {
+        if mode == "toggle" || mode == "show" || mode == "hide" {
+            mode
+        } else {
+            "toggle"
+        }
+    } else {
+        action
+    };
+
+    let run_cmd = |cmd: &str, args: &[&str]| -> Result<()> {
+        let mut proc = Command::new(cmd)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        if let Some(ref mut stdin) = proc.stdin {
+            stdin.write_all(list.as_bytes())?;
+        }
+
+        let output = proc.wait_with_output()?;
+        if output.status.success() {
+            let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if name.is_empty() {
+                let _ = log("No scratchpad given to menu".into(), Warn);
+                return Ok(());
+            }
+
+            send_request(socket, action, &name)?;
+        }
+        Ok(())
+    };
+
+    match mode {
+        "rofi" => run_cmd("rofi", &["-dmenu", "-i", "-p", "Hyprscratch"]),
+        "fzf" => run_cmd("fzf", &["--prompt", &format!("hyprscratch {action} ")]),
+        _ => run_basic_menu(socket, &list, action),
+    }
+    .unwrap_or_else(|e| {
+        let _ = log(format!("Menu {mode} was unsucessfull: {e}"), Warn);
+    });
+
+    Ok(())
+}
+
 pub fn print_help() {
     println!(
         "Usage:
@@ -305,7 +365,7 @@ EXTRA COMMANDS
   show <name>                Shows the scratchpad with the given name
   hide <name>                Hides the scratchpad with the given name
   previous [show|hide]       Spawn the previous non-active scratchpad
-  rofi [show|hide]           Spawn a rofi menu to search scratchpads
+  menu [fzf|rofi]            Spawn a menu to search through and trigger scratchpads.
   hide-all                   Hide all scratchpads
   kill-all                   Close all scratchpads
   reload (-r) [config]       Update the config file
