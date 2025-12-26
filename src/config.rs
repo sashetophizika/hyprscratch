@@ -1,6 +1,6 @@
 use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
-use crate::utils::{dequote, prepend_rules};
+use crate::utils::{dequote, get_flag_arg, prepend_rules};
 use crate::DEFAULT_CONFIG_FILES;
 use crate::KNOWN_COMMANDS;
 use hyprland::Result;
@@ -31,15 +31,6 @@ impl ConfigData {
         }
     }
 
-    fn from_scratchpads(scratchpads: Scratchpads, names: Vec<String>) -> ConfigData {
-        ConfigData {
-            daemon_options: String::new(),
-            scratchpads,
-            groups: HashMap::new(),
-            names,
-        }
-    }
-
     fn append(&mut self, new_data: &mut ConfigData) {
         self.daemon_options.push_str(&new_data.daemon_options);
         self.scratchpads.extend(new_data.scratchpads.drain());
@@ -52,8 +43,23 @@ impl ConfigData {
         self.scratchpads.insert(name.into(), scratchpad.clone());
     }
 
-    fn add_group(&mut self, name: &str, scratchpads: &[Scratchpad]) {
-        self.groups.insert(name.into(), scratchpads.to_vec());
+    fn add_to_group(&mut self, name: &str, scratchpads: &mut Vec<Scratchpad>) {
+        if let Some(group) = self.groups.get_mut(name) {
+            group.append(scratchpads);
+        } else {
+            self.groups.insert(name.into(), scratchpads.to_vec());
+        }
+    }
+
+    fn add_to_config(&mut self, args: &[String]) {
+        if let Some([title, command, opts]) = parse_args(&args) {
+            let scratchpad = Scratchpad::new(&title, &command, &opts);
+            self.add_scratchpad(&title, &scratchpad);
+
+            if let Some(g) = get_flag_arg(args, "group") {
+                self.add_to_group(&g, &mut vec![scratchpad]);
+            }
+        }
     }
 
     fn add_globals(&mut self, state: &ParserState) {
@@ -174,7 +180,7 @@ impl ParserState {
 
     fn close_group(&mut self, config_data: &mut ConfigData) {
         if let Some(name) = &self.active_group {
-            config_data.add_group(name, &self.group_data);
+            config_data.add_to_group(name, &mut self.group_data);
             self.active_group = None;
             self.group_data = vec![];
         } else {
@@ -389,9 +395,14 @@ fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
     }
 
     if let Some(conf) = config_path {
-        if !default_configs.contains(&conf) && !Path::new(&conf).exists() {
+        if !Path::new(&conf).exists() {
             log(format!("Config file not found: {conf}"), Error)?;
         }
+
+        if default_configs.contains(&conf) {
+            return Ok(default_configs);
+        }
+
         return Ok(vec![conf]);
     }
 
@@ -413,6 +424,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
             parse_hyprlang(&content)?
         };
 
+        let _ = log(format!("Config file {config} parsed successfully"), Warn);
         config_data.append(&mut new_data);
     }
 
@@ -484,7 +496,7 @@ fn get_lines_with(pat: &str, config: &str) -> Vec<String> {
 }
 
 fn warn_unknown_options(opts: &str) {
-    let known_arg_options = ["monitor"];
+    let known_arg_options = ["monitor", "group"];
     let known_options = [
         "",
         "pin",
@@ -560,6 +572,7 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
         let parent = path.parent().unwrap_log(file!(), line!());
 
         let data = parse_config(&config, parent)?;
+        let _ = log(format!("Source file {source_path} parsed"), Info);
         Ok(data)
     } else {
         let _ = log(format!("Source file not found: {source_path}"), Warn);
@@ -568,25 +581,19 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
 }
 
 fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
-    let mut scratchpads: Scratchpads = HashMap::new();
-    let mut names = vec![];
+    let mut config_data = ConfigData::new();
 
     let lines = get_lines_with("hyprscratch ", config);
     for line in lines {
-        let args = split_args(&line);
-        if let Some([title, command, opts]) = parse_args(&args) {
-            scratchpads.insert(title.clone(), Scratchpad::new(&title, &command, &opts));
-            names.push(title.clone());
-        }
+        config_data.add_to_config(&split_args(&line));
     }
 
     for source in &get_lines_with("source ", config) {
         let mut data = parse_source_config(source, parent)?;
-        scratchpads.extend(data.scratchpads);
-        names.append(&mut data.names);
+        config_data.append(&mut data);
     }
 
-    Ok(ConfigData::from_scratchpads(scratchpads, names))
+    Ok(config_data)
 }
 
 use SyntaxErr::*;
