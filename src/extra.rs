@@ -116,22 +116,22 @@ fn print_group_table(group_data: &[Vec<&str>]) {
 }
 
 fn get_centered_conf(conf: &str, width: usize) -> String {
-    let c = if width <= conf.len() {
+    let config = if width <= conf.len() {
         conf.split('/').next_back().unwrap_log(file!(), line!())
     } else {
         conf
     };
 
     let center_fix = if width % 2 == 0 {
-        c.len() + c.len() % 2
+        config.len() + config.len() % 2
     } else {
-        c.len() - 1
+        config.len() - 1
     };
 
     format!(
         "{}{}{}",
-        " ".repeat(max(width / 2 - c.len() / 2, 0)),
-        c,
+        " ".repeat(max(width / 2 - config.len() / 2, 0)),
+        config,
         " ".repeat(max((width - center_fix) / 2, 0))
     )
 }

@@ -345,10 +345,15 @@ fn start_unix_listener(
         match stream {
             Ok(mut stream) => {
                 let buf = read_into_string(&mut stream)?;
+                let (req, msg) = match buf.split_once('?') {
+                    Some(t) => t,
+                    None => {
+                        let _ = log(format!("Unrecognized command format {buf}"), Warn);
+                        continue;
+                    }
+                };
 
-                let (f, l) = (file!(), line!());
-                let (req, msg) = buf.split_once('?').unwrap_log(f, l);
-                let conf = &mut config.lock().unwrap_log(f, l);
+                let conf = &mut config.lock().unwrap_log(file!(), line!());
 
                 match handle_request((req, msg), &mut stream, state, conf) {
                     Ok(()) => (),
