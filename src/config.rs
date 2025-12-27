@@ -52,7 +52,7 @@ impl ConfigData {
     }
 
     fn add_to_config(&mut self, args: &[String]) {
-        if let Some([title, command, opts]) = parse_args(&args) {
+        if let Some([title, command, opts]) = parse_args(args) {
             let scratchpad = Scratchpad::new(&title, &command, &opts);
             self.add_scratchpad(&title, &scratchpad);
 
@@ -205,17 +205,16 @@ impl ConfigCache {
         let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
             scratchpads
                 .values()
-                .filter(|scratchpad| cond(&scratchpad.options))
-                .map(|scratchpad| scratchpad.title.clone())
+                .filter(|sc| cond(&sc.options))
+                .map(|sc| sc.title.clone())
                 .collect::<Vec<_>>()
         };
 
         let filter_maps = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
             scratchpads
-                .clone()
-                .into_iter()
-                .filter(|(_, scratchpad)| cond(&scratchpad.options))
-                .map(|(name, scratchpad)| (scratchpad.title, name))
+                .iter()
+                .filter(|(_, sc)| cond(&sc.options))
+                .map(|(name, sc)| (sc.title.clone(), name.clone()))
                 .collect::<HashMap<_, _>>()
         };
 
@@ -306,7 +305,7 @@ impl Config {
         Ok(())
     }
 
-    fn split_commands(scratchpads: &[Scratchpad]) -> Vec<[String; 3]> {
+    fn split_commands(scratchpads: &[&Scratchpad]) -> Vec<[String; 3]> {
         let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
             sc.command
                 .split('?')
@@ -314,15 +313,12 @@ impl Config {
                 .collect()
         };
 
-        scratchpads.iter().flat_map(split).collect()
+        scratchpads.iter().flat_map(|sc| split(&sc)).collect()
     }
 
     fn format_scratchpads(&mut self) -> String {
-        let ordered_scratchpads: Vec<Scratchpad> = self
-            .names
-            .iter()
-            .map(|k| self.scratchpads[k].clone())
-            .collect();
+        let ordered_scratchpads: Vec<&Scratchpad> =
+            self.names.iter().map(|k| &self.scratchpads[k]).collect();
         let scratchpads = Self::split_commands(&ordered_scratchpads);
 
         let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
