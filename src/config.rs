@@ -313,7 +313,7 @@ impl Config {
                 .collect()
         };
 
-        scratchpads.iter().flat_map(|sc| split(&sc)).collect()
+        scratchpads.iter().flat_map(|sc| split(sc)).collect()
     }
 
     fn format_scratchpads(&mut self) -> String {
