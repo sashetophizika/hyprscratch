@@ -42,7 +42,7 @@ In `hyprland.conf`:
 exec-once = hyprscratch init [DAEMON_OPTIONS]
 
 # Configure scratchpads
-bind = $MOD, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
+bind = $mainMod, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
 ```
 
 Example scratchpad configuration:
@@ -135,7 +135,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `hide`: only hides the scratchpad if active.
 
-* `poly`: toggle all scratchpads with the same title simultaneously.
+* `poly`: toggles all scratchpads with the same title simultaneously.
 
 * `pin`: keeps the scratchpad active through workspace changes.
 
@@ -163,7 +163,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `reload [config]`: re-parses the configuration file without restarting the daemon.
 
-* `menu [fzf|rofi] [show|hide]`: spawn a menu to search through and trigger scratchpads (`rofi` for keybinds, `fzf` for cli).
+* `menu [fzf|rofi] [show|hide]`: spawns a menu to search through and trigger scratchpads (`rofi` for keybinds, `fzf` for cli).
 
 * `get-config`: prints out the parsed configuration.
 
@@ -178,7 +178,5 @@ The title of a scratchpad has to be either the `initialTitle` or `initialClass` 
 Terminal applications often all use the title of the terminal emulator. Usually the title can be set with the `--title` flag to differentiate them.
 
 Multiple commands can be bound to a single scratchpad by separating them with `?` (e.g. `hyprscratch title "[rules1] command1 ? [rules2] command2"`). Can be useful with the `poly` option to allow different window rules for each client.
-
-To group multiple scratchpads together, bind them to the same key and use `cover` and `persist` on all of them.
 
 If there are multiple clients with the same title, the program just grabs the first one it finds. This usually results in cycling between them, every time one is shown.
