@@ -356,8 +356,9 @@ SCRATCHPAD OPTIONS
   poly                       Toggle all scratchpads matching the title simultaneously
   pin                        Keep the scratchpad active through workspace changes
   tiled                      Makes a tiled scratchpad instead of a floating one
-  special                    Use Hyprland's special workspace, ignores most other options
   monitor <id|name>          Restrict the scratchpad to a specified monitor
+  group <name>               Add the scratchpad to the specified group
+  special                    Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
   cycle [normal|special]     Cycle between [only normal | only special] scratchpads
