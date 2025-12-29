@@ -143,6 +143,8 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `monitor <id|name>`: restricts the scratchpad to a specific monitor.
 
+* `group <name>`: adds the scratchpad to the specified group.
+
 * `special`: uses the special workspace. Does not work with all other options.
 
 ### Extra subcommands:
