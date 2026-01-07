@@ -50,7 +50,7 @@ Example scratchpad configuration:
 ```bash
 exec-once = hyprscratch init clean eager
 
-bind = $mainMod, b, exec, hyprscratch btop "[size 70% 80%] alacritty --title btop -e btop" persist pin
+bind = $mainMod, b, exec, hyprscratch btop "[size monitor_h*0.7 monitor_h*0.8] alacritty --title btop -e btop" persist pin
 bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 1
 ```
 
