@@ -16,9 +16,9 @@ use std::fs::{create_dir, remove_file};
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
-type ConfigMutex = Arc<Mutex<Config>>;
+type ConfigMutex = Arc<RwLock<Config>>;
 
 #[derive(Clone, Copy)]
 pub struct DaemonOptions {
@@ -116,15 +116,10 @@ fn handle_group(
 
     for sc in group {
         let cover = sc.options.cover;
-        if !cover {
-            sc.options.cover = true;
-        }
+        sc.options.cover = true;
 
         trigger_action(sc, name, action, &config.cache)?;
-
-        if cover != sc.options.cover {
-            sc.options.cover = false;
-        }
+        sc.options.cover = cover;
     }
     Ok(())
 }
@@ -353,7 +348,7 @@ fn start_unix_listener(
                     }
                 };
 
-                let conf = &mut config.lock().unwrap_log(file!(), line!());
+                let conf = &mut config.write().unwrap_log(file!(), line!());
 
                 match handle_request((req, msg), &mut stream, state, conf) {
                     Ok(()) => (),
@@ -390,7 +385,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
         autospawn(&mut config).log_err(f, l);
     }
 
-    let config = Arc::new(Mutex::new(config));
+    let config = Arc::new(RwLock::new(config));
     start_event_listeners(&config, &mut state);
 
     start_unix_listener(socket_path, &mut state, config).unwrap_log(file!(), line!());
@@ -672,7 +667,7 @@ mod tests {
         let config = Config::new(Some(config_path.to_string())).unwrap();
         let mut state = DaemonState::new("", &config);
 
-        let config = Arc::new(Mutex::new(config));
+        let config = Arc::new(RwLock::new(config));
         start_event_listeners(&config, &mut state);
         std::thread::sleep(std::time::Duration::from_millis(500));
 
@@ -682,7 +677,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
         assert!(config
-            .lock()
+            .read()
             .unwrap()
             .names
             .iter()

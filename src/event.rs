@@ -10,16 +10,16 @@ use hyprland::Result;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread::*;
 use std::time::Duration;
 
-type ConfigMutex = Arc<Mutex<Config>>;
+type ConfigMutex = Arc<RwLock<Config>>;
 
 fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_window_moved_handler(move |data| {
         let (f, l) = (file!(), line!());
-        let ephemeral_titles = &config.lock().unwrap_log(f, l).cache.ephemeral_titles;
+        let ephemeral_titles = &config.read().unwrap_log(f, l).cache.ephemeral_titles;
 
         if ephemeral_titles.is_empty() {
             return;
@@ -41,7 +41,7 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
 fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_workspace_changed_handler(move |_| {
         let (f, l) = (file!(), line!());
-        let slick_map = &config.lock().unwrap_log(f, l).cache.clean_map;
+        let slick_map = &config.read().unwrap_log(f, l).cache.clean_map;
         move_floating(slick_map).log_err(f, l);
 
         if let Ok(Some(ac)) = Client::get_active() {
@@ -56,7 +56,7 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_active_window_changed_handler(move |_| {
         if let Ok(Some(cl)) = Client::get_active() {
             let (f, l) = (file!(), line!());
-            let conf = &config.lock().unwrap_log(f, l);
+            let conf = &config.read().unwrap_log(f, l);
 
             if !is_known(&conf.cache.normal_titles, &cl) {
                 move_floating(&conf.cache.spotless_map).log_err(f, l);
@@ -68,7 +68,7 @@ fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
 fn add_builtin_reload(ev: &mut EventListener, config: ConfigMutex) {
     ev.add_config_reloaded_handler(move || {
         let (f, l) = (file!(), line!());
-        config.lock().unwrap_log(f, l).reload(None).log_err(f, l);
+        config.write().unwrap_log(f, l).reload(None).log_err(f, l);
     });
 }
 
@@ -116,7 +116,7 @@ fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: C
 
 fn reload_on_modify(res: notify::Result<Event>, config: ConfigMutex) {
     let (f, l) = (file!(), line!());
-    let mut config_guard = config.lock().unwrap_log(f, l);
+    let mut config_guard = config.write().unwrap_log(f, l);
     let config_path = PathBuf::from(&config_guard.config_file);
 
     match res {
@@ -139,7 +139,7 @@ fn start_auto_reload(config: ConfigMutex) -> notify::Result<()> {
 
     let (f, l) = (file!(), line!());
     watcher.watch(
-        Path::new(&config.lock().unwrap_log(f, l).config_file)
+        Path::new(&config.read().unwrap_log(f, l).config_file)
             .parent()
             .unwrap_log(f, l),
         RecursiveMode::NonRecursive,
