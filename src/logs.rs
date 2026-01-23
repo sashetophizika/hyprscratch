@@ -87,7 +87,7 @@ fn get_log_file() -> io::Result<File> {
         .open(DEFAULT_LOGFILE)
 }
 
-fn write_msg(msg: &String, level: &LogLevel) -> io::Result<()> {
+fn write_msg(msg: &str, level: &LogLevel) -> io::Result<()> {
     get_log_file()?.write_all(
         format!(
             "{} {} {msg}\n",

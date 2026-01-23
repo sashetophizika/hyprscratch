@@ -130,16 +130,14 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 
 fn catch_err(args: &[String], err: HyprError) {
     if let HyprError::IoError(e) = err {
-        if e.to_string() == "Connection refused (os error 111)" {
+        if e.raw_os_error() == Some(111) {
             let _ = log("Could not connect to daemon. Is it running?".into(), Warn);
         }
     } else {
-        {
-            let _ = log(
-                format!("{}, command: '{}'.", err, args[1..].join(" ")),
-                Warn,
-            );
-        }
+        let _ = log(
+            format!("{}, command: '{}'.", err, args[1..].join(" ")),
+            Warn,
+        );
     }
 }
 

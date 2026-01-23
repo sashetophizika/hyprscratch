@@ -210,18 +210,15 @@ impl Scratchpad {
     }
 
     fn get_workspace_name(&self, state: &HyprlandState) -> String {
-        if let Some(m) = &self.options.monitor {
-            state
-                .monitors
-                .get(m)
-                .unwrap_or_else(|| {
-                    let _ = log(format!("Monitor {m} not found"), Warn);
-                    &state.active_workspace.name
-                })
-                .to_owned()
-        } else {
+        let monitor = match &self.options.monitor {
+            Some(m) => m,
+            None => return state.active_workspace.name.clone(),
+        };
+
+        state.monitors.get(monitor).cloned().unwrap_or_else(|| {
+            let _ = log(format!("Monitor {monitor} not found"), Warn);
             state.active_workspace.name.clone()
-        }
+        })
     }
 
     fn spawn_normal(&self, state: &HyprlandState) {
@@ -314,8 +311,7 @@ impl Scratchpad {
         let mut clients_on_active = state
             .clients_with_title
             .iter()
-            .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating))
-            .peekable();
+            .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating));
 
         if self.options.special || self.options.show {
             return Summon;
@@ -326,15 +322,14 @@ impl Scratchpad {
             None => return Summon,
         };
 
-        match clients_on_active.peek() {
-            Some(client) => {
-                if self.options.hide || !active.floating || self.matches_client(active) {
-                    Hide(clients_on_active.collect())
-                } else {
-                    Refocus(client)
-                }
+        if let Some(client) = clients_on_active.next() {
+            if self.options.hide || !active.floating || self.matches_client(active) {
+                Hide(clients_on_active.collect())
+            } else {
+                Refocus(client)
             }
-            None => Summon,
+        } else {
+            Summon
         }
     }
 

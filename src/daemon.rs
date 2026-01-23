@@ -535,9 +535,9 @@ mod tests {
                 "test_nonfloating".to_string(),
             ],
             commands: [
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
-                "[float; workspace special:test_special; size 30% 30%; move 30% 0] kitty --title test_special".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
+                "[float; workspace special:test_special; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_special".to_string(),
                 "kitty --title test_nonfloating".to_string(),
             ],
             expected_workspace: [
@@ -579,9 +579,9 @@ mod tests {
             ],
             commands: [
                 "kitty --title test_nonfloating".to_string(),
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
-                "[float; size 30% 30%; move 30% 0] kitty --title test_shiny".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_shiny".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
@@ -625,10 +625,10 @@ mod tests {
                 "test_ephemeral".to_string(),
             ],
             commands: [
-                "[float; size 30% 30%; move 60% 0] kitty --title test_sticky".to_string(),
-                "[float; pin; size 30% 30%; move 30% 0] kitty --title test_pin".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_normal".to_string(),
-                "[float; size 30% 30%; move 0 30%] kitty --title test_ephemeral".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
+                "[float; pin; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_pin".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 monitor_h*0.3] kitty --title test_ephemeral".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),

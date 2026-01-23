@@ -109,7 +109,8 @@ impl ParserState {
             } else {
                 self.in_scope = true;
                 self.active_scratchpad = Some(n.into());
-                for f in ["title", "class", "command", "rules", "options"] {
+                let scratchpad_fields = ["title", "class", "command", "rules", "options"];
+                for f in scratchpad_fields {
                     self.scratchpad_data.insert(f.into(), String::new());
                 }
             }
@@ -202,7 +203,7 @@ pub struct ConfigCache {
 
 impl ConfigCache {
     pub fn new(scratchpads: &Scratchpads) -> ConfigCache {
-        let filter_titles = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
+        let filter_titles = |cond: fn(&ScratchpadOptions) -> bool| {
             scratchpads
                 .values()
                 .filter(|sc| cond(&sc.options))
@@ -210,7 +211,7 @@ impl ConfigCache {
                 .collect::<Vec<_>>()
         };
 
-        let filter_maps = |cond: &dyn Fn(&ScratchpadOptions) -> bool| {
+        let filter_maps = |cond: fn(&ScratchpadOptions) -> bool| {
             scratchpads
                 .iter()
                 .filter(|(_, sc)| cond(&sc.options))
@@ -219,17 +220,17 @@ impl ConfigCache {
         };
 
         ConfigCache {
-            ephemeral_titles: filter_titles(&|opts| opts.ephemeral),
-            special_titles: filter_titles(&|opts| opts.special),
-            normal_titles: filter_titles(&|opts| !opts.special),
-            normal_map: filter_maps(&|opts| !opts.special),
-            replace_map: filter_maps(&|opts| !opts.persist && !opts.special),
-            clean_map: filter_maps(&|opts| !opts.sticky && !opts.pin),
-            spotless_map: filter_maps(&|opts| !opts.sticky && !opts.shiny && !opts.pin),
+            ephemeral_titles: filter_titles(|opts| opts.ephemeral),
+            special_titles: filter_titles(|opts| opts.special),
+            normal_titles: filter_titles(|opts| !opts.special),
+            normal_map: filter_maps(|opts| !opts.special),
+            replace_map: filter_maps(|opts| !opts.persist && !opts.special),
+            clean_map: filter_maps(|opts| !opts.sticky && !opts.pin),
+            spotless_map: filter_maps(|opts| !opts.sticky && !opts.shiny && !opts.pin),
         }
     }
 
-    fn update_titles(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
+    fn update_cache(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
         if options.ephemeral {
             self.ephemeral_titles.push(title.into());
         }
@@ -285,7 +286,7 @@ impl Config {
     }
 
     fn update_cache(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
-        self.cache.update_titles(options, name, title);
+        self.cache.update_cache(options, name, title);
     }
 
     pub fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
@@ -660,7 +661,11 @@ fn add_copy_to_group(name: &str, config_data: &mut ConfigData, state: &mut Parse
 }
 
 fn escape(s: &str) -> String {
-    dequote(&s.replace("\\\\", "^").replace('\\', "").replace('^', "\\"))
+    dequote(
+        &s.replace("\\\\", "\0")
+            .replace('\\', "")
+            .replace('\0', "\\"),
+    )
 }
 
 fn set_global(state: &mut ParserState, (k, v): (&str, String)) {
@@ -685,8 +690,8 @@ fn set_field<'a>(state: &mut ParserState, (k, v): (&'a str, &'a str)) {
     }
 }
 
-fn set_var<'a>(split: (&'a str, &'a str), config_data: &mut ConfigData, state: &mut ParserState) {
-    let (k, v) = (split.0.trim(), escape(split.1));
+fn set_var<'a>((k, v): (&'a str, &'a str), config_data: &mut ConfigData, state: &mut ParserState) {
+    let (k, v) = (k.trim(), escape(v));
     match k {
         "global_options" | "global_rules" | "daemon_options" => set_global(state, (k, v)),
         "name" => add_copy_to_group(&v, config_data, state),
@@ -737,10 +742,14 @@ mod tests {
         let scratchpads = vec![
             Scratchpad::new(
                 "btop",
-                "[size 85% 85%] kitty --title btop -e btop",
+                "[size monitor_w*0.85 monitor_h*0.85] kitty --title btop -e btop",
                 "cover persist sticky shiny lazy show hide poly special tiled",
             ),
-            Scratchpad::new("Loading…", "[size 70% 80%] nautilus", ""),
+            Scratchpad::new(
+                "Loading…",
+                "[size monitor_w*0.7 monitor_h*0.8] nautilus",
+                "",
+            ),
             Scratchpad::new("\\\"", "\\'", "cover lazy special"),
             Scratchpad::new(
                 " a program with ' a wierd ' name",
