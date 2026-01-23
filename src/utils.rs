@@ -26,22 +26,19 @@ pub fn read_into_string(stream: &mut UnixStream) -> Result<String> {
 fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
     let long = format!("--{flag}");
     let is_short = |x: &str| {
-        x.len() > 1
-            && !x.contains('=')
-            && x.starts_with('-')
-            && !x[1..].starts_with('-')
-            && x.contains(flag.as_bytes()[0] as char)
+        x.starts_with('-')
+            && !x.starts_with("--")
+            && x.contains(flag.chars().next().unwrap_or('\0'))
     };
 
     let is_present = |x: &str| x == *flag || *x == long || is_short(x);
-    if is_present(arg) {
-        return Some(flag);
-    }
 
     if let Some((key, _)) = arg.split_once('=') {
         if is_present(key) {
             return Some(flag);
         }
+    } else if is_present(arg) {
+        return Some(flag);
     }
     None
 }
@@ -261,8 +258,8 @@ mod tests {
             ],
             commands: [
                 "kitty --title test_nonfloating_move".to_string(),
-                "[float; size 30% 30%; move 0 0] kitty --title test_notcontained_move".to_string(),
-                "[float; size 30% 30%; move 30% 0] kitty --title test_scratchpad_move".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_notcontained_move".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_scratchpad_move".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
@@ -387,5 +384,64 @@ mod tests {
                     assert_eq!(&clients_with_title[0].workspace.name, workspace);
                 }
             });
+    }
+
+    fn verify_get_flag_name(flag: &str, cases: &[(&str, bool)]) {
+        for (arg, should_match) in cases {
+            let result = get_flag_name(arg) == Some(flag);
+            assert_eq!(result, *should_match, "Failed for {arg}");
+        }
+    }
+
+    fn verify_get_flag_arg(flag: &str, cases: &[(&[&str], Option<&str>)]) {
+        for (args, expected) in cases {
+            let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            let result = get_flag_arg(&args, flag);
+            assert_eq!(result.as_deref(), *expected, "Failed for {args:?}");
+        }
+    }
+
+    #[test]
+    fn test_get_flag_name() {
+        verify_get_flag_name(
+            "version",
+            &[
+                ("version", true),
+                ("--version", true),
+                ("-v", true),
+                ("-vvh", true),
+                ("-x", false),
+                ("version=1.0", true),
+                ("--version=1.0", true),
+                ("-v=1.0", true),
+                ("", false),
+                ("unknown", false),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_get_flag_name_unknown() {
+        let result = get_flag_name("nonexistent");
+        assert_eq!(result, None,);
+    }
+
+    #[test]
+    fn test_get_flag_arg_all_formats() {
+        verify_get_flag_arg(
+            "config",
+            &[
+                (&["--config", "/tmp/config.toml"], Some("/tmp/config.toml")),
+                (&["-c", "/tmp/config.toml"], Some("/tmp/config.toml")),
+                (&["--config=/tmp/config.toml"], Some("/tmp/config.toml")),
+                (&["-c=/tmp/config.toml"], Some("/tmp/config.toml")),
+                (&["--config"], None),
+                (
+                    &["--config", "/tmp/val1", "--config", "/tmp/val2"],
+                    Some("/tmp/val1"),
+                ),
+                (&[], None),
+            ],
+        );
     }
 }
