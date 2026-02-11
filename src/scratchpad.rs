@@ -132,6 +132,7 @@ enum TriggerMode<T> {
 pub struct Scratchpad {
     pub title: String,
     pub command: String,
+    pub rules: String,
     pub options: ScratchpadOptions,
 }
 
@@ -140,12 +141,22 @@ impl Scratchpad {
         Scratchpad {
             title: title.into(),
             command: command.into(),
+            rules: String::new(),
             options: ScratchpadOptions::new(options),
         }
     }
 
     pub fn add_rules(&mut self, rules: &str) {
         self.command = prepend_rules(&self.command, rules).join("?");
+        if !rules.is_empty() {
+            if !self.rules.is_empty() {
+                // Prepend new rules before existing ones so per-scratchpad rules
+                // (set earlier) take precedence over global rules (added later)
+                self.rules = format!("{};{}", rules, self.rules);
+            } else {
+                self.rules = rules.to_string();
+            }
+        }
     }
 
     pub fn add_opts(&mut self, options: &str) {
@@ -235,6 +246,8 @@ impl Scratchpad {
     }
 
     fn show_normal(&self, state: &HyprlandState) -> Result<()> {
+        let mut shown = false;
+
         for client in state
             .clients_with_title
             .iter()
@@ -258,8 +271,32 @@ impl Scratchpad {
                 )?;
             }
 
+            reapply_rules(client, &self.rules, !self.options.tiled);
+            shown = true;
+
             if !self.options.poly {
                 break;
+            }
+        }
+
+        // If no clients were moved (all already on workspace), reapply rules
+        // to clients already here. This handles apps like Spotify whose windows
+        // ignore exec rules at spawn and end up tiled.
+        if !shown {
+            for client in state
+                .clients_with_title
+                .iter()
+                .filter(|cl| self.is_on_workspace(cl, state))
+            {
+                hyprland::dispatch!(
+                    FocusWindow,
+                    WindowIdentifier::Address(client.address.clone())
+                )?;
+                reapply_rules(client, &self.rules, !self.options.tiled);
+
+                if !self.options.poly {
+                    break;
+                }
             }
         }
 
@@ -338,11 +375,12 @@ impl Scratchpad {
         }
     }
 
-    fn refocus(client: &Client) -> Result<()> {
+    fn refocus(&self, client: &Client) -> Result<()> {
         hyprland::dispatch!(
             FocusWindow,
             WindowIdentifier::Address(client.address.clone())
         )?;
+        reapply_rules(client, &self.rules, !self.options.tiled);
         Ok(())
     }
 
@@ -355,7 +393,7 @@ impl Scratchpad {
     pub fn trigger(&self, title_map: &HashMap<String, String>, name: &str) -> Result<()> {
         let state = HyprlandState::new(&self.title, name)?;
         match self.get_mode(&state) {
-            Refocus(client) => Self::refocus(client)?,
+            Refocus(client) => self.refocus(client)?,
             Hide(clients) => self.hide(clients, &state),
             Summon => self.summon(&state)?,
         }

@@ -2,8 +2,8 @@ use crate::config::Config;
 use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
-use hyprland::data::{Client, Clients};
-use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
+use hyprland::data::{Client, Clients, Monitors};
+use hyprland::dispatch::*;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::collections::HashMap;
@@ -217,6 +217,142 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
         .for_each(spawn);
 
     Ok(())
+}
+
+/// Evaluate a size/position expression like "monitor_w*0.95", "30%", "800"
+fn eval_expr(expr: &str, monitor_w: f64, monitor_h: f64, is_width: bool) -> Option<i64> {
+    let expr = expr.trim();
+    if expr.is_empty() {
+        return None;
+    }
+
+    // Percentage: "30%"
+    if let Some(pct) = expr.strip_suffix('%') {
+        let p = pct.trim().parse::<f64>().ok()?;
+        let base = if is_width { monitor_w } else { monitor_h };
+        return Some((base * p / 100.0) as i64);
+    }
+
+    // Expression with monitor variables: "monitor_w*0.95"
+    if expr.contains("monitor_w") || expr.contains("monitor_h") {
+        let replaced = expr
+            .replace("monitor_w", &monitor_w.to_string())
+            .replace("monitor_h", &monitor_h.to_string());
+
+        // Handle multiplication: "2560*0.95"
+        if let Some((a, b)) = replaced.split_once('*') {
+            let a = a.trim().parse::<f64>().ok()?;
+            // Handle subtraction after multiplication: "2560*0.95-60"
+            if let Some((mul, sub)) = b.trim().split_once('-') {
+                let mul = mul.trim().parse::<f64>().ok()?;
+                let sub = sub.trim().parse::<f64>().ok()?;
+                return Some((a * mul - sub) as i64);
+            }
+            let b = b.trim().parse::<f64>().ok()?;
+            return Some((a * b) as i64);
+        }
+
+        // Just a variable reference: "monitor_w"
+        return replaced.trim().parse::<f64>().ok().map(|v| v as i64);
+    }
+
+    // Plain number
+    expr.parse::<f64>().ok().map(|v| v as i64)
+}
+
+/// Reapply scratchpad rules (size, position, float) to an existing window.
+/// Called after showing or refocusing a scratchpad so rules are enforced
+/// even if the window was previously resized or moved.
+pub fn reapply_rules(client: &Client, rules: &str, should_float: bool) {
+    let (monitor_w, monitor_h) = match get_focused_monitor_dimensions() {
+        Some(dims) => dims,
+        None => return,
+    };
+
+    let addr = client.address.clone();
+
+    // Ensure floating if the scratchpad isn't configured as tiled
+    if should_float && !client.floating {
+        Dispatch::call(DispatchType::ToggleFloating(Some(
+            WindowIdentifier::Address(addr.clone()),
+        )))
+        .log_err(file!(), line!());
+    }
+
+    if rules.is_empty() {
+        return;
+    }
+
+    // Parse rules to find the final size/position state.
+    // Later rules override earlier ones (per-scratchpad overrides global).
+    let mut final_size: Option<(i64, i64)> = None;
+    let mut final_center = false;
+    let mut final_move: Option<(i64, i64)> = None;
+
+    for rule in rules.split(';') {
+        let rule = rule.trim();
+        if rule.is_empty() {
+            continue;
+        }
+
+        if rule == "float" {
+            // Already handled above
+        } else if let Some(size_args) = rule.strip_prefix("size ") {
+            let parts: Vec<&str> = size_args.trim().splitn(2, char::is_whitespace).collect();
+            if parts.len() == 2 {
+                if let (Some(w), Some(h)) = (
+                    eval_expr(parts[0], monitor_w, monitor_h, true),
+                    eval_expr(parts[1], monitor_w, monitor_h, false),
+                ) {
+                    final_size = Some((w, h));
+                    // New size invalidates previous center/move
+                    final_center = false;
+                    final_move = None;
+                }
+            }
+        } else if let Some(move_args) = rule.strip_prefix("move ") {
+            let parts: Vec<&str> = move_args.trim().splitn(2, char::is_whitespace).collect();
+            if parts.len() == 2 {
+                if let (Some(x), Some(y)) = (
+                    eval_expr(parts[0], monitor_w, monitor_h, true),
+                    eval_expr(parts[1], monitor_w, monitor_h, false),
+                ) {
+                    final_move = Some((x, y));
+                    final_center = false;
+                }
+            }
+        } else if rule == "center" {
+            final_center = true;
+            final_move = None;
+        }
+    }
+
+    // Apply the final computed state
+    if let Some((w, h)) = final_size {
+        Dispatch::call(DispatchType::Custom(
+            "resizewindowpixel",
+            &format!("exact {} {},address:{}", w, h, addr),
+        ))
+        .log_err(file!(), line!());
+    }
+
+    if let Some((x, y)) = final_move {
+        Dispatch::call(DispatchType::Custom(
+            "movewindowpixel",
+            &format!("exact {} {},address:{}", x, y, addr),
+        ))
+        .log_err(file!(), line!());
+    } else if final_center {
+        // centerwindow operates on the focused window (no address targeting)
+        Dispatch::call(DispatchType::Custom("centerwindow", "1"))
+            .log_err(file!(), line!());
+    }
+}
+
+fn get_focused_monitor_dimensions() -> Option<(f64, f64)> {
+    let monitors = Monitors::get().ok()?;
+    let monitor = monitors.into_iter().find(|m| m.focused)?;
+    Some((monitor.width as f64, monitor.height as f64))
 }
 
 #[cfg(test)]

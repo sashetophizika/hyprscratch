@@ -144,9 +144,10 @@ impl ParserState {
     }
 
     fn create_scratchpad(&mut self) -> Scratchpad {
+        let rules_str = self.scratchpad_data["rules"].replace(',', ";");
         let command = &prepend_rules(
             &self.scratchpad_data["command"],
-            &self.scratchpad_data["rules"].replace(',', ";"),
+            &rules_str,
         )
         .join("?");
 
@@ -157,7 +158,9 @@ impl ParserState {
         };
 
         let options = &self.scratchpad_data["options"];
-        Scratchpad::new(title, command, options)
+        let mut sc = Scratchpad::new(title, command, options);
+        sc.rules = rules_str;
+        sc
     }
 
     fn append_to_field(&mut self, k: &str, v: &str) {
