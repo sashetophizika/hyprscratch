@@ -50,46 +50,48 @@ Example scratchpad configuration:
 ```bash
 exec-once = hyprscratch init clean eager
 
-bind = $mainMod, b, exec, hyprscratch btop "[size monitor_h*0.7 monitor_h*0.8] alacritty --title btop -e btop" persist pin
+bind = $mainMod, t, exec, hyprscratch terminal "alacritty --title terminal"
+bind = $mainMod, b, exec, hyprscratch btop "[size monitor_w*0.7 monitor_h*0.8] alacritty --title btop -e btop" persist pin
 bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 1
 ```
 
 ### Optional Configuration File
 If you consider it more convenient to use a separate configuration file, you can create a `~/.config/hypr/hyprscratch.conf` or `~/.config/hyprscratch/config.conf` and configure scratchpads in the following way:
 
-```hyprlang
-# Optional globals that apply to all scratchpads
-daemon_options = clean
-global_options = special
-global_rules = size 90% 90%
-
+```perl
+# Create a new scratchpad
 scratchpad1 {
     # Mandatory fields
     command = command
 
-    # At least one is mandatory, title takes priority
-    title = title
-    class = class
+    # At least one is mandatory, title takes priority for matching
+    title = title # Hyprland initialTitle
+    class = class # Hyprland initialClass
 
     # Optional fields
-    options = option1 option2 option3
-    rules = rule1;rule2;rule3
+    options = option1 option2 option3 # Scratchpad options
+    rules = rule1;rule2;rule3 # Hyprland window rules
 }
 
 # Groups that manage multiple scratchpads are also supported
 group:group1 {
-    # Add the already defined scratchpad to the group
+    # Add an existing scratchpad to the group
     name = scratchpad1
 
-    # Define a new scratchpad that can also be used independently
+    # Create a new scratchpad that can also be used by itself
     scratchpad2 {
         title = title
         command = command
     }
 }
+
+# Optional globals that apply to all scratchpads
+daemon_options = clean
+global_options = special
+global_rules = monitor_w*0.9 monitor_h*0.9
 ```
 
-And in `hyprland.conf`, using the given name:
+And in `hyprland.conf`, using the given names:
 
 ```bash
 exec-once = hyprscratch init
@@ -145,7 +147,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `group <name>`: adds the scratchpad to the specified group.
 
-* `special`: uses the special workspace. Does not work with all other options.
+* `special`: uses the special workspace. Does not work with most other options and groups.
 
 ### Extra subcommands:
 
