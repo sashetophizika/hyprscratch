@@ -182,7 +182,7 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
 }
 
 pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
-    let mut rules = sc.rules.clone() + ";";
+    let mut rules = sc.rules.clone() + "; tag +scratchpad;";
     if let Some(is_silent) = on_special {
         let silent = if is_silent { "silent" } else { "" };
         rules += &format!("workspace special:{} {silent};", &workspace);
