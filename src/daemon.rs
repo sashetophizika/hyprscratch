@@ -234,7 +234,7 @@ fn handle_call(mut data: RequestData) -> Result<()> {
 fn handle_attach(data: RequestData) -> Result<()> {
     if let Some(client) = Client::get_active()? {
         let class = client.initial_class;
-        let scratchpad = Scratchpad::new(&class, "", &data.msg);
+        let scratchpad = Scratchpad::new(&class, "", "", &data.msg);
         data.config.add_scratchpad(&class, &scratchpad);
     }
 
@@ -245,7 +245,7 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
     let args: Vec<&str> = data.msg.splitn(3, '^').collect();
     data.state.update_prev_titles(args[0]);
 
-    let mut scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
+    let mut scratchpad = Scratchpad::new(args[0], args[1], "", &args[2..].join(" "));
     data.config.add_scratchpad(args[0], &scratchpad);
 
     data.msg = args[0].to_string();

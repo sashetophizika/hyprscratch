@@ -132,14 +132,16 @@ enum TriggerMode<T> {
 pub struct Scratchpad {
     pub title: String,
     pub command: String,
+    pub rules: String,
     pub options: ScratchpadOptions,
 }
 
 impl Scratchpad {
-    pub fn new(title: &str, command: &str, options: &str) -> Scratchpad {
+    pub fn new(title: &str, command: &str, rules: &str, options: &str) -> Scratchpad {
         Scratchpad {
             title: title.into(),
             command: command.into(),
+            rules: rules.into(),
             options: ScratchpadOptions::new(options),
         }
     }
@@ -311,7 +313,8 @@ impl Scratchpad {
         let mut clients_on_active = state
             .clients_with_title
             .iter()
-            .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating));
+            .filter(|cl| self.is_on_workspace(cl, state) && (self.options.tiled || cl.floating))
+            .peekable();
 
         if self.options.special || self.options.show {
             return Summon;
@@ -322,7 +325,7 @@ impl Scratchpad {
             None => return Summon,
         };
 
-        if let Some(client) = clients_on_active.next() {
+        if let Some(client) = clients_on_active.peek() {
             if self.options.hide || !active.floating || self.matches_client(active) {
                 Hide(clients_on_active.collect())
             } else {
@@ -341,7 +344,7 @@ impl Scratchpad {
         Ok(())
     }
 
-    fn hide(&self, clients: Vec<&Client>, state: &HyprlandState) {
+    fn hide(clients: Vec<&Client>, state: &HyprlandState) {
         clients
             .into_iter()
             .for_each(|c| move_to_special(c, &state.special_workspace));
@@ -349,9 +352,10 @@ impl Scratchpad {
 
     pub fn trigger(&self, title_map: &HashMap<String, String>, name: &str) -> Result<()> {
         let state = HyprlandState::new(&self.title, name)?;
+
         match self.get_mode(&state) {
             Refocus(client) => Self::refocus(client)?,
-            Hide(clients) => self.hide(clients, &state),
+            Hide(clients) => Self::hide(clients, &state),
             Summon => self.summon(&state)?,
         }
 
@@ -384,7 +388,7 @@ mod tests {
         }
 
         fn into_scratchpad(&self, options: &str) -> Scratchpad {
-            Scratchpad::new(&self.title, &self.command, options)
+            Scratchpad::new(&self.title, &self.command, "", options)
         }
 
         fn assert_present(&self) {

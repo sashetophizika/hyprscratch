@@ -182,9 +182,9 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
 }
 
 pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
-    let mut rules = String::from("[");
-    if let Some(sil) = on_special {
-        let silent = if sil { "silent" } else { "" };
+    let mut rules = sc.rules.clone() + ";";
+    if let Some(is_silent) = on_special {
+        let silent = if is_silent { "silent" } else { "" };
         rules += &format!("workspace special:{} {silent};", &workspace);
     }
 
@@ -351,7 +351,7 @@ mod tests {
             .iter()
             .zip(resources.commands.clone())
             .zip(options)
-            .map(|((t, c), o)| (t.clone(), Scratchpad::new(t, &c, &o)))
+            .map(|((t, c), o)| (t.clone(), Scratchpad::new(t, &c, "", &o)))
             .collect();
 
         let mut config = Config {

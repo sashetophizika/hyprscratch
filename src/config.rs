@@ -1,6 +1,6 @@
 use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
-use crate::utils::{dequote, get_flag_arg, prepend_rules};
+use crate::utils::{dequote, get_flag_arg};
 use crate::DEFAULT_CONFIG_FILES;
 use crate::KNOWN_COMMANDS;
 use hyprland::Result;
@@ -52,8 +52,8 @@ impl ConfigData {
     }
 
     fn add_to_config(&mut self, args: &[String]) {
-        if let Some([title, command, opts]) = parse_args(args) {
-            let scratchpad = Scratchpad::new(&title, &command, &opts);
+        if let Some([title, command, rules, opts]) = parse_args(args) {
+            let scratchpad = Scratchpad::new(&title, &command, &rules, &opts);
             self.add_scratchpad(&title, &scratchpad);
 
             if let Some(g) = get_flag_arg(args, "group") {
@@ -145,20 +145,26 @@ impl ParserState {
     }
 
     fn create_scratchpad(&mut self) -> Scratchpad {
-        let command = &prepend_rules(
-            &self.scratchpad_data["command"],
-            &self.scratchpad_data["rules"].replace(',', ";"),
-        )
-        .join("?");
-
         let title = if self.scratchpad_data["title"].is_empty() {
             &self.scratchpad_data["class"]
         } else {
             &self.scratchpad_data["title"]
         };
 
+        let [rules, command] = extract_rules(&self.scratchpad_data["command"]);
+        let rules = if rules.is_empty() {
+            self.scratchpad_data["rules"].replace(',', ";")
+        } else if self.scratchpad_data["rules"].is_empty() {
+            rules
+        } else {
+            format!(
+                "{}; {}",
+                rules,
+                self.scratchpad_data["rules"].replace(',', ";")
+            )
+        };
         let options = &self.scratchpad_data["options"];
-        Scratchpad::new(title, command, options)
+        Scratchpad::new(title, &command, &rules, options)
     }
 
     fn append_to_field(&mut self, k: &str, v: &str) {
@@ -285,17 +291,14 @@ impl Config {
         })
     }
 
-    fn update_cache(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
-        self.cache.update_cache(options, name, title);
-    }
-
-    pub fn add_scratchpad(&mut self, name: &str, scratchpad: &Scratchpad) {
+    pub fn add_scratchpad(&mut self, name: &str, sc: &Scratchpad) {
         if self.scratchpads.contains_key(name) {
             return;
         }
 
-        self.update_cache(&scratchpad.options, name, &scratchpad.title);
-        self.scratchpads.insert(name.into(), scratchpad.clone());
+        self.cache.update_cache(&sc.options, name, &sc.title);
+        self.scratchpads.insert(name.into(), sc.clone());
+        self.names.push(name.into());
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -306,11 +309,18 @@ impl Config {
         Ok(())
     }
 
-    fn split_commands(scratchpads: &[&Scratchpad]) -> Vec<[String; 3]> {
-        let split = |sc: &Scratchpad| -> Vec<[String; 3]> {
+    fn split_commands(scratchpads: &[&Scratchpad]) -> Vec<[String; 4]> {
+        let split = |sc: &Scratchpad| -> Vec<[String; 4]> {
             sc.command
                 .split('?')
-                .map(|cmd| [sc.title.clone(), cmd.trim().into(), sc.options.as_string()])
+                .map(|cmd| {
+                    [
+                        sc.title.clone(),
+                        cmd.trim().into(),
+                        sc.rules.clone(),
+                        sc.options.as_string(),
+                    ]
+                })
                 .collect()
         };
 
@@ -322,7 +332,7 @@ impl Config {
             self.names.iter().map(|k| &self.scratchpads[k]).collect();
         let scratchpads = Self::split_commands(&ordered_scratchpads);
 
-        let format_field = |field: &dyn Fn(&[String; 3]) -> &str| {
+        let format_field = |field: &dyn Fn(&[String; 4]) -> &str| {
             scratchpads
                 .iter()
                 .map(field)
@@ -332,13 +342,14 @@ impl Config {
 
         let conf = &self.config_file;
         let names = self.names.join("\u{2C02}");
-        let (titles, commands, options) = (
+        let (titles, commands, rules, options) = (
             format_field(&|x| &x[0]),
             format_field(&|x| &x[1]),
             format_field(&|x| &x[2]),
+            format_field(&|x| &x[3]),
         );
 
-        format!("{conf}\u{2C00}{names}\u{2C01}{titles}\u{2C01}{commands}\u{2C01}{options}")
+        format!("{conf}\u{2C00}{names}\u{2C01}{titles}\u{2C01}{rules}\u{2C01}{commands}\u{2C01}{options}")
     }
 
     fn format_groups(&self) -> String {
@@ -527,7 +538,18 @@ fn warn_unknown_options(opts: &str) {
         .fold(false, |acc, x| warn_unknown(x, acc));
 }
 
-fn parse_args(args: &[String]) -> Option<[String; 3]> {
+fn extract_rules(cmd: &String) -> [String; 2] {
+    let i1 = cmd.find('[').unwrap_or_default();
+    let i2 = cmd.find(']').unwrap_or_default();
+
+    if i2 == 0 {
+        ["".into(), cmd.trim().into()]
+    } else {
+        [cmd[i1 + 1..i2].trim().into(), cmd[i2 + 1..].trim().into()]
+    }
+}
+
+fn parse_args(args: &[String]) -> Option<[String; 4]> {
     if KNOWN_COMMANDS.contains(&args.get(1).map_or("", |s| s.as_str())) {
         return None;
     }
@@ -536,9 +558,13 @@ fn parse_args(args: &[String]) -> Option<[String; 3]> {
         4.. => {
             let opts = args[3..].join(" ");
             warn_unknown_options(&opts);
-            Some([dequote(&args[1]), dequote(&args[2]), opts])
+            let [rules, command] = extract_rules(&dequote(&args[2]));
+            Some([dequote(&args[1]), command, rules, opts])
         }
-        3 => Some([dequote(&args[1]), dequote(&args[2]), String::new()]),
+        3 => {
+            let [rules, command] = extract_rules(&dequote(&args[2]));
+            Some([dequote(&args[1]), command, rules, String::new()])
+        }
         2 => {
             let _ = log(
                 format!("Unknown command or no command after title: {}", args[1]),
@@ -742,18 +768,21 @@ mod tests {
         let scratchpads = vec![
             Scratchpad::new(
                 "btop",
-                "[size monitor_w*0.85 monitor_h*0.85] kitty --title btop -e btop",
+                "kitty --title btop -e btop",
+                "size monitor_w*0.85 monitor_h*0.85",
                 "cover persist sticky shiny lazy show hide poly special tiled",
             ),
             Scratchpad::new(
                 "Loading…",
-                "[size monitor_w*0.7 monitor_h*0.8] nautilus",
+                "nautilus",
+                "size monitor_w*0.7 monitor_h*0.8",
                 "",
             ),
-            Scratchpad::new("\\\"", "\\'", "cover lazy special"),
+            Scratchpad::new("\\\"", "\\'", "", "cover lazy special"),
             Scratchpad::new(
                 " a program with ' a wierd ' name",
-                " a \"command with\" \\'a wierd\\' format",
+                "a \"command with\" \\'a wierd\\' format",
+                "",
                 "hide show",
             ),
         ];
@@ -827,7 +856,7 @@ mod tests {
         let mut expected_scratchpads = HashMap::new();
         for i in 1..=11 {
             let title = format!("scratch{i}");
-            expected_scratchpads.insert(title.clone(), Scratchpad::new(&title, "noop", ""));
+            expected_scratchpads.insert(title.clone(), Scratchpad::new(&title, "noop", "", ""));
         }
 
         assert_eq!(config_data.scratchpads, expected_scratchpads);
@@ -863,14 +892,15 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 groups: HashMap::new(),
                 names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
                 scratchpads: create_scratchpads(vec![
-                Scratchpad::new("firefox", "firefox", "cover"),
+                Scratchpad::new("firefox", "firefox", "", "cover"),
                 Scratchpad::new(
                     "btop",
                     "kitty --title btop -e btop",
+                    "",
                     "cover shiny lazy show hide special sticky",
                 ),
-                Scratchpad::new("htop", "kitty --title htop -e htop", "special"),
-                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "lazy"),
+                Scratchpad::new("htop", "kitty --title htop -e htop", "", "special"),
+                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "", "lazy"),
             ]),
                 cache: ConfigCache {
                     normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
@@ -905,11 +935,12 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 Scratchpad::new(
                     "firefox",
                     "firefox --private-window",
+                    "",
                     "special sticky",
                 ),
-                Scratchpad::new( "btop", "kitty --title btop -e btop", ""),
-                Scratchpad::new( "htop", "kitty --title htop -e htop", "cover shiny"),
-                Scratchpad::new( "cmat", "kitty --title cmat -e cmat", "special"),
+                Scratchpad::new( "btop", "kitty --title btop -e btop", "", ""),
+                Scratchpad::new( "htop", "kitty --title htop -e htop", "", "cover shiny"),
+                Scratchpad::new( "cmat", "kitty --title cmat -e cmat", "", "special"),
             ]),
                 cache: ConfigCache {
                     normal_titles: vec!["btop".to_string(), "htop".to_string()],

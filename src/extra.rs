@@ -30,18 +30,14 @@ fn color(str: &str) -> String {
     let col_titles = [
         "Name",
         "Title/Class",
+        "Rules",
         "Command",
         "Options",
         "Group",
         "Scratchpads",
     ];
 
-    let mut colored_str = str
-        .replace(';', "?")
-        .replace('[', "[\x1b[0;36m")
-        .replace(']', "\x1b[0;0m]")
-        .replace('?', "\x1b[0;0m;\x1b[0;36m");
-
+    let mut colored_str = str.to_string();
     if str.contains(".conf") {
         colored_str = colored_str.replace(str, &format!("\x1b[0;35m{str}\x1b[0;0m"));
     }
@@ -52,11 +48,11 @@ fn color(str: &str) -> String {
     colored_str
 }
 
-fn fancify(x: usize, str: &str) -> String {
-    let str = if str.len() <= x {
-        str.to_string() + &" ".repeat(max(x - str.chars().count(), 0))
+fn fancify(width: usize, str: &str) -> String {
+    let str = if str.len() <= width {
+        format!("{:width$}", str, width = width)
     } else {
-        str[..x - 3].to_string() + "..."
+        str[..width - 1].to_string() + "⋯"
     };
     color(&str)
 }
@@ -137,32 +133,41 @@ fn get_centered_conf(conf: &str, width: usize) -> String {
 }
 
 fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
-    let [names, titles, commands, options] = &scratchpad_data[0..4] else {
+    let [names, titles, rules, commands, options] = &scratchpad_data[0..5] else {
         return;
     };
 
-    let max_chars = 60;
+    let cols = termsize::get().map(|size| size.cols).unwrap_or(150) as usize;
+    let cols = if cols > 14 { cols - 14 } else { 0 };
+
     let field_widths = vec![
-        max_len(names, 4, max_chars),
-        max_len(titles, 11, max_chars),
-        max_len(commands, 7, max_chars),
-        max_len(options, 7, max_chars),
+        max_len(names, 4, cols / 10),
+        max_len(titles, 11, cols / 10),
+        max_len(rules, 5, cols / 3),
+        max_len(commands, 7, cols / 3),
+        max_len(options, 7, cols / 8),
     ];
 
-    let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 9);
+    let config_str = get_centered_conf(conf, field_widths.iter().sum::<usize>() + 12);
 
     print_table_outline(('┌', '─', '┐'), &[config_str.len()]);
     print_table_row(&[&config_str], &[config_str.len()]);
 
     print_table_outline(('├', '┬', '┤'), &field_widths);
     print_table_row(
-        &["Name", "Title/Class", "Command", "Options"],
+        &["Name", "Title/Class", "Rules", "Command", "Options"],
         &field_widths,
     );
 
     print_table_outline(('├', '┼', '┤'), &field_widths);
-    for (((name, title), command), option) in names.iter().zip(titles).zip(commands).zip(options) {
-        print_table_row(&[name, title, command, option], &field_widths);
+    for ((((name, title), rules), command), option) in names
+        .iter()
+        .zip(titles)
+        .zip(rules)
+        .zip(commands)
+        .zip(options)
+    {
+        print_table_row(&[name, title, rules, command, option], &field_widths);
     }
 
     print_table_outline(('└', '┴', '┘'), &field_widths);
@@ -173,7 +178,7 @@ fn print_raw_data(data: &[Vec<&str>]) {
         .map(|i| data.iter().map(|inner| inner[i]).collect::<Vec<&str>>())
         .collect::<Vec<Vec<&str>>>()
     {
-        println!("{}", row.join("    "));
+        println!("{}", row.join("  |  "));
     }
 }
 
@@ -210,7 +215,7 @@ fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
 }
 
 fn parse_config_data(data: &str) -> ParsedConfig {
-    let (sc_fields, g_fields) = (4, 2);
+    let (sc_fields, g_fields) = (5, 2);
     match data.splitn(3, '\u{2C00}').collect::<Vec<_>>()[..] {
         [c, scd, gd] => (c, parse_data(scd, sc_fields), parse_data(gd, g_fields)),
         [c, scd] => (c, parse_data(scd, sc_fields), vec![]),
