@@ -35,7 +35,7 @@ const KNOWN_CLI_COMMANDS: [&str; 7] = [
     "kill",
 ];
 
-const KNOWN_COMMANDS: [&str; 19] = [
+const KNOWN_COMMANDS: [&str; 20] = [
     "no-auto-reload",
     "get-config",
     "spotless",
@@ -43,6 +43,7 @@ const KNOWN_COMMANDS: [&str; 19] = [
     "kill-all",
     "previous",
     "version",
+    "attach",
     "reload",
     "toggle",
     "clean",
