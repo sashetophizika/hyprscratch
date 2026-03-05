@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::config::ConfigCache;
 use crate::event::start_event_listeners;
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
@@ -64,46 +63,106 @@ impl DaemonState {
     }
 }
 
-fn trigger_action(
-    sc: &mut Scratchpad,
-    name: &str,
-    action: &str,
-    cache: &ConfigCache,
-) -> Result<()> {
-    sc.options.toggle(action);
-    sc.trigger(&cache.replace_map, name)?;
-    sc.options.toggle(action);
+struct RequestData<'a> {
+    state: &'a mut DaemonState,
+    config: &'a mut Config,
+    req: String,
+    msg: String,
+}
+
+impl<'a> RequestData<'a> {
+    fn new(state: &'a mut DaemonState, config: &'a mut Config, req: &'a str, msg: &'a str) -> Self {
+        RequestData {
+            state,
+            config,
+            req: req.to_string(),
+            msg: msg.to_string(),
+        }
+    }
+
+    fn get_new_index(&mut self) {
+        let warn_empty = |titles: &[_]| {
+            if titles.is_empty() {
+                let _ = log(format!("No {} scratchpads found", self.msg), Warn);
+                return true;
+            }
+            false
+        };
+
+        let len = self.config.scratchpads.len();
+        let find_next = |mode| -> usize {
+            let mut index = (self.state.cycle_index + 1) % len;
+            while mode
+                == self.config.scratchpads[&self.config.names[index]]
+                    .options
+                    .special
+            {
+                index = (index + 1) % len;
+            }
+            index
+        };
+
+        let index = if self.msg.contains("special") {
+            if warn_empty(&self.config.cache.special_titles) {
+                return;
+            }
+            find_next(false)
+        } else if self.msg.contains("normal") {
+            if warn_empty(&self.config.cache.normal_titles) {
+                return;
+            }
+            find_next(true)
+        } else {
+            if warn_empty(&self.config.names) {
+                return;
+            }
+            (self.state.cycle_index + 1) % len
+        };
+
+        self.state.cycle_index = index;
+    }
+
+    fn get_next_name(&mut self) -> Option<String> {
+        self.get_new_index();
+        self.state.update_prev_titles(
+            &self.config.scratchpads[&self.config.names[self.state.cycle_index]].title,
+        );
+        Some((&self.config.names[self.state.cycle_index]).into())
+    }
+
+    fn get_config_path(&self) -> Option<String> {
+        if !self.msg.is_empty() && Path::new(&self.msg).exists() {
+            Some(self.msg.clone())
+        } else {
+            None
+        }
+    }
+}
+
+fn trigger_action(sc: &mut Scratchpad, data: &mut RequestData) -> Result<()> {
+    sc.options.toggle(&data.req);
+    sc.trigger(&data.config.cache.replace_map, &data.msg)?;
     Ok(())
 }
 
-fn handle_scratchpad(
-    name: &str,
-    action: &str,
-    config: &mut Config,
-    state: &mut DaemonState,
-) -> Result<()> {
-    let sc = match config.scratchpads.get_mut(name) {
-        Some(sc) => sc,
+fn handle_scratchpad(data: &mut RequestData) -> Result<()> {
+    let mut sc = match data.config.scratchpads.get_mut(data.msg.as_str()) {
+        Some(sc) => sc.clone(),
         None => {
-            let _ = log(format!("Scratchpad '{name}' not found"), Warn);
+            let _ = log(format!("Scratchpad '{}' not found", data.msg), Warn);
             return Ok(());
         }
     };
 
-    state.update_prev_titles(&sc.title);
-    trigger_action(sc, name, action, &config.cache)
+    data.state.update_prev_titles(&sc.title);
+    trigger_action(&mut sc, data)
 }
 
-fn handle_group(
-    name: &str,
-    action: &str,
-    config: &mut Config,
-    state: &mut DaemonState,
-) -> Result<()> {
-    let group = match config.groups.get_mut(name) {
-        Some(group) => group,
+fn handle_group(data: &mut RequestData) -> Result<()> {
+    let group = match data.config.groups.get_mut(data.msg.as_str()) {
+        Some(group) => group.clone(),
         None => {
-            let _ = log(format!("Group '{name}' not found"), Warn);
+            let _ = log(format!("Group '{}' not found", data.msg), Warn);
             return Ok(());
         }
     };
@@ -112,143 +171,111 @@ fn handle_group(
         return Ok(());
     }
 
-    state.update_prev_titles(&group.last().unwrap().title);
+    data.state.update_prev_titles(&group.last().unwrap().title);
 
-    for sc in group {
-        let cover = sc.options.cover;
+    for mut sc in group {
         sc.options.cover = true;
-
-        trigger_action(sc, name, action, &config.cache)?;
-        sc.options.cover = cover;
+        trigger_action(&mut sc, data)?;
     }
     Ok(())
 }
 
-fn get_new_index(msg: &str, config: &Config, state: &mut DaemonState) -> Option<usize> {
-    let warn_empty = |titles: &[_]| {
-        if titles.is_empty() {
-            let _ = log(format!("No {msg} scratchpads found"), Warn);
-            return true;
-        }
-        false
-    };
-
-    let len = config.scratchpads.len();
-    let find_next = |mode| -> usize {
-        let mut index = (state.cycle_index + 1) % len;
-        while mode == config.scratchpads[&config.names[index]].options.special {
-            index = (index + 1) % len;
-        }
-        index
-    };
-
-    let index = if msg.contains("special") {
-        if warn_empty(&config.cache.special_titles) {
-            return None;
-        }
-        find_next(false)
-    } else if msg.contains("normal") {
-        if warn_empty(&config.cache.normal_titles) {
-            return None;
-        }
-        find_next(true)
-    } else {
-        if warn_empty(&config.names) {
-            return None;
-        }
-        (state.cycle_index + 1) % len
-    };
-
-    Some(index)
-}
-
-fn get_next_name(msg: &str, config: &Config, state: &mut DaemonState) -> Option<String> {
-    state.cycle_index = get_new_index(msg, config, state)?;
-    state.update_prev_titles(&config.scratchpads[&config.names[state.cycle_index]].title);
-    Some((&config.names[state.cycle_index]).into())
-}
-
-fn handle_cycle(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if config.scratchpads.is_empty() {
+fn handle_cycle(mut data: RequestData) -> Result<()> {
+    if data.config.scratchpads.is_empty() {
         return log("No scratchpads configured for 'cycle'".into(), Warn);
     }
 
-    if let Some(name) = get_next_name(msg, config, state) {
-        handle_scratchpad(&name, "", config, state)?;
+    if let Some(name) = data.get_next_name() {
+        data.msg = name;
+        handle_scratchpad(&mut data)?;
+        return Ok(());
     }
 
     Ok(())
 }
 
-fn handle_previous(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if state.prev_titles[0].is_empty() {
+fn handle_previous(mut data: RequestData) -> Result<()> {
+    if data.state.prev_titles[0].is_empty() {
         return log("No previous scratchpads exist".into(), Warn);
     }
 
     let is_prev = |ac: &Client| {
-        ac.initial_class == state.prev_titles[0] || ac.initial_title == state.prev_titles[0]
+        ac.initial_class == data.state.prev_titles[0]
+            || ac.initial_title == data.state.prev_titles[0]
     };
 
-    let name = match Client::get_active() {
-        Ok(Some(ac)) if is_prev(&ac) => &state.prev_titles[1],
-        _ => &state.prev_titles[0],
+    data.msg = match Client::get_active() {
+        Ok(Some(ac)) if is_prev(&ac) => data.state.prev_titles[1].clone(),
+        _ => data.state.prev_titles[0].clone(),
     };
 
-    handle_scratchpad(&name.clone(), msg, config, state)?;
+    handle_scratchpad(&mut data)?;
     Ok(())
 }
 
-fn handle_call(msg: &str, req: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    if msg.is_empty() {
+fn handle_call(mut data: RequestData) -> Result<()> {
+    if data.msg.is_empty() {
         return log(
-            format!("No scratchpad or group title given to '{req}'"),
+            format!("No scratchpad or group title given to '{}'", data.req),
             Warn,
         );
     }
 
-    if let Some(("group", name)) = msg.split_once(":") {
-        if config.groups.contains_key(name) {
-            return handle_group(name, req, config, state);
+    if let Some(("group", name)) = data.msg.split_once(":") {
+        if data.config.groups.contains_key(name) {
+            data.msg = name.to_string();
+            return handle_group(&mut data);
         }
     }
 
-    handle_scratchpad(msg, req, config, state)
+    handle_scratchpad(&mut data)
 }
 
-fn handle_manual(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    let args: Vec<&str> = msg.splitn(3, '^').collect();
-    state.update_prev_titles(args[0]);
-
-    let scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
-    config.add_scratchpad(args[0], &scratchpad);
-    scratchpad.trigger(&config.cache.replace_map, args[0])
-}
-
-fn get_config_path(msg: &str) -> Option<String> {
-    if !msg.is_empty() && Path::new(msg).exists() {
-        Some(msg.to_string())
-    } else {
-        None
+fn handle_attach(data: RequestData) -> Result<()> {
+    if let Some(client) = Client::get_active()? {
+        let class = client.initial_class;
+        let scratchpad = Scratchpad::new(&class, "", &data.msg);
+        data.config.add_scratchpad(&class, &scratchpad);
     }
+
+    Ok(())
 }
 
-fn handle_reload(msg: &str, config: &mut Config, state: &mut DaemonState) -> Result<()> {
-    config.reload(get_config_path(msg))?;
-    if state.options.eager {
-        autospawn(config)?;
+fn handle_manual(mut data: RequestData) -> Result<()> {
+    let args: Vec<&str> = data.msg.splitn(3, '^').collect();
+    data.state.update_prev_titles(args[0]);
+
+    let mut scratchpad = Scratchpad::new(args[0], args[1], &args[2..].join(" "));
+    data.config.add_scratchpad(args[0], &scratchpad);
+
+    data.msg = args[0].to_string();
+    data.req = String::new();
+    let _ = trigger_action(&mut scratchpad, &mut data);
+    Ok(())
+}
+
+fn handle_reload(data: RequestData) -> Result<()> {
+    data.config.reload(data.get_config_path())?;
+    if data.state.options.eager {
+        autospawn(data.config)?;
     }
 
     log("Configuration reloaded".to_string(), Info)?;
     Ok(())
 }
 
-fn handle_get_config(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
-    stream.write_all(config.get_config_str().as_bytes())?;
+fn handle_get_config(stream: &mut UnixStream, data: RequestData) -> Result<()> {
+    stream.write_all(data.config.get_config_str().as_bytes())?;
     Ok(())
 }
 
-fn handle_killall(config: &Config) -> Result<()> {
-    let is_scratchpad = |cl: &Client| config.scratchpads.values().any(|sc| sc.matches_client(cl));
+fn handle_killall(data: RequestData) -> Result<()> {
+    let is_scratchpad = |cl: &Client| {
+        data.config
+            .scratchpads
+            .values()
+            .any(|sc| sc.matches_client(cl))
+    };
 
     let kill = |cl: Client| {
         hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address))
@@ -262,15 +289,16 @@ fn handle_killall(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_hideall(config: &Config) -> Result<()> {
-    move_floating(&config.cache.normal_map)?;
+fn handle_hideall(data: RequestData) -> Result<()> {
+    move_floating(&data.config.cache.normal_map)?;
     if let Ok(Some(ac)) = Client::get_active() {
         hide_special(&ac);
     }
     Ok(())
 }
 
-fn handle_menu(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
+fn handle_menu(stream: &mut UnixStream, data: RequestData) -> Result<()> {
+    let config = data.config;
     let list = config.names.join("\n")
         + "\n"
         + &config
@@ -282,27 +310,26 @@ fn handle_menu(stream: &mut UnixStream, config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_request(
-    (req, msg): (&str, &str),
-    stream: &mut UnixStream,
-    state: &mut DaemonState,
-    config: &mut Config,
-) -> Result<()> {
-    match req {
-        "toggle" | "summon" | "show" | "hide" => handle_call(msg, req, config, state),
-        "get-config" => handle_get_config(stream, config),
-        "previous" => handle_previous(msg, config, state),
-        "kill-all" => handle_killall(config),
-        "hide-all" => handle_hideall(config),
-        "reload" => handle_reload(msg, config, state),
-        "manual" => handle_manual(msg, config, state),
-        "cycle" => handle_cycle(msg, config, state),
-        "menu" => handle_menu(stream, config),
+fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
+    match data.req.as_str() {
+        "toggle" | "summon" | "show" | "hide" => handle_call(data),
+        "get-config" => handle_get_config(stream, data),
+        "previous" => handle_previous(data),
+        "kill-all" => handle_killall(data),
+        "hide-all" => handle_hideall(data),
+        "reload" => handle_reload(data),
+        "manual" => handle_manual(data),
+        "attach" => handle_attach(data),
+        "cycle" => handle_cycle(data),
+        "menu" => handle_menu(stream, data),
         "kill" => {
             let _ = log("Recieved 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
         }
-        _ => log(format!("Unknown request: '{req} {msg}'"), Warn),
+        _ => log(
+            format!("Unknown request: '{} {}'", data.req, data.msg),
+            Warn,
+        ),
     }
 }
 
@@ -350,7 +377,9 @@ fn start_unix_listener(
 
                 let conf = &mut config.write().unwrap_log(file!(), line!());
 
-                match handle_request((req, msg), &mut stream, state, conf) {
+                let data = RequestData::new(state, conf, req, msg);
+
+                match handle_request(data, &mut stream) {
                     Ok(()) => (),
                     Err(HyprError::Other(e)) if e == "kill" => break,
                     Err(e) => log(format!("{e} in '{req} {msg}'"), Warn)?,
@@ -431,31 +460,21 @@ mod tests {
     fn test_state() {
         let config = Config::new(Some("test_configs/test_config3.txt".into())).unwrap();
         let mut state = DaemonState::new("", &config);
+        let mut config_mut = config.clone();
 
-        assert_eq!(
-            get_next_name("special", &config, &mut state),
-            Some("test_special".into())
-        );
-        assert_eq!(
-            get_next_name("normal", &config, &mut state),
-            Some("test_sticky".into())
-        );
-        assert_eq!(
-            get_next_name("", &config, &mut state),
-            Some("test_shiny".into())
-        );
-        assert_eq!(
-            get_next_name("", &config, &mut state),
-            Some("test_pin".into())
-        );
-        assert_eq!(
-            get_next_name("", &config, &mut state),
-            Some("test_normal".into())
-        );
-        assert_eq!(
-            get_next_name("unknown", &config, &mut state),
-            Some("test_nonfloating".into())
-        );
+        let test_cases = vec![
+            ("special", "test_special"),
+            ("normal", "test_sticky"),
+            ("", "test_shiny"),
+            ("", "test_pin"),
+            ("", "test_normal"),
+            ("unknown", "test_nonfloating"),
+        ];
+
+        for (message, expected_name) in test_cases {
+            let mut data = RequestData::new(&mut state, &mut config_mut, "", message);
+            assert_eq!(data.get_next_name(), Some(expected_name.into()));
+        }
     }
 
     struct TestResources {
