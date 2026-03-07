@@ -1,21 +1,23 @@
 {
   lib,
   rustPlatform,
-}:
-rustPlatform.buildRustPackage {
-  pname = "hyprscratch";
-  version = "0.6.4";
+}: let
+  cargo = lib.importTOML ../Cargo.toml;
+in
+  rustPlatform.buildRustPackage {
+    pname = "hyprscratch";
+    inherit (cargo.package) version;
 
-  src = lib.cleanSource ../.;
+    src = lib.cleanSource ../.;
 
-  cargoLock.lockFile = ../Cargo.lock;
+    cargoLock.lockFile = ../Cargo.lock;
 
-  doCheck = false;
+    doCheck = false;
 
-  meta = {
-    description = "Improved scratchpad functionality for Hyprland";
-    homepage = "https://github.com/sashetophizika/hyprscratch";
-    license = lib.licenses.mit;
-    mainProgram = "hyprscratch";
-  };
-}
+    meta = {
+      description = "Improved scratchpad functionality for Hyprland";
+      homepage = "https://github.com/sashetophizika/hyprscratch";
+      license = lib.licenses.mit;
+      mainProgram = "hyprscratch";
+    };
+  }
