@@ -18,10 +18,11 @@ const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
 const DEFAULT_LOGFILE: &str = "/tmp/hyprscratch/hyprscratch.log";
 const DEFAULT_SOCKET: &str = "/tmp/hyprscratch/hyprscratch.sock";
 
-const DEFAULT_CONFIG_FILES: [&str; 4] = [
+const DEFAULT_CONFIG_FILES: [&str; 5] = [
     "hypr/hyprscratch.conf",
     "hyprscratch/config.conf",
     "hyprscratch/hyprscratch.conf",
+    "hypr/hyprland.lua",
     "hypr/hyprland.conf",
 ];
 

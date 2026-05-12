@@ -427,7 +427,9 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
         File::open(config)?.read_to_string(&mut content)?;
 
         let mut new_data = if config.contains("hyprland.conf") || ext == "txt" {
-            parse_config(&content, parent)?
+            parse_config(&content, parent, false)?
+        } else if ext == "lua" {
+            parse_config(&content, parent, true)?
         } else {
             parse_hyprlang(&content)?
         };
@@ -489,15 +491,25 @@ fn split_args(line: &str) -> Vec<String> {
     args
 }
 
-fn get_lines_with(pat: &str, config: &str) -> Vec<String> {
+fn get_lines_with(pat: &str, config: &str, is_lua: bool) -> Vec<String> {
     let mut lines = vec![];
+    let comment = if is_lua { "--" } else { "#" };
+
     for line in config.lines() {
-        if line.trim().starts_with('#') {
+        if line.trim().starts_with(comment) {
             continue;
         }
 
-        if let Some(l) = line.find(pat) {
-            lines.push(line.split_at(l).1.to_string());
+        if let Some(i) = line.find(pat) {
+            let hl = &line[i..];
+
+            if is_lua {
+                if let Some(q) = hl.find('\"') {
+                    lines.push(hl[..q].into());
+                }
+            } else {
+                lines.push(hl.into());
+            }
         }
     }
     lines
@@ -538,14 +550,14 @@ fn warn_unknown_options(opts: &str) {
         .fold(false, |acc, x| warn_unknown(x, acc));
 }
 
-fn extract_rules(cmd: &String) -> [String; 2] {
+fn extract_rules(cmd: &str) -> [String; 2] {
     let i1 = cmd.find('[').unwrap_or_default();
     let i2 = cmd.find(']').unwrap_or_default();
 
-    if i2 == 0 {
-        ["".into(), cmd.trim().into()]
-    } else {
+    if i2 > i1 {
         [cmd[i1 + 1..i2].trim().into(), cmd[i2 + 1..].trim().into()]
+    } else {
+        ["".into(), cmd.trim().into()]
     }
 }
 
@@ -594,7 +606,7 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
         conf_file.read_to_string(&mut config)?;
         let parent = path.parent().unwrap_log(file!(), line!());
 
-        let data = parse_config(&config, parent)?;
+        let data = parse_config(&config, parent, false)?;
         let _ = log(format!("Source file {source_path} parsed"), Info);
         Ok(data)
     } else {
@@ -603,15 +615,15 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
     }
 }
 
-fn parse_config(config: &str, parent: &Path) -> Result<ConfigData> {
+fn parse_config(config: &str, parent: &Path, is_lua: bool) -> Result<ConfigData> {
     let mut config_data = ConfigData::new();
 
-    let lines = get_lines_with("hyprscratch ", config);
+    let lines = get_lines_with("hyprscratch ", config, is_lua);
     for line in lines {
         config_data.add_to_config(&split_args(&line));
     }
 
-    for source in &get_lines_with("source ", config) {
+    for source in &get_lines_with("source ", config, is_lua) {
         let mut data = parse_source_config(source, parent)?;
         config_data.append(&mut data);
     }
@@ -838,6 +850,7 @@ mod tests {
         let config_data = parse_config(
             &open_conf("./test_configs/test_config1.txt"),
             Path::new("./test_configs"),
+            false,
         )
         .unwrap();
 
@@ -850,6 +863,7 @@ mod tests {
         let config_data = parse_config(
             &open_conf("./test_configs/test_nested/config_main.txt"),
             Path::new("./test_configs/test_nested"),
+            false,
         )
         .unwrap();
 
