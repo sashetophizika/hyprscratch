@@ -648,6 +648,52 @@ mod tests {
         resources.assert_active();
 
         assert_eq!(Workspace::get_active().unwrap().name, "test");
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Id(1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Id(1))
+            .unwrap();
+    }
+
+    #[test]
+    fn test_attach() {
+        use crate::daemon::initialize_daemon;
+
+        let sock = "/tmp/hyprscratch_attach_test.sock";
+
+        std::thread::spawn(|| {
+            initialize_daemon(
+                String::new(),
+                Some("./test_configs/test_config3.txt".to_string()),
+                Some(sock),
+            );
+        });
+        sleep(Duration::from_millis(100));
+
+        let resources = TestResources {
+            title: "test_attach".to_string(),
+            command: "[float; size 30% 30%] kitty --class test_attach --title test_attach"
+                .to_string(),
+            title_map: HashMap::from([("test_attach".to_string(), "test_attach".to_string())]),
+        };
+
+        resources.assert_not_present();
+
+        dispatchers().exec(&resources.command).unwrap();
+        sleep(Duration::from_millis(1000));
+
+        resources.assert_present();
+        resources.assert_active();
+
+        send_request(Some(sock), "attach", "").unwrap();
+        sleep(Duration::from_millis(200));
+
+        send_request(Some(sock), "toggle", "test_attach").unwrap();
+        sleep(Duration::from_millis(500));
+
+        resources.assert_on_active(0);
+
+        send_request(Some(sock), "toggle", "test_attach").unwrap();
+        sleep(Duration::from_millis(500));
+
+        resources.assert_on_active(1);
     }
 }
