@@ -859,6 +859,24 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_lua_config() {
+        let config_data = parse_config(
+            &open_conf("./test_configs/test_lua.lua"),
+            Path::new("./test_configs"),
+            true,
+        )
+        .unwrap();
+
+        let all = expected_scratchpads(true);
+        let expected: Scratchpads = ["btop", "Loading…"]
+            .iter()
+            .map(|&k| (k.into(), all[k].clone()))
+            .collect();
+
+        assert_eq!(config_data.scratchpads, expected);
+    }
+
+    #[test]
     fn test_recursive_config() {
         let config_data = parse_config(
             &open_conf("./test_configs/test_nested/config_main.txt"),
