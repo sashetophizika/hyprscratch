@@ -3,7 +3,8 @@ use crate::daemon::{DaemonOptions, DaemonState};
 use crate::logs::*;
 use crate::utils::*;
 use hyprland::data::{Client, Clients, Workspace};
-use hyprland::dispatch::*;
+use crate::dispatchers::dispatchers;
+use hyprland::dispatch::WindowIdentifier;
 use hyprland::event_listener::EventListener;
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -31,7 +32,8 @@ fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
                 .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
                 .filter(|cl| is_known(ephemeral_titles, cl))
                 .for_each(|cl| {
-                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address.clone()))
+                    dispatchers()
+                        .close_window(WindowIdentifier::Address(cl.address.clone()))
                         .log_err(f, l);
                 });
         }

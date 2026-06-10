@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::dispatchers::dispatchers;
 use crate::event::start_event_listeners;
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
@@ -6,7 +7,7 @@ use crate::utils::*;
 use crate::DEFAULT_SOCKET;
 use crate::HYPRSCRATCH_DIR;
 use hyprland::data::{Client, Clients};
-use hyprland::dispatch::*;
+use hyprland::dispatch::WindowIdentifier;
 use hyprland::error::HyprError;
 use hyprland::keyword::Keyword;
 use hyprland::prelude::*;
@@ -278,7 +279,8 @@ fn handle_killall(data: RequestData) -> Result<()> {
     };
 
     let kill = |cl: Client| {
-        hyprland::dispatch!(CloseWindow, WindowIdentifier::Address(cl.address))
+        dispatchers()
+            .close_window(WindowIdentifier::Address(cl.address))
             .log_err(file!(), line!());
     };
 
@@ -424,6 +426,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 mod tests {
     use super::*;
     use hyprland::data::{Clients, Workspace};
+    use hyprland::dispatch::WorkspaceIdentifierWithSpecial;
     use std::io::prelude::*;
     use std::{env, fs::File, thread::sleep, time::Duration};
 
@@ -490,7 +493,9 @@ mod tests {
                 .zip(&self.expected_workspace)
                 .for_each(|(title, ws)| {
                     if ws != "none" {
-                        hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(title)).unwrap();
+                        dispatchers()
+                            .close_window(WindowIdentifier::Title(title))
+                            .unwrap();
                     }
                 });
 
@@ -508,7 +513,7 @@ mod tests {
         resources
             .commands
             .clone()
-            .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
+            .map(|command| dispatchers().exec(&command).unwrap());
         sleep(Duration::from_millis(1000));
     }
 
@@ -569,9 +574,13 @@ mod tests {
 
         setup_test(&resources);
 
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .unwrap();
         sleep(Duration::from_millis(500));
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .unwrap();
 
         verify_test(&resources);
         sleep(Duration::from_millis(500));
@@ -613,11 +622,9 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         setup_test(&resources);
 
-        hyprland::dispatch!(
-            FocusWindow,
-            WindowIdentifier::Address(active_client.address)
-        )
-        .unwrap();
+        dispatchers()
+            .focus_window(WindowIdentifier::Address(active_client.address))
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
@@ -658,11 +665,15 @@ mod tests {
         };
 
         setup_test(&resources);
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .unwrap();
         sleep(Duration::from_millis(500));
     }
 
@@ -705,4 +716,5 @@ mod tests {
         let mut config_file = File::create(config_path).unwrap();
         config_file.write_all(content.as_bytes()).unwrap();
     }
+
 }

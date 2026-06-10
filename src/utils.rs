@@ -3,6 +3,7 @@ use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
 use hyprland::data::{Client, Clients};
+use crate::dispatchers::dispatchers;
 use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -87,7 +88,7 @@ pub fn get_flag_arg(args: &[String], flag: &str) -> Option<String> {
 
 pub fn dequote(s: &str) -> String {
     let tr = s.trim();
-    if tr.is_empty() {
+    if tr.len() <= 1 {
         return String::new();
     }
 
@@ -105,21 +106,19 @@ pub fn send_request(socket: Option<&str>, req: &str, msg: &str) -> Result<()> {
 
 pub fn move_to_special(cl: &Client, workspace: &str) {
     if cl.pinned {
-        hyprland::dispatch!(
-            TogglePinWindow,
-            WindowIdentifier::Address(cl.address.clone())
-        )
-        .log_err(file!(), line!());
+        dispatchers()
+            .toggle_pin_window(WindowIdentifier::Address(cl.address.clone()))
+            .log_err(file!(), line!());
     }
 
-    hyprland::dispatch!(
-        MoveToWorkspaceSilent,
-        WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
-        Some(WindowIdentifier::Address(cl.address.clone()))
-    )
-    .unwrap_or_else(|e| {
-        log(format!("MoveToSpecial returned Err: {e}"), Debug).unwrap();
-    });
+    dispatchers()
+        .move_to_workspace_silent(
+            WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
+            Some(WindowIdentifier::Address(cl.address.clone())),
+        )
+        .unwrap_or_else(|e| {
+            log(format!("MoveToSpecial returned Err: {e}"), Debug).unwrap();
+        });
 }
 
 pub fn is_known(titles: &[String], cl: &Client) -> bool {
@@ -140,7 +139,8 @@ pub fn auto_hide(cl: &Client, title_map: &HashMap<String, String>) {
 
 pub fn hide_special(cl: &Client) {
     if let Some(("special", workspace)) = cl.workspace.name.split_once(":") {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(workspace.into()))
+        dispatchers()
+            .toggle_special_workspace(Some(workspace.into()))
             .log_err(file!(), line!());
     }
 }
@@ -203,7 +203,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |(n, sc): (&String, &Scratchpad)| {
         prepare_commands(sc, Some(true), n)
             .iter()
-            .for_each(|cmd| hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!()));
+            .for_each(|cmd| dispatchers().exec(cmd).log_err(file!(), line!()));
     };
 
     let clients = Clients::get()?;
@@ -241,7 +241,7 @@ mod tests {
                 .zip(self.spawned)
                 .filter(|(_, spawned)| *spawned == 1)
                 .for_each(|(title, _)| {
-                    hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&title)).unwrap();
+                    dispatchers().close_window(WindowIdentifier::Title(&title)).unwrap();
                 });
             sleep(Duration::from_millis(500));
         }
@@ -278,7 +278,7 @@ mod tests {
         resources
             .commands
             .clone()
-            .map(|command| hyprland::dispatch!(Exec, &command).unwrap());
+            .map(|command| dispatchers().exec(&command).unwrap());
         sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();

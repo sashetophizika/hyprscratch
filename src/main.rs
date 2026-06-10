@@ -1,5 +1,6 @@
 mod config;
 mod daemon;
+mod dispatchers;
 mod event;
 mod extra;
 mod logs;
@@ -117,8 +118,8 @@ fn resolve_command(args: &[String], config: Option<String>, socket: Option<&str>
 }
 
 fn hyprscratch(args: &[String]) -> Result<()> {
-    let depracated_features = ["summon"];
-    for feature in depracated_features {
+    let deprecated_features = ["summon"];
+    for feature in deprecated_features {
         if args.contains(&feature.to_string()) {
             warn_deprecated(feature)?;
         }

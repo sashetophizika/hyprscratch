@@ -1,7 +1,8 @@
+use crate::dispatchers::dispatchers;
 use crate::logs::*;
 use crate::utils::*;
 use hyprland::data::{Client, Clients, Monitors, Workspace};
-use hyprland::dispatch::*;
+use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::collections::HashMap;
@@ -41,7 +42,7 @@ impl HyprlandState {
     }
 
     fn toggle_special(&self) -> Result<()> {
-        hyprland::dispatch!(ToggleSpecialWorkspace, Some(self.special_workspace.clone()))
+        dispatchers().toggle_special_workspace(Some(self.special_workspace.clone()))
     }
 }
 
@@ -158,10 +159,7 @@ impl Scratchpad {
     }
 
     pub fn matches_client(&self, client: &Client) -> bool {
-        if self.title == client.initial_title || self.title == client.initial_class {
-            return true;
-        }
-        false
+        self.title == client.initial_title || self.title == client.initial_class
     }
 
     fn capture_special(&self, state: &HyprlandState) -> Result<()> {
@@ -190,7 +188,7 @@ impl Scratchpad {
 
     fn spawn_special(&self, state: &HyprlandState) {
         for cmd in &prepare_commands(self, Some(false), &state.special_workspace) {
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            dispatchers().exec(cmd).log_err(file!(), line!());
         }
     }
 
@@ -229,7 +227,7 @@ impl Scratchpad {
         }
 
         for cmd in &prepare_commands(self, None, &state.special_workspace) {
-            hyprland::dispatch!(Exec, &cmd).log_err(file!(), line!());
+            dispatchers().exec(cmd).log_err(file!(), line!());
         }
     }
 
@@ -239,22 +237,16 @@ impl Scratchpad {
             .iter()
             .filter(|cl| !self.is_on_workspace(cl, state))
         {
-            hyprland::dispatch!(
-                MoveToWorkspaceSilent,
+            dispatchers().move_to_workspace_silent(
                 WorkspaceIdentifierWithSpecial::Name(&self.get_workspace_name(state)),
-                Some(WindowIdentifier::Address(client.address.clone()))
+                Some(WindowIdentifier::Address(client.address.clone())),
             )?;
 
-            hyprland::dispatch!(
-                FocusWindow,
-                WindowIdentifier::Address(client.address.clone())
-            )?;
+            dispatchers().focus_window(WindowIdentifier::Address(client.address.clone()))?;
 
             if self.options.pin && !client.pinned {
-                hyprland::dispatch!(
-                    TogglePinWindow,
-                    WindowIdentifier::Address(client.address.clone())
-                )?;
+                dispatchers()
+                    .toggle_pin_window(WindowIdentifier::Address(client.address.clone()))?;
             }
 
             if !self.options.poly {
@@ -337,10 +329,7 @@ impl Scratchpad {
     }
 
     fn refocus(client: &Client) -> Result<()> {
-        hyprland::dispatch!(
-            FocusWindow,
-            WindowIdentifier::Address(client.address.clone())
-        )?;
+        dispatchers().focus_window(WindowIdentifier::Address(client.address.clone()))?;
         Ok(())
     }
 
@@ -360,7 +349,7 @@ impl Scratchpad {
         }
 
         self.hide_active(title_map, &state);
-        Dispatch::call(DispatchType::BringActiveToTop)?;
+        dispatchers().bring_active_to_top()?;
         Ok(())
     }
 }
@@ -447,7 +436,9 @@ mod tests {
     impl Drop for TestResources {
         fn drop(&mut self) {
             self.command.split('?').for_each(|_| {
-                hyprland::dispatch!(CloseWindow, WindowIdentifier::Title(&self.title)).unwrap();
+                dispatchers()
+                    .close_window(WindowIdentifier::Title(&self.title))
+                    .unwrap();
                 sleep(Duration::from_millis(500));
             });
         }
@@ -582,11 +573,15 @@ mod tests {
 
         resources.assert_active();
 
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Relative(-1)).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .unwrap();
     }
 
     #[test]
@@ -636,7 +631,9 @@ mod tests {
 
         resources.assert_not_present();
 
-        hyprland::dispatch!(Workspace, WorkspaceIdentifierWithSpecial::Name("test")).unwrap();
+        dispatchers()
+            .workspace(WorkspaceIdentifierWithSpecial::Name("test"))
+            .unwrap();
         sleep(Duration::from_millis(500));
         assert_eq!(Workspace::get_active().unwrap().name, "test");
 

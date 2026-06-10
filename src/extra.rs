@@ -50,7 +50,7 @@ fn color(str: &str) -> String {
 
 fn fancify(width: usize, str: &str) -> String {
     let str = if str.len() <= width {
-        format!("{:width$}", str, width = width)
+        format!("{str:width$}")
     } else {
         str[..width - 1].to_string() + "⋯"
     };
@@ -72,7 +72,7 @@ fn print_table_row(data: &[&str], widths: &[usize]) {
     println!("{row_str}");
 }
 
-fn max_len(xs: &Vec<&str>, min: usize, max: usize) -> usize {
+fn max_len(xs: &[&str], min: usize, max: usize) -> usize {
     xs.iter()
         .map(|x| x.chars().count())
         .max()
@@ -91,6 +91,9 @@ fn get_config_data(socket: Option<&str>) -> Result<String> {
 }
 
 fn print_group_table(group_data: &[Vec<&str>]) {
+    if group_data.len() < 2 {
+        return;
+    }
     let [names, scratchpadss] = &group_data[0..2] else {
         return;
     };
@@ -133,12 +136,15 @@ fn get_centered_conf(conf: &str, width: usize) -> String {
 }
 
 fn print_scratchpad_table(scratchpad_data: &[Vec<&str>], conf: &str) {
+    if scratchpad_data.len() < 5 {
+        return;
+    }
     let [names, titles, rules, commands, options] = &scratchpad_data[0..5] else {
         return;
     };
 
     let cols = termsize::get().map(|size| size.cols).unwrap_or(150) as usize;
-    let cols = if cols > 14 { cols - 14 } else { 0 };
+    let cols = cols.saturating_sub(14);
 
     let field_widths = vec![
         max_len(names, 4, cols / 10),
@@ -201,17 +207,17 @@ fn print_tables((conf, scratchpad_data, group_data): ParsedConfig) {
 }
 
 fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
-    let parsed_data = &data
+    let parsed_data: Vec<Vec<&str>> = data
         .splitn(field_num, '\u{2C01}')
-        .map(|x| x.split('\u{2C02}').collect::<Vec<_>>())
-        .collect::<Vec<_>>()[0..field_num];
+        .map(|x| x.split('\u{2C02}').collect())
+        .collect();
 
     if parsed_data.len() < field_num {
         let _ = log("Config data could not be parsed".into(), Error);
         return vec![];
     }
 
-    parsed_data.to_vec()
+    parsed_data
 }
 
 fn parse_config_data(data: &str) -> ParsedConfig {
@@ -275,7 +281,7 @@ pub fn print_full_raw(socket: Option<&str>) -> Result<()> {
 }
 
 fn run_basic_menu(socket: Option<&str>, list: &str, action: &str) -> Result<()> {
-    print!("Exisiting scratchpads:\n{list}\nEnter scratchpad: ");
+    print!("Existing scratchpads:\n{list}\nEnter scratchpad: ");
 
     io::stdout().flush()?;
     let mut name = String::new();
@@ -328,7 +334,7 @@ pub fn menu(socket: Option<&str>, mode: &str, action: &str) -> Result<()> {
         _ => run_basic_menu(socket, &list, action),
     }
     .unwrap_or_else(|e| {
-        let _ = log(format!("Menu {mode} was unsucessfull: {e}"), Warn);
+        let _ = log(format!("Menu {mode} was unsuccessful: {e}"), Warn);
     });
 
     Ok(())
@@ -338,7 +344,7 @@ pub fn print_help() {
     println!(
         "Usage:
   Daemon:
-    hypscratch init [options...]
+    hyprscratch init [options...]
   Scratchpads:
     hyprscratch title command [options...]
 

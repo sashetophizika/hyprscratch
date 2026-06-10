@@ -47,7 +47,7 @@ impl ConfigData {
         if let Some(group) = self.groups.get_mut(name) {
             group.append(scratchpads);
         } else {
-            self.groups.insert(name.into(), scratchpads.to_vec());
+            self.groups.insert(name.into(), scratchpads.clone());
         }
     }
 
@@ -247,13 +247,13 @@ impl ConfigCache {
             self.normal_titles.push(title.into());
         }
         if !options.special && !options.persist {
-            self.replace_map.insert(name.into(), title.into());
+            self.replace_map.insert(title.into(), name.into());
         }
         if !options.pin && !options.sticky {
-            self.clean_map.insert(name.into(), title.into());
+            self.clean_map.insert(title.into(), name.into());
         }
         if !options.shiny && !options.sticky && !options.pin {
-            self.spotless_map.insert(name.into(), title.into());
+            self.spotless_map.insert(title.into(), name.into());
         }
     }
 }
@@ -434,7 +434,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
             parse_hyprlang(&content)?
         };
 
-        let _ = log(format!("Config file {config} parsed successfully"), Warn);
+        let _ = log(format!("Config file {config} parsed successfully"), Info);
         config_data.append(&mut new_data);
     }
 
@@ -466,7 +466,7 @@ fn split_args(line: &str) -> Vec<String> {
         } else {
             if is_quote(word_bytes[0]) {
                 quotes.push(word_bytes[0]);
-            } else if word_bytes[0] == b'\\' && is_quote(word_bytes[1]) {
+            } else if word_bytes.len() > 1 && word_bytes[0] == b'\\' && is_quote(word_bytes[1]) {
                 quotes.push(word_bytes[1]);
             }
 
@@ -890,7 +890,7 @@ mod tests {
             .collect()
     }
 
-    fn create_reosources(config_file: &str) -> ReloadResources {
+    fn create_resources(config_file: &str) -> ReloadResources {
         ReloadResources {
             config_contents_a: b"bind = $mainMod, a, exec, hyprscratch firefox 'firefox' cover
 bind = $mainMod, b, exec, hyprscratch btop 'kitty --title btop -e btop' cover shiny lazy show hide special sticky
@@ -1006,7 +1006,7 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
     fn test_reload() {
         let config_path = "./test_configs/test_config2.txt";
         let mut config_file = File::create(config_path).unwrap();
-        let mut resources = create_reosources(config_path);
+        let mut resources = create_resources(config_path);
         config_file.write_all(resources.config_contents_a).unwrap();
 
         let mut config_b = Config::new(Some(config_path.to_string())).unwrap();
