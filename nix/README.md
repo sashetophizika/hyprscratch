@@ -1,6 +1,7 @@
-## Nix Installation Instructions:
+## Nix Installation Instructions
 
-### Flake:
+### Flake
+
 ```nix
 inputs = {
   hyprscratch = {
@@ -10,7 +11,8 @@ inputs = {
 };
 ```
 
-### Home Manager:
+### Home Manager
+
 ```nix
 {inputs, pkgs, ...}: {
   home.packages = [inputs.hyprscratch.packages.${pkgs.system}.default];
@@ -32,8 +34,8 @@ inputs = {
 }
 ```
 
-### Non-NixOS:
+### Non-NixOS
+
 ```bash
 nix profile install github:sashetophizika/hyprscratch
 ```
-
