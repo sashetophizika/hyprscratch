@@ -325,7 +325,7 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
         "cycle" => handle_cycle(data),
         "menu" => handle_menu(stream, data),
         "kill" => {
-            let _ = log("Recieved 'kill' request, terminating listener".into(), Info);
+            let _ = log("Received 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
         }
         _ => log(

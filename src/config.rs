@@ -771,10 +771,10 @@ mod tests {
                 "btop",
                 "Loading…",
                 "\\\"",
-                " a program with ' a wierd ' name",
+                " a program with ' a weird ' name",
             ]
         } else {
-            vec!["btop", "nautilus", "noname", "wierd"]
+            vec!["btop", "nautilus", "noname", "weird"]
         };
 
         let scratchpads = vec![
@@ -792,8 +792,8 @@ mod tests {
             ),
             Scratchpad::new("\\\"", "\\'", "", "cover lazy special"),
             Scratchpad::new(
-                " a program with ' a wierd ' name",
-                "a \"command with\" \\'a wierd\\' format",
+                " a program with ' a weird ' name",
+                "a \"command with\" \\'a weird\\' format",
                 "",
                 "hide show",
             ),
@@ -815,7 +815,7 @@ mod tests {
         );
         groups.insert(
             "two".into(),
-            vec![scs["btop"].clone(), scs["wierd"].clone()],
+            vec![scs["btop"].clone(), scs["weird"].clone()],
         );
         groups.insert(
             "three".into(),
