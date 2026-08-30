@@ -15,6 +15,7 @@ hsc.hide_all()
 ```
 
 ## Example
+
 ```lua
 local hsc = require("hyprscratch")
 
