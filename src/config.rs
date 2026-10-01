@@ -245,6 +245,7 @@ impl ConfigCache {
         }
         if !options.special {
             self.normal_titles.push(title.into());
+            self.normal_map.insert(title.into(), name.into());
         }
         if !options.special && !options.persist {
             self.replace_map.insert(title.into(), name.into());
@@ -279,7 +280,7 @@ impl Config {
                 config_files[0]
             ),
             Info,
-        )?;
+        );
 
         Ok(Config {
             cache: ConfigCache::new(&config_data.scratchpads),
@@ -399,12 +400,12 @@ fn find_config_files() -> Vec<String> {
 fn get_config_files(config_path: Option<String>) -> Result<Vec<String>> {
     let default_configs = find_config_files();
     if default_configs.is_empty() && config_path.is_none() {
-        log("No configuration files found".into(), Error)?;
+        log("No configuration files found".into(), Error);
     }
 
     if let Some(conf) = config_path {
         if !Path::new(&conf).exists() {
-            log(format!("Config file not found: {conf}"), Error)?;
+            log(format!("Config file not found: {conf}"), Error);
         }
 
         if default_configs.contains(&conf) {
@@ -426,7 +427,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
         let mut content = String::new();
         File::open(config)?.read_to_string(&mut content)?;
 
-        let mut new_data = if config.contains("hyprland.conf") || ext == "txt" {
+        let mut new_data = if ext == "txt" {
             parse_config(&content, parent, false)?
         } else if ext == "lua" {
             parse_config(&content, parent, true)?
@@ -434,7 +435,7 @@ fn get_config_data(config_files: &[String]) -> Result<ConfigData> {
             parse_hyprlang(&content)?
         };
 
-        let _ = log(format!("Config file {config} parsed successfully"), Info);
+        log(format!("Config file {config} parsed successfully"), Info);
         config_data.append(&mut new_data);
     }
 
@@ -541,7 +542,7 @@ fn warn_unknown_options(opts: &str) {
             if known_arg_options.contains(&opt) {
                 return true;
             }
-            let _ = log(format!("Unknown scratchpad option: {opt}"), Warn);
+            log(format!("Unknown scratchpad option: {opt}"), Warn);
         }
         false
     };
@@ -578,14 +579,14 @@ fn parse_args(args: &[String]) -> Option<[String; 4]> {
             Some([dequote(&args[1]), command, rules, String::new()])
         }
         2 => {
-            let _ = log(
+            log(
                 format!("Unknown command or no command after title: {}", args[1]),
                 Warn,
             );
             None
         }
         _ => {
-            let _ = log("Use without arguments is not supported".into(), Warn);
+            log("Use without arguments is not supported".into(), Warn);
             None
         }
     }
@@ -595,7 +596,7 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
     let source_path = if let Some((_, s)) = source.split_once('=') {
         s.trim()
     } else {
-        let _ = log(format!("No filename given to source in {source}"), Warn);
+        log(format!("No filename given to source in {source}"), Warn);
         return Ok(ConfigData::new());
     };
 
@@ -607,10 +608,10 @@ fn parse_source_config(source: &str, parent: &Path) -> Result<ConfigData> {
         let parent = path.parent().unwrap_log(file!(), line!());
 
         let data = parse_config(&config, parent, false)?;
-        let _ = log(format!("Source file {source_path} parsed"), Info);
+        log(format!("Source file {source_path} parsed"), Info);
         Ok(data)
     } else {
-        let _ = log(format!("Source file not found: {source_path}"), Warn);
+        log(format!("Source file not found: {source_path}"), Warn);
         Ok(ConfigData::new())
     }
 }
@@ -654,7 +655,7 @@ fn warn_syntax_err(err: SyntaxErr) {
         Unclosed => "Unclosed '{'",
         Unopened => "Unopened '}'",
     };
-    let _ = log(format!("Syntax error in configuration: {msg}"), Warn);
+    log(format!("Syntax error in configuration: {msg}"), Warn);
 }
 
 fn open_scope(line: &str, state: &mut ParserState) {

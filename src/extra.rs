@@ -7,6 +7,8 @@ use std::fs::File;
 use std::io::{self, prelude::*};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, Stdio};
+use std::thread::sleep;
+use std::time::Duration;
 use std::vec;
 
 type ParsedConfig<'a> = (&'a str, Vec<Vec<&'a str>>, Vec<Vec<&'a str>>);
@@ -26,7 +28,7 @@ fn print_table_outline(symbols: (char, char, char), widths: &[usize]) {
     println!("{outline_str}");
 }
 
-fn color(str: &str) -> String {
+fn color(s: &str) -> String {
     let col_titles = [
         "Name",
         "Title/Class",
@@ -37,9 +39,9 @@ fn color(str: &str) -> String {
         "Scratchpads",
     ];
 
-    let mut colored_str = str.to_string();
-    if str.contains(".conf") {
-        colored_str = colored_str.replace(str, &format!("\x1b[0;35m{str}\x1b[0;0m"));
+    let mut colored_str = s.to_string();
+    if s.contains(".conf") {
+        colored_str = colored_str.replace(s, &format!("\x1b[0;35m{s}\x1b[0;0m"));
     }
 
     for title in col_titles {
@@ -48,11 +50,11 @@ fn color(str: &str) -> String {
     colored_str
 }
 
-fn fancify(width: usize, str: &str) -> String {
-    let str = if str.len() <= width {
-        format!("{str:width$}")
+fn fancify(width: usize, s: &str) -> String {
+    let str = if s.len() <= width {
+        format!("{s:width$}")
     } else {
-        str[..width - 1].to_string() + "⋯"
+        s[..width - 1].to_string() + "⋯"
     };
     color(&str)
 }
@@ -213,8 +215,7 @@ fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
         .collect();
 
     if parsed_data.len() < field_num {
-        let _ = log("Config data could not be parsed".into(), Error);
-        return vec![];
+        log("Config data could not be parsed".into(), Error);
     }
 
     parsed_data
@@ -226,8 +227,8 @@ fn parse_config_data(data: &str) -> ParsedConfig {
         [c, scd, gd] => (c, parse_data(scd, sc_fields), parse_data(gd, g_fields)),
         [c, scd] => (c, parse_data(scd, sc_fields), vec![]),
         _ => {
-            let _ = log("Could not get configuration data".into(), Error);
-            ("", vec![], vec![])
+            log("Could not get configuration data".into(), Error);
+            unreachable!()
         }
     }
 }
@@ -319,10 +320,11 @@ pub fn menu(socket: Option<&str>, mode: &str, action: &str) -> Result<()> {
         if output.status.success() {
             let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if name.is_empty() {
-                let _ = log("No scratchpad given to menu".into(), Warn);
+                log("No scratchpad given to menu".into(), Warn);
                 return Ok(());
             }
 
+            sleep(Duration::from_millis(100));
             send_request(socket, action, &name)?;
         }
         Ok(())
@@ -334,7 +336,7 @@ pub fn menu(socket: Option<&str>, mode: &str, action: &str) -> Result<()> {
         _ => run_basic_menu(socket, &list, action),
     }
     .unwrap_or_else(|e| {
-        let _ = log(format!("Menu {mode} was unsuccessful: {e}"), Warn);
+        log(format!("Menu {mode} was unsuccessful: {e}"), Warn);
     });
 
     Ok(())

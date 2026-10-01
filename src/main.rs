@@ -19,15 +19,14 @@ const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
 const DEFAULT_LOGFILE: &str = "/tmp/hyprscratch/hyprscratch.log";
 const DEFAULT_SOCKET: &str = "/tmp/hyprscratch/hyprscratch.sock";
 
-const DEFAULT_CONFIG_FILES: [&str; 5] = [
+const DEFAULT_CONFIG_FILES: &[&str] = &[
     "hypr/hyprscratch.conf",
     "hyprscratch/config.conf",
     "hyprscratch/hyprscratch.conf",
     "hypr/hyprland.lua",
-    "hypr/hyprland.conf",
 ];
 
-const KNOWN_CLI_COMMANDS: [&str; 7] = [
+const KNOWN_CLI_COMMANDS: &[&str] = &[
     "get-config",
     "version",
     "reload",
@@ -37,7 +36,7 @@ const KNOWN_CLI_COMMANDS: [&str; 7] = [
     "kill",
 ];
 
-const KNOWN_COMMANDS: [&str; 20] = [
+const KNOWN_COMMANDS: &[&str] = &[
     "no-auto-reload",
     "get-config",
     "spotless",
@@ -78,7 +77,7 @@ fn get_cli_command(args: &[String]) -> Option<&str> {
         if let Some(flag) = get_flag_name(arg) {
             return Some(flag);
         } else if arg.starts_with('-') {
-            let _ = log(format!("Unknown flag: {arg}"), Warn);
+            log(format!("Unknown flag: {arg}"), Warn);
         }
     }
     None
@@ -90,14 +89,14 @@ fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
             "Unknown command or not enough arguments for scratchpad in '{}'",
             args[1..].join(" ")
         );
-        log(msg, Warn)?;
+        log(msg, Warn);
         return Ok(());
     }
     send_request(socket, "manual", &args[1..].join("^"))
 }
 
 fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
-    let get_arg = |i| args.get(i).map_or("", |x: &String| x.as_str());
+        let get_arg = |i| args.get(i).map_or("", String::as_str);
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
         "init" => initialize_daemon(args.join(" "), config, socket),
@@ -134,10 +133,10 @@ fn hyprscratch(args: &[String]) -> Result<()> {
 fn catch_err(args: &[String], err: HyprError) {
     if let HyprError::IoError(e) = err {
         if e.raw_os_error() == Some(111) {
-            let _ = log("Could not connect to daemon. Is it running?".into(), Warn);
+            log("Could not connect to daemon. Is it running?".into(), Warn);
         }
     } else {
-        let _ = log(
+        log(
             format!("{}, command: '{}'.", err, args[1..].join(" ")),
             Warn,
         );

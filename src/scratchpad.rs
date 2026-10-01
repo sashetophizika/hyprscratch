@@ -117,7 +117,7 @@ impl ScratchpadOptions {
         self.options_string.trim()
     }
     pub fn as_string(&self) -> String {
-        self.options_string.trim().into()
+        self.as_str().to_string()
     }
 }
 
@@ -216,7 +216,7 @@ impl Scratchpad {
         };
 
         state.monitors.get(monitor).cloned().unwrap_or_else(|| {
-            let _ = log(format!("Monitor {monitor} not found"), Warn);
+            log(format!("Monitor {monitor} not found"), Warn);
             state.active_workspace.name.clone()
         })
     }

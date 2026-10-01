@@ -9,7 +9,6 @@ use crate::HYPRSCRATCH_DIR;
 use hyprland::data::{Client, Clients};
 use hyprland::dispatch::WindowIdentifier;
 use hyprland::error::HyprError;
-use hyprland::keyword::Keyword;
 use hyprland::prelude::*;
 use hyprland::Result;
 use std::fs::{create_dir, remove_file};
@@ -84,7 +83,7 @@ impl<'a> RequestData<'a> {
     fn get_new_index(&mut self) {
         let warn_empty = |titles: &[_]| {
             if titles.is_empty() {
-                let _ = log(format!("No {} scratchpads found", self.msg), Warn);
+                log(format!("No {} scratchpads found", self.msg), Warn);
                 return true;
             }
             false
@@ -150,7 +149,7 @@ fn handle_scratchpad(data: &mut RequestData) -> Result<()> {
     let mut sc = match data.config.scratchpads.get_mut(data.msg.as_str()) {
         Some(sc) => sc.clone(),
         None => {
-            let _ = log(format!("Scratchpad '{}' not found", data.msg), Warn);
+            log(format!("Scratchpad '{}' not found", data.msg), Warn);
             return Ok(());
         }
     };
@@ -163,7 +162,7 @@ fn handle_group(data: &mut RequestData) -> Result<()> {
     let group = match data.config.groups.get_mut(data.msg.as_str()) {
         Some(group) => group.clone(),
         None => {
-            let _ = log(format!("Group '{}' not found", data.msg), Warn);
+            log(format!("Group '{}' not found", data.msg), Warn);
             return Ok(());
         }
     };
@@ -183,7 +182,8 @@ fn handle_group(data: &mut RequestData) -> Result<()> {
 
 fn handle_cycle(mut data: RequestData) -> Result<()> {
     if data.config.scratchpads.is_empty() {
-        return log("No scratchpads configured for 'cycle'".into(), Warn);
+        log("No scratchpads configured for 'cycle'".into(), Warn);
+        return Ok(());
     }
 
     if let Some(name) = data.get_next_name() {
@@ -197,7 +197,8 @@ fn handle_cycle(mut data: RequestData) -> Result<()> {
 
 fn handle_previous(mut data: RequestData) -> Result<()> {
     if data.state.prev_titles[0].is_empty() {
-        return log("No previous scratchpads exist".into(), Warn);
+        log("No previous scratchpads exist".into(), Warn);
+        return Ok(());
     }
 
     let is_prev = |ac: &Client| {
@@ -216,10 +217,11 @@ fn handle_previous(mut data: RequestData) -> Result<()> {
 
 fn handle_call(mut data: RequestData) -> Result<()> {
     if data.msg.is_empty() {
-        return log(
+        log(
             format!("No scratchpad or group title given to '{}'", data.req),
             Warn,
         );
+        return Ok(());
     }
 
     if let Some(("group", name)) = data.msg.split_once(":") {
@@ -237,6 +239,8 @@ fn handle_attach(data: RequestData) -> Result<()> {
         let class = client.initial_class;
         let scratchpad = Scratchpad::new(&class, "", "", &data.msg);
         data.config.add_scratchpad(&class, &scratchpad);
+
+        make_workspaces_persistent(data.config)?;
     }
 
     Ok(())
@@ -249,6 +253,8 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
     let mut scratchpad = Scratchpad::new(args[0], args[1], "", &args[2..].join(" "));
     data.config.add_scratchpad(args[0], &scratchpad);
 
+    make_workspaces_persistent(&data.config)?;
+
     data.msg = args[0].to_string();
     data.req = String::new();
     let _ = trigger_action(&mut scratchpad, &mut data);
@@ -257,11 +263,12 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
 
 fn handle_reload(data: RequestData) -> Result<()> {
     data.config.reload(data.get_config_path())?;
+    make_workspaces_persistent(&data.config)?;
     if data.state.options.eager {
         autospawn(data.config)?;
     }
 
-    log("Configuration reloaded".to_string(), Info)?;
+    log("Configuration reloaded".to_string(), Info);
     Ok(())
 }
 
@@ -302,12 +309,11 @@ fn handle_hideall(data: RequestData) -> Result<()> {
 fn handle_menu(stream: &mut UnixStream, data: RequestData) -> Result<()> {
     let config = data.config;
     let list = config.names.join("\n")
-        + "\n"
-        + &config
-            .groups
-            .keys()
-            .cloned()
-            .fold("".into(), |acc: String, k| acc + "group:" + &k + "\n");
+        + &config.groups.keys().fold(String::new(), |mut acc, k| {
+            acc.push_str("\ngroup:");
+            acc.push_str(k);
+            acc
+        });
     stream.write_all(list.as_bytes())?;
     Ok(())
 }
@@ -325,13 +331,16 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
         "cycle" => handle_cycle(data),
         "menu" => handle_menu(stream, data),
         "kill" => {
-            let _ = log("Received 'kill' request, terminating listener".into(), Info);
+            log("Received 'kill' request, terminating listener".into(), Info);
             Err(HyprError::Other("kill".into()))
         }
-        _ => log(
-            format!("Unknown request: '{} {}'", data.req, data.msg),
-            Warn,
-        ),
+        _ => {
+            log(
+                format!("Unknown request: '{} {}'", data.req, data.msg),
+                Warn,
+            );
+            Ok(())
+        }
     }
 }
 
@@ -355,7 +364,7 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
 
     let listener = UnixListener::bind(sock)?;
     let msg = format!("Daemon started successfully, listening on {sock:?}");
-    log(msg, Info)?;
+    log(msg, Info);
     Ok(listener)
 }
 
@@ -372,7 +381,7 @@ fn start_unix_listener(
                 let (req, msg) = match buf.split_once('?') {
                     Some(t) => t,
                     None => {
-                        let _ = log(format!("Unrecognized command format {buf}"), Warn);
+                        log(format!("Unrecognized command format {buf}"), Warn);
                         continue;
                     }
                 };
@@ -384,7 +393,7 @@ fn start_unix_listener(
                 match handle_request(data, &mut stream) {
                     Ok(()) => (),
                     Err(HyprError::Other(e)) if e == "kill" => break,
-                    Err(e) => log(format!("{e} in '{req} {msg}'"), Warn)?,
+                    Err(e) => log(format!("{e} in '{req} {msg}'"), Warn),
                 }
             }
             Err(_) => {
@@ -398,8 +407,7 @@ fn start_unix_listener(
 
 fn make_workspaces_persistent(config: &Config) -> Result<()> {
     for name in config.scratchpads.keys() {
-        let rule = format!("special:{name}, persistent:true");
-        Keyword::set("workspace", rule)?;
+        dispatchers().set_workspace_persistent(name)?;
     }
     Ok(())
 }
@@ -716,5 +724,4 @@ mod tests {
         let mut config_file = File::create(config_path).unwrap();
         config_file.write_all(content.as_bytes()).unwrap();
     }
-
 }

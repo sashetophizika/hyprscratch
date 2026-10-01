@@ -4,7 +4,6 @@ use std::env::VarError;
 use std::fs::{create_dir, File};
 use std::io::{self, Write};
 use std::path::Path;
-use std::process::exit;
 use std::sync::LockResult;
 
 pub use LogLevel::*;
@@ -39,15 +38,16 @@ macro_rules! impl_logerr {
                 match self {
                     Ok(t) => t,
                     Err(e) => {
-                        let _ = log(format!("{e} at {file}:{line}"), Error);
-                        exit(1)
+                        let msg = format!("{e} at {file}:{line}");
+                        log(msg.clone(), Error);
+                        panic!("{}", msg)
                     }
                 }
             }
 
             fn log_err(self, file: &str, line: u32) {
                 if let Err(e) = self {
-                    let _ = log(format!("{e} at {file}:{line}"), Warn);
+                    log(format!("{e} at {file}:{line}"), Warn);
                 }
             }
         })+
@@ -62,14 +62,15 @@ impl<T> LogErr<T> for Option<T> {
         if let Some(t) = self {
             t
         } else {
-            let _ = log(format!("Function returned None at {file}:{line}"), Error);
-            exit(1)
+            let msg = format!("Function returned None at {file}:{line}");
+            log(msg.clone(), Error);
+            panic!("{}", msg)
         }
     }
 
     fn log_err(self, file: &str, line: u32) {
         if self.is_none() {
-            let _ = log(format!("Received None at {file}:{line}"), Warn);
+            log(format!("Received None at {file}:{line}"), Warn);
         }
     }
 }
@@ -98,19 +99,10 @@ fn write_msg(msg: &str, level: &LogLevel) -> io::Result<()> {
     )
 }
 
-fn exit_on_err(level: LogLevel) {
-    if level == Error {
-        if cfg!(debug_assertions) {
-            panic!("Fatal");
-        } else {
-            exit(1);
-        }
-    }
-}
-
-pub fn log(msg: String, level: LogLevel) -> hyprland::Result<()> {
-    write_msg(&msg, &level)?;
+pub fn log(msg: String, level: LogLevel) {
+    let _ = write_msg(&msg, &level);
     println!("{msg}");
-    exit_on_err(level);
-    Ok(())
+    if level == Error {
+        panic!("{}", msg);
+    }
 }

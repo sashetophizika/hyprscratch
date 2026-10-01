@@ -104,14 +104,14 @@ fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: C
 
         restarts += 1;
         if restarts >= max_restarts {
-            let _ = log(
+            log(
                 "Event listener repeated panic, terminating thread.".to_string(),
                 Warn,
             );
             break;
         }
 
-        let _ = log("Event listener panic, restarting thread".to_string(), Warn);
+        log("Event listener panic, restarting thread".to_string(), Warn);
         handle = spawn(|| start_events(options, config).log_err(file!(), line!()));
     }
 }
@@ -129,7 +129,7 @@ fn reload_on_modify(res: notify::Result<Event>, config: ConfigMutex) {
             }
         }
         Err(err) => {
-            let _ = log(format!("Watcher returned error: {err}"), Warn);
+            log(format!("Watcher returned error: {err}"), Warn);
         }
         _ => (),
     }

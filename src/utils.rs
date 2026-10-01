@@ -1,9 +1,9 @@
 use crate::config::Config;
+use crate::dispatchers::dispatchers;
 use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
 use hyprland::data::{Client, Clients};
-use crate::dispatchers::dispatchers;
 use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
 use hyprland::prelude::*;
 use hyprland::Result;
@@ -12,16 +12,15 @@ use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 
 pub fn warn_deprecated(feature: &str) -> Result<()> {
-    log(format!("The '{feature}' feature is deprecated."), Warn)?;
+    log(format!("The '{feature}' feature is deprecated."), Warn);
     println!("Try 'hyprscratch help' and change your configuration before it is removed.");
     Ok(())
 }
 
 pub fn read_into_string(stream: &mut UnixStream) -> Result<String> {
-    let mut buf = [0; 2048];
-    let count = stream.read(&mut buf)?;
-    let list = String::from_utf8(buf[..count].to_vec()).unwrap_or("invalid utf-8".into());
-    Ok(list)
+    let mut buf = String::new();
+    stream.read_to_string(&mut buf)?;
+    Ok(buf)
 }
 
 fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
@@ -45,12 +44,7 @@ fn is_flag<'a>(arg: &str, flag: &&'a str) -> Option<&'a str> {
 }
 
 pub fn get_flag_name<'a>(arg: &str) -> Option<&'a str> {
-    let flags = &KNOWN_CLI_COMMANDS;
-    if flags.is_empty() {
-        return None;
-    }
-
-    for flag in flags {
+    for flag in KNOWN_CLI_COMMANDS {
         if flag.is_empty() {
             continue;
         }
@@ -116,9 +110,7 @@ pub fn move_to_special(cl: &Client, workspace: &str) {
             WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
             Some(WindowIdentifier::Address(cl.address.clone())),
         )
-        .unwrap_or_else(|e| {
-            log(format!("MoveToSpecial returned Err: {e}"), Debug).unwrap();
-        });
+        .log_err(file!(), line!());
 }
 
 pub fn is_known(titles: &[String], cl: &Client) -> bool {
@@ -146,7 +138,7 @@ pub fn hide_special(cl: &Client) {
 }
 
 pub fn is_on_special(cl: &Client) -> bool {
-    cl.workspace.name.contains("special")
+    cl.workspace.name.starts_with("special:")
 }
 
 pub fn move_floating(titles: &HashMap<String, String>) -> Result<()> {
@@ -241,7 +233,9 @@ mod tests {
                 .zip(self.spawned)
                 .filter(|(_, spawned)| *spawned == 1)
                 .for_each(|(title, _)| {
-                    dispatchers().close_window(WindowIdentifier::Title(&title)).unwrap();
+                    dispatchers()
+                        .close_window(WindowIdentifier::Title(&title))
+                        .unwrap();
                 });
             sleep(Duration::from_millis(500));
         }
