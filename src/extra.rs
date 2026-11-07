@@ -1,7 +1,7 @@
+use crate::error::Result;
 use crate::logs::*;
 use crate::utils::*;
 use crate::{DEFAULT_LOGFILE, DEFAULT_SOCKET};
-use hyprland::Result;
 use std::cmp::max;
 use std::fs::File;
 use std::io::{self, prelude::*};
@@ -221,7 +221,7 @@ fn parse_data(data: &str, field_num: usize) -> Vec<Vec<&str>> {
     parsed_data
 }
 
-fn parse_config_data(data: &str) -> ParsedConfig {
+fn parse_config_data(data: &str) -> ParsedConfig<'_> {
     let (sc_fields, g_fields) = (5, 2);
     match data.splitn(3, '\u{2C00}').collect::<Vec<_>>()[..] {
         [c, scd, gd] => (c, parse_data(scd, sc_fields), parse_data(gd, g_fields)),

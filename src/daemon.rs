@@ -1,16 +1,13 @@
 use crate::config::Config;
-use crate::dispatchers::dispatchers;
+use crate::ipc::data::{Client, Clients};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
+use crate::error::{Error, Result};
 use crate::event::start_event_listeners;
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
 use crate::utils::*;
 use crate::DEFAULT_SOCKET;
 use crate::HYPRSCRATCH_DIR;
-use hyprland::data::{Client, Clients};
-use hyprland::dispatch::WindowIdentifier;
-use hyprland::error::HyprError;
-use hyprland::prelude::*;
-use hyprland::Result;
 use std::fs::{create_dir, remove_file};
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -332,7 +329,7 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
         "menu" => handle_menu(stream, data),
         "kill" => {
             log("Received 'kill' request, terminating listener".into(), Info);
-            Err(HyprError::Other("kill".into()))
+            Err(Error::Other("kill".into()))
         }
         _ => {
             log(
@@ -392,7 +389,7 @@ fn start_unix_listener(
 
                 match handle_request(data, &mut stream) {
                     Ok(()) => (),
-                    Err(HyprError::Other(e)) if e == "kill" => break,
+                    Err(Error::Other(e)) if e == "kill" => break,
                     Err(e) => log(format!("{e} in '{req} {msg}'"), Warn),
                 }
             }
@@ -433,8 +430,8 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyprland::data::{Clients, Workspace};
-    use hyprland::dispatch::WorkspaceIdentifierWithSpecial;
+    use crate::ipc::data::{Clients, Workspace};
+    use crate::ipc::dispatchers::WorkspaceIdentifier;
     use std::io::prelude::*;
     use std::{env, fs::File, thread::sleep, time::Duration};
 
@@ -513,12 +510,12 @@ mod tests {
 
     fn setup_test(resources: &TestResources) {
         let clients = Clients::get().unwrap().into_iter();
-        resources
+        let _ = resources
             .titles
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        resources
+        let _ = resources
             .commands
             .clone()
             .map(|command| dispatchers().exec(&command).unwrap());
@@ -583,11 +580,11 @@ mod tests {
         setup_test(&resources);
 
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .workspace(WorkspaceIdentifier::Relative(1))
             .unwrap();
         sleep(Duration::from_millis(500));
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .workspace(WorkspaceIdentifier::Relative(-1))
             .unwrap();
 
         verify_test(&resources);
@@ -666,7 +663,7 @@ mod tests {
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
-                (active_workspace.id + 1).to_string(),
+                (active_workspace.id.as_number().unwrap_or_default() + 1).to_string(),
                 "special:test_normal".to_string(),
                 "none".into(),
             ],
@@ -674,13 +671,13 @@ mod tests {
 
         setup_test(&resources);
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .workspace(WorkspaceIdentifier::Relative(1))
             .unwrap();
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .workspace(WorkspaceIdentifier::Relative(-1))
             .unwrap();
         sleep(Duration::from_millis(500));
     }

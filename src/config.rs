@@ -1,9 +1,9 @@
 use crate::logs::*;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use crate::utils::{dequote, get_flag_arg};
+use crate::error::Result;
 use crate::DEFAULT_CONFIG_FILES;
 use crate::KNOWN_COMMANDS;
-use hyprland::Result;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;

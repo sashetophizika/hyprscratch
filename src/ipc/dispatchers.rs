@@ -1,9 +1,6 @@
-use hyprland::dispatch::{
-    Dispatch, DispatchType, WindowIdentifier, WorkspaceIdentifierWithSpecial,
-};
-use hyprland::error::HyprError;
-use hyprland::Result;
-use std::process::Command;
+use crate::error::Result;
+use crate::ipc;
+use std::fmt;
 use std::sync::OnceLock;
 
 static DISPATCHERS: OnceLock<Dispatchers> = OnceLock::new();
@@ -14,8 +11,57 @@ pub fn dispatchers() -> &'static Dispatchers {
 
 pub struct Dispatchers;
 
-fn dispatch(expr: &str) -> Result<()> {
-    Dispatch::call(DispatchType::Custom(expr, ""))
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum WindowIdentifier<'a> {
+    Address(String),
+    Class(&'a str),
+    Title(&'a str),
+    ProcessId(u32),
+}
+
+impl fmt::Display for WindowIdentifier<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowIdentifier::Address(address) => write!(f, "address:{address}"),
+            WindowIdentifier::Class(class) => write!(f, "class:{class}"),
+            WindowIdentifier::Title(title) => write!(f, "title:{title}"),
+            WindowIdentifier::ProcessId(pid) => write!(f, "pid:{pid}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum WorkspaceIdentifier<'a> {
+    Id(i32),
+    Relative(i32),
+    Name(&'a str),
+    Special(Option<&'a str>),
+}
+
+impl fmt::Display for WorkspaceIdentifier<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkspaceIdentifier::Id(id) => write!(f, "{id}"),
+            WorkspaceIdentifier::Relative(offset) => {
+                write!(f, "e{offset:+}")
+            }
+            WorkspaceIdentifier::Name(name) => write!(f, "{name}"),
+            WorkspaceIdentifier::Special(Some(name)) => write!(f, "special:{name}"),
+            WorkspaceIdentifier::Special(None) => write!(f, "special"),
+        }
+    }
+}
+
+fn dispatch(expression: &str) -> Result<()> {
+    ipc::eval(&format!("return hl.dispatch({expression})"))?;
+    Ok(())
+}
+
+fn eval(expression: &str) -> Result<()> {
+    ipc::eval(expression)?;
+    Ok(())
 }
 
 impl Dispatchers {
@@ -36,12 +82,15 @@ impl Dispatchers {
     }
 
     pub fn toggle_pin_window(&self, win: WindowIdentifier<'_>) -> Result<()> {
-        dispatch(&format!("hl.dsp.window.pin({})", win_selector(&win)))
+        dispatch(&format!(
+            "hl.dsp.window.pin({{action=\"toggle\", window={}}})",
+            quote(&win.to_string())
+        ))
     }
 
     pub fn move_to_workspace_silent(
         &self,
-        ws: WorkspaceIdentifierWithSpecial<'_>,
+        ws: WorkspaceIdentifier<'_>,
         win: Option<WindowIdentifier<'_>>,
     ) -> Result<()> {
         let ws_arg = quote(&ws.to_string());
@@ -62,20 +111,14 @@ impl Dispatchers {
     }
 
     pub fn set_workspace_persistent(&self, name: &str) -> Result<()> {
-        let expr = format!(
+        eval(&format!(
             "hl.workspace_rule({{ workspace = {}, persistent = true }})",
             quote(&format!("special:{name}"))
-        );
-        let out = Command::new("hyprctl").arg("eval").arg(expr).output()?;
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        if !out.status.success() || stdout.to_lowercase().contains("error") {
-            return Err(HyprError::Other(stdout.trim().to_string().into()));
-        }
-        Ok(())
+        ))
     }
 
     #[cfg(test)]
-    pub fn workspace(&self, ws: WorkspaceIdentifierWithSpecial<'_>) -> Result<()> {
+    pub fn workspace(&self, ws: WorkspaceIdentifier<'_>) -> Result<()> {
         dispatch(&format!(
             "hl.dsp.focus({{workspace={}}})",
             quote(&ws.to_string())

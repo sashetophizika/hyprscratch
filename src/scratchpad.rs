@@ -1,10 +1,8 @@
-use crate::dispatchers::dispatchers;
+use crate::ipc::data::{Client, Clients, Monitors, Workspace};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
+use crate::error::Result;
 use crate::logs::*;
 use crate::utils::*;
-use hyprland::data::{Client, Clients, Monitors, Workspace};
-use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
-use hyprland::prelude::*;
-use hyprland::Result;
 use std::collections::HashMap;
 
 struct HyprlandState {
@@ -166,7 +164,7 @@ impl Scratchpad {
         let first_title = &state.clients_with_title[0];
         move_to_special(first_title, &state.special_workspace);
 
-        if !self.options.hide && first_title.workspace.id == state.active_workspace.id {
+        if !self.options.hide && first_title.workspace.name == state.active_workspace.name {
             state.toggle_special()?;
         }
         Ok(())
@@ -238,7 +236,7 @@ impl Scratchpad {
             .filter(|cl| !self.is_on_workspace(cl, state))
         {
             dispatchers().move_to_workspace_silent(
-                WorkspaceIdentifierWithSpecial::Name(&self.get_workspace_name(state)),
+                WorkspaceIdentifier::Name(&self.get_workspace_name(state)),
                 Some(WindowIdentifier::Address(client.address.clone())),
             )?;
 
@@ -282,7 +280,7 @@ impl Scratchpad {
 
         if let Some(ac) = &state.active_client {
             if !self.matches_client(ac)
-                && ac.workspace.id == state.active_workspace.id
+                && ac.workspace.name == state.active_workspace.name
                 && ac.floating
             {
                 auto_hide(ac, titles);
@@ -297,7 +295,7 @@ impl Scratchpad {
                 .values()
                 .any(|name| *name == client.workspace.name)
         } else {
-            state.active_workspace.id == client.workspace.id
+            state.active_workspace.name == client.workspace.name
         }
     }
 
@@ -574,13 +572,13 @@ mod tests {
         resources.assert_active();
 
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(1))
+            .workspace(WorkspaceIdentifier::Relative(1))
             .unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Relative(-1))
+            .workspace(WorkspaceIdentifier::Relative(-1))
             .unwrap();
     }
 
@@ -632,7 +630,7 @@ mod tests {
         resources.assert_not_present();
 
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Name("test"))
+            .workspace(WorkspaceIdentifier::Name("test"))
             .unwrap();
         sleep(Duration::from_millis(500));
         assert_eq!(Workspace::get_active().unwrap().name, "test");
@@ -646,7 +644,7 @@ mod tests {
 
         assert_eq!(Workspace::get_active().unwrap().name, "test");
         dispatchers()
-            .workspace(WorkspaceIdentifierWithSpecial::Id(1))
+            .workspace(WorkspaceIdentifier::Id(1))
             .unwrap();
     }
 

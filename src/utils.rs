@@ -1,12 +1,10 @@
 use crate::config::Config;
-use crate::dispatchers::dispatchers;
+use crate::ipc::data::{Client, Clients};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
+use crate::error::Result;
 use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
-use hyprland::data::{Client, Clients};
-use hyprland::dispatch::{WindowIdentifier, WorkspaceIdentifierWithSpecial};
-use hyprland::prelude::*;
-use hyprland::Result;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -107,7 +105,7 @@ pub fn move_to_special(cl: &Client, workspace: &str) {
 
     dispatchers()
         .move_to_workspace_silent(
-            WorkspaceIdentifierWithSpecial::Special(Some(workspace)),
+            WorkspaceIdentifier::Special(Some(workspace)),
             Some(WindowIdentifier::Address(cl.address.clone())),
         )
         .log_err(file!(), line!());
@@ -212,8 +210,8 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
 mod tests {
     use super::*;
     use crate::config::ConfigCache;
+    use crate::ipc::data::{Client, Workspace};
     use crate::scratchpad::Scratchpad;
-    use hyprland::data::{Client, Workspace};
     use std::collections::HashMap;
     use std::thread::sleep;
     use std::time::Duration;
@@ -264,19 +262,19 @@ mod tests {
         };
 
         let mut clients = Clients::get().unwrap().into_iter();
-        resources
+        let _ = resources
             .titles
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        resources
+        let _ = resources
             .commands
             .clone()
             .map(|command| dispatchers().exec(&command).unwrap());
         sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();
-        resources
+        let _ = resources
             .titles
             .clone()
             .map(|title| assert!(clients.clone().any(|x| x.initial_title == title)));
@@ -329,7 +327,7 @@ mod tests {
         };
 
         let mut clients = Clients::get().unwrap().into_iter();
-        resources
+        let _ = resources
             .titles
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));

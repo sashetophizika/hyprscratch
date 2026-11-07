@@ -1,18 +1,18 @@
 mod config;
 mod daemon;
-mod dispatchers;
+mod error;
 mod event;
 mod extra;
+mod ipc;
 mod logs;
 mod scratchpad;
 mod utils;
 
 use crate::daemon::initialize_daemon;
+use crate::error::{Error, Result};
 use crate::extra::*;
 use crate::logs::*;
 use crate::utils::*;
-use hyprland::error::HyprError;
-use hyprland::Result;
 use std::env::args;
 
 const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
@@ -130,17 +130,18 @@ fn hyprscratch(args: &[String]) -> Result<()> {
     resolve_command(args, config, socket)
 }
 
-fn catch_err(args: &[String], err: HyprError) {
-    if let HyprError::IoError(e) = err {
+fn catch_err(args: &[String], err: Error) {
+    if let Error::Io(e) = &err {
         if e.raw_os_error() == Some(111) {
             log("Could not connect to daemon. Is it running?".into(), Warn);
+            return;
         }
-    } else {
-        log(
-            format!("{}, command: '{}'.", err, args[1..].join(" ")),
-            Warn,
-        );
     }
+
+    log(
+        format!("{}, command: '{}'.", err, args[1..].join(" ")),
+        Warn,
+    );
 }
 
 fn main() {

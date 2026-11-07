@@ -8,6 +8,7 @@ use std::sync::LockResult;
 
 pub use LogLevel::*;
 #[derive(PartialEq)]
+#[allow(dead_code)]
 pub enum LogLevel {
     Info,
     Warn,
@@ -54,7 +55,7 @@ macro_rules! impl_logerr {
     }
 }
 
-impl_logerr!(hyprland::Result<T>, io::Result<T>, notify::Result<T>,
+impl_logerr!(crate::error::Result<T>, io::Result<T>, notify::Result<T>,
     Result<T, VarError>, LockResult<T>);
 
 impl<T> LogErr<T> for Option<T> {

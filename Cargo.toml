@@ -13,8 +13,9 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 chrono = "0.4.38"
-hyprland = "0.4.0-beta.3"
 notify = "8.1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 termsize = "0.1.9"
 
 [dev-dependencies]

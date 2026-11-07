@@ -1,15 +1,15 @@
 use crate::config::Config;
 use crate::daemon::{DaemonOptions, DaemonState};
+use crate::ipc::data::{Client, Clients, Workspace};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
+use crate::error::Result;
+use crate::ipc;
 use crate::logs::*;
 use crate::utils::*;
-use hyprland::data::{Client, Clients, Workspace};
-use crate::dispatchers::dispatchers;
-use hyprland::dispatch::WindowIdentifier;
-use hyprland::event_listener::EventListener;
-use hyprland::prelude::*;
-use hyprland::Result;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::io::{BufRead, BufReader};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread::*;
@@ -17,80 +17,97 @@ use std::time::Duration;
 
 type ConfigMutex = Arc<RwLock<Config>>;
 
-fn add_vanish(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_window_moved_handler(move |data| {
-        let (f, l) = (file!(), line!());
-        let ephemeral_titles = &config.read().unwrap_log(f, l).cache.ephemeral_titles;
-
-        if ephemeral_titles.is_empty() {
-            return;
-        }
-
-        if let (Ok(clients), Ok(active)) = (Clients::get(), Workspace::get_active()) {
-            clients
-                .iter()
-                .filter(|cl| cl.address == data.window_address && active.id != data.workspace_id)
-                .filter(|cl| is_known(ephemeral_titles, cl))
-                .for_each(|cl| {
-                    dispatchers()
-                        .close_window(WindowIdentifier::Address(cl.address.clone()))
-                        .log_err(f, l);
-                });
-        }
-    });
+fn moved_to_active(active: &Workspace, workspace_name: &str) -> bool {
+    workspace_name == active.name
 }
 
-fn add_clean(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_workspace_changed_handler(move |_| {
-        let (f, l) = (file!(), line!());
-        let slick_map = &config.read().unwrap_log(f, l).cache.clean_map;
-        move_floating(slick_map).log_err(f, l);
+fn parse_moved_window(data: &str) -> Option<(String, &str)> {
+    let mut fields = data.splitn(3, ',');
+    let address = fields.next()?;
+    let workspace_name = fields.next()?;
 
-        if let Ok(Some(ac)) = Client::get_active() {
-            if is_known_map(slick_map, &ac) {
-                hide_special(&ac);
-            }
-        }
-    });
+    let address = if address.starts_with("0x") {
+        address.to_string()
+    } else {
+        format!("0x{address}")
+    };
+
+    Some((address, workspace_name))
 }
 
-fn add_spotless(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_active_window_changed_handler(move |_| {
-        if let Ok(Some(cl)) = Client::get_active() {
-            let (f, l) = (file!(), line!());
-            let conf = &config.read().unwrap_log(f, l);
+fn handle_vanish(data: &str, config: &ConfigMutex) {
+    let (f, l) = (file!(), line!());
+    let ephemeral_titles = &config.read().unwrap_log(f, l).cache.ephemeral_titles;
 
-            if !is_known(&conf.cache.normal_titles, &cl) {
-                move_floating(&conf.cache.spotless_map).log_err(f, l);
-            }
-        }
-    });
+    if ephemeral_titles.is_empty() {
+        return;
+    }
+
+    let Some((address, workspace_name)) = parse_moved_window(data) else {
+        return;
+    };
+
+    if let (Ok(clients), Ok(active)) = (Clients::get(), Workspace::get_active()) {
+        clients
+            .iter()
+            .filter(|cl| cl.address == address && !moved_to_active(&active, workspace_name))
+            .filter(|cl| is_known(ephemeral_titles, cl))
+            .for_each(|cl| {
+                dispatchers()
+                    .close_window(WindowIdentifier::Address(cl.address.clone()))
+                    .log_err(f, l);
+            });
+    }
 }
 
-fn add_builtin_reload(ev: &mut EventListener, config: ConfigMutex) {
-    ev.add_config_reloaded_handler(move || {
+fn handle_clean(config: &ConfigMutex) {
+    let (f, l) = (file!(), line!());
+    let slick_map = &config.read().unwrap_log(f, l).cache.clean_map;
+    move_floating(slick_map).log_err(f, l);
+
+    if let Ok(Some(ac)) = Client::get_active() {
+        if is_known_map(slick_map, &ac) {
+            hide_special(&ac);
+        }
+    }
+}
+
+fn handle_spotless(config: &ConfigMutex) {
+    if let Ok(Some(cl)) = Client::get_active() {
         let (f, l) = (file!(), line!());
-        config.write().unwrap_log(f, l).reload(None).log_err(f, l);
-    });
+        let conf = &config.read().unwrap_log(f, l);
+
+        if !is_known(&conf.cache.normal_titles, &cl) {
+            move_floating(&conf.cache.spotless_map).log_err(f, l);
+        }
+    }
+}
+
+fn handle_config_reload(config: &ConfigMutex) {
+    let (f, l) = (file!(), line!());
+    config.write().unwrap_log(f, l).reload(None).log_err(f, l);
 }
 
 fn start_events(options: Arc<DaemonOptions>, config: ConfigMutex) -> Result<()> {
-    let mut ev = EventListener::new();
+    let stream = UnixStream::connect(ipc::event_socket_path()?)?;
+    let reader = BufReader::new(stream);
 
-    if options.auto_reload {
-        add_builtin_reload(&mut ev, config.clone());
+    for line in reader.lines() {
+        let line = line?;
+        let Some((event, data)) = line.split_once(">>") else {
+            continue;
+        };
+
+        match event {
+            "movewindowv2" | "windowmoved" | "windowmovedv2" => handle_vanish(data, &config),
+            "workspace" | "workspacev2" if options.clean => handle_clean(&config),
+            "activewindow" | "activewindowv2" if options.spotless => handle_spotless(&config),
+            "configreloaded" if options.auto_reload => handle_config_reload(&config),
+            _ => {}
+        }
     }
 
-    if options.clean {
-        add_clean(&mut ev, config.clone());
-    }
-
-    if options.spotless {
-        add_spotless(&mut ev, config.clone());
-    }
-
-    add_vanish(&mut ev, config.clone());
-    ev.start_listener()
+    Ok(())
 }
 
 fn keep_alive(mut handle: JoinHandle<()>, options: Arc<DaemonOptions>, config: ConfigMutex) {
