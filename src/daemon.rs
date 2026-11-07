@@ -1,8 +1,8 @@
 use crate::config::Config;
-use crate::ipc::data::{Client, Clients};
-use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::error::{Error, Result};
 use crate::event::start_event_listeners;
+use crate::ipc::data::{Client, Clients};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::logs::*;
 use crate::scratchpad::Scratchpad;
 use crate::utils::*;

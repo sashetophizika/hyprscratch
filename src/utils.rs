@@ -1,7 +1,7 @@
 use crate::config::Config;
+use crate::error::Result;
 use crate::ipc::data::{Client, Clients};
 use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
-use crate::error::Result;
 use crate::scratchpad::Scratchpad;
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
@@ -172,7 +172,12 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
 }
 
 pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
-    let mut rules = sc.rules.clone() + "; tag +scratchpad;";
+    let mut rules = if sc.rules.is_empty() {
+        "tag +scratchpad;".into()
+    } else {
+        sc.rules.clone() + "; tag +scratchpad;"
+    };
+
     if let Some(is_silent) = on_special {
         let silent = if is_silent { "silent" } else { "" };
         rules += &format!("workspace special:{} {silent};", &workspace);

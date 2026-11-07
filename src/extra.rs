@@ -5,6 +5,7 @@ use crate::{DEFAULT_LOGFILE, DEFAULT_SOCKET};
 use std::cmp::max;
 use std::fs::File;
 use std::io::{self, prelude::*};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::process::{Command, Stdio};
 use std::thread::sleep;
@@ -40,7 +41,7 @@ fn color(s: &str) -> String {
     ];
 
     let mut colored_str = s.to_string();
-    if s.contains(".conf") {
+    if s.trim().ends_with(".conf") || s.trim().ends_with(".lua") {
         colored_str = colored_str.replace(s, &format!("\x1b[0;35m{s}\x1b[0;0m"));
     }
 
@@ -86,6 +87,7 @@ fn max_len(xs: &[&str], min: usize, max: usize) -> usize {
 fn get_config_data(socket: Option<&str>) -> Result<String> {
     let mut stream = UnixStream::connect(socket.unwrap_or(DEFAULT_SOCKET))?;
     stream.write_all("get-config?".as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
 
     let mut buf = String::new();
     stream.read_to_string(&mut buf)?;
