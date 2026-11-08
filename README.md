@@ -13,7 +13,7 @@ flexible way.
 ## Features
 
 * Scratchpads are part of your current workspace by default.
-* Can be configured in `hyprland.conf` or a dedicated configuration file.
+* Can be configured in `hyprland.lua` or a dedicated configuration file.
 * Makes special workspace scratchpads simpler to set up.
 * Many options to easily tweak behaviour of scratchpads.
 * Event listeners to automate scratchpad management.
@@ -47,25 +47,32 @@ Nix installation options can be found
 
 ### Basic
 
-In `hyprland.conf`:
+In `hyprland.lua`:
 
-```bash
-# Start the hyprscratch daemon
-exec-once = hyprscratch init [DAEMON_OPTIONS]
+```lua
+-- Start the hyprscratch daemon
+hl.on("hyprland.start", function()
+    hl.exec_cmd("hyprscratch init [DAEMON_OPTIONS]")
+end)
 
-# Configure scratchpads
-bind = $mainMod, $KEY, exec, hyprscratch $CLIENT_TITLE "$HYPRLAND_EXEC_COMMAND" [SCRATCHPAD_OPTIONS]
+-- Configure scratchpads
+hl.bind("SUPER + KEY", hl.dsp.exec_cmd("hyprscratch [CLIENT_TITLE] '[HYPRLAND_EXEC_COMMAND]' [SCRATCHPAD_OPTIONS]"))
 ```
 
 Example scratchpad configuration:
 
-```bash
-exec-once = hyprscratch init clean eager
+```lua
+hl.on("hyprland.start", function()
+    hl.exec_cmd("hyprscratch init clean eager")
+end)
 
-bind = $mainMod, t, exec, hyprscratch terminal "alacritty --title terminal"
-bind = $mainMod, b, exec, hyprscratch btop "[size monitor_w*0.7 monitor_h*0.8] alacritty --title btop -e btop" persist pin
-bind = $mainMod, f, exec, hyprscratch "Mozilla Firefox" firefox special monitor 1
+hl.bind("SUPER + T", hl.dsp.exec_cmd("hyprscratch terminal 'alacritty --title terminal'"))
+hl.bind("SUPER + B", hl.dsp.exec_cmd("hyprscratch btop '[size monitor_w*0.7 monitor_h*0.8] alacritty --title btop -e btop' persist pin"))
+hl.bind("SUPER + F", hl.dsp.exec_cmd("hyprscratch 'Mozilla Firefox' firefox special monitor 1"))
 ```
+
+A Lua helper with wrappers for these commands is available in
+[`lua/hyprscratch.lua`](lua/hyprscratch.lua).
 
 ### Optional Configuration File
 
@@ -107,16 +114,18 @@ global_options = special
 global_rules = monitor_w*0.9 monitor_h*0.9
 ```
 
-And in `hyprland.conf`, using the given names:
+And in `hyprland.lua`, using the given names:
 
-```bash
-exec-once = hyprscratch init
+```lua
+hl.on("hyprland.start", function()
+    hl.exec_cmd("hyprscratch init")
+end)
 
-bind = $mainMod, t, hyprscratch toggle scratchpad1
-bind = $mainMod, s, hyprscratch show scratchpad1
-bind = $mainMod, h, hyprscratch hide scratchpad1
+hl.bind("SUPER + T", hl.dsp.exec_cmd("hyprscratch toggle scratchpad1"))
+hl.bind("SUPER + S", hl.dsp.exec_cmd("hyprscratch show scratchpad1"))
+hl.bind("SUPER + H", hl.dsp.exec_cmd("hyprscratch hide scratchpad1"))
 
-bind = $mainMod, g, hyprscratch toggle group1
+hl.bind("SUPER + G", hl.dsp.exec_cmd("hyprscratch toggle group1"))
 ```
 
 Using a configuration file can be combined with normally configured scratchpads.
