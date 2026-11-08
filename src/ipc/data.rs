@@ -16,15 +16,6 @@ pub enum WorkspaceId {
     Name(String),
 }
 
-impl WorkspaceId {
-    pub fn as_number(&self) -> Option<i32> {
-        match self {
-            WorkspaceId::Number(id) => Some(*id),
-            WorkspaceId::Name(_) => None,
-        }
-    }
-}
-
 impl Default for WorkspaceId {
     fn default() -> Self {
         WorkspaceId::Name(String::new())

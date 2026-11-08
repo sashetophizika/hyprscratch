@@ -172,15 +172,11 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
 }
 
 pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
-    let mut rules = if sc.rules.is_empty() {
-        "tag +scratchpad;".into()
-    } else {
-        sc.rules.clone() + "; tag +scratchpad;"
-    };
+    let mut rules = "tag +scratchpad;".to_string();
 
     if let Some(is_silent) = on_special {
-        let silent = if is_silent { "silent" } else { "" };
-        rules += &format!("workspace special:{} {silent};", &workspace);
+        let silent = if is_silent { " silent" } else { "" };
+        rules += &format!("workspace special:{}{silent};", workspace);
     }
 
     if sc.options.pin && on_special.is_none() {
@@ -189,6 +185,10 @@ pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &s
 
     if !sc.options.tiled {
         rules += "float;";
+    }
+
+    if !sc.rules.is_empty() {
+        rules += &sc.rules.clone();
     }
 
     prepend_rules(&sc.command, &rules)
@@ -254,9 +254,9 @@ mod tests {
                 "test_scratchpad_move".to_string(),
             ],
             commands: [
-                "kitty --title test_nonfloating_move".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_notcontained_move".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_scratchpad_move".to_string(),
+                "alacritty --title test_nonfloating_move".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] alacritty --title test_notcontained_move".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] alacritty --title test_scratchpad_move".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
@@ -319,9 +319,9 @@ mod tests {
                 "test_notonstart_autospawn".to_string(),
             ],
             commands: [
-                "kitty --title test_normal_autospawn".to_string(),
-                "[float] kitty --title test_special_autospawn".to_string(),
-                "kitty --title test_notonstart_autospawn".to_string(),
+                "alacritty --title test_normal_autospawn".to_string(),
+                "[float] alacritty --title test_special_autospawn".to_string(),
+                "alacritty --title test_notonstart_autospawn".to_string(),
             ],
             expected_workspace: [
                 "special:test_normal_autospawn".to_string(),

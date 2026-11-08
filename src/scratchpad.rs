@@ -361,6 +361,7 @@ mod tests {
     struct TestResources {
         title: String,
         command: String,
+        rules: String,
         title_map: HashMap<String, String>,
     }
 
@@ -369,13 +370,14 @@ mod tests {
             let title = format!("test_{title}");
             TestResources {
                 title: title.clone(),
-                command: format!("[size 30% 30%] kitty --title {title}"),
+                command: format!("alacritty --title {title}"),
+                rules: "size monitor_w*0.3 monitor_h*0.3".to_string(),
                 title_map: HashMap::from([(title.clone(), title)]),
             }
         }
 
         fn into_scratchpad(&self, options: &str) -> Scratchpad {
-            Scratchpad::new(&self.title, &self.command, "", options)
+            Scratchpad::new(&self.title, &self.command, &self.rules, options)
         }
 
         fn assert_present(&self) {
@@ -535,7 +537,8 @@ mod tests {
         let title = "test_poly".to_string();
         let resources = TestResources {
             title: title.clone(),
-            command: "[size 30% 30%; move 0 0] kitty --title test_poly ? [size 30% 30%; move 30% 0] kitty --title test_poly".to_string(),
+            command: "[move 0 0] alacritty --title test_poly ? [move monitor_w*0.3 0] alacritty --title test_poly".to_string(),
+            rules: "size monitor_w*0.3 monitor_h*0.3".to_string(),
             title_map: HashMap::from([(title.clone(), title)]),
         };
         let scratchpad = resources.into_scratchpad("poly");
@@ -547,7 +550,7 @@ mod tests {
             .unwrap();
         sleep(Duration::from_millis(500));
 
-        resources.assert_active();
+        resources.assert_present();
 
         scratchpad
             .trigger(&resources.title_map, &resources.title)
@@ -665,14 +668,16 @@ mod tests {
 
         let resources = TestResources {
             title: "test_attach".to_string(),
-            command: "[float; size 30% 30%] kitty --class test_attach --title test_attach"
-                .to_string(),
+            command: "alacritty --class test_attach --title test_attach".to_string(),
+            rules: "float; size monitor_w*0.3 monitor_h*0.3".to_string(),
             title_map: HashMap::from([("test_attach".to_string(), "test_attach".to_string())]),
         };
 
         resources.assert_not_present();
 
-        dispatchers().exec(&resources.command).unwrap();
+        prepend_rules(&resources.command, &resources.rules)
+            .into_iter()
+            .for_each(|command| dispatchers().exec(&command).unwrap());
         sleep(Duration::from_millis(1000));
 
         resources.assert_present();

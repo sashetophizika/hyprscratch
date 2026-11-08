@@ -250,7 +250,7 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
     let mut scratchpad = Scratchpad::new(args[0], args[1], "", &args[2..].join(" "));
     data.config.add_scratchpad(args[0], &scratchpad);
 
-    make_workspaces_persistent(&data.config)?;
+    make_workspaces_persistent(data.config)?;
 
     data.msg = args[0].to_string();
     data.req = String::new();
@@ -260,7 +260,7 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
 
 fn handle_reload(data: RequestData) -> Result<()> {
     data.config.reload(data.get_config_path())?;
-    make_workspaces_persistent(&data.config)?;
+    make_workspaces_persistent(data.config)?;
     if data.state.options.eager {
         autospawn(data.config)?;
     }
@@ -430,7 +430,7 @@ pub fn initialize_daemon(args: String, config_path: Option<String>, socket_path:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::data::{Clients, Workspace};
+    use crate::ipc::data::{Clients, Workspace, WorkspaceId};
     use crate::ipc::dispatchers::WorkspaceIdentifier;
     use std::io::prelude::*;
     use std::{env, fs::File, thread::sleep, time::Duration};
@@ -564,10 +564,10 @@ mod tests {
                 "test_nonfloating".to_string(),
             ],
             commands: [
-                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
-                "[float; workspace special:test_special; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_special".to_string(),
-                "kitty --title test_nonfloating".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] alacritty --title test_sticky".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] alacritty --title test_normal".to_string(),
+                "[float; workspace special:test_special; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] alacritty --title test_special".to_string(),
+                "alacritty --title test_nonfloating".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
@@ -611,10 +611,10 @@ mod tests {
                 "test_normal".to_string(),
             ],
             commands: [
-                "kitty --title test_nonfloating".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_shiny".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
+                "alacritty --title test_nonfloating".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] alacritty --title test_sticky".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] alacritty --title test_shiny".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] alacritty --title test_normal".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
@@ -647,6 +647,13 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
 
+        let as_number = |w: WorkspaceId| -> Option<i32> {
+            match w {
+                WorkspaceId::Number(id) => Some(id),
+                WorkspaceId::Name(_) => None,
+            }
+        };
+
         let active_workspace = Workspace::get_active().unwrap();
         let resources = TestResources {
             titles: [
@@ -656,14 +663,14 @@ mod tests {
                 "test_ephemeral".to_string(),
             ],
             commands: [
-                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] kitty --title test_sticky".to_string(),
-                "[float; pin; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] kitty --title test_pin".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] kitty --title test_normal".to_string(),
-                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 monitor_h*0.3] kitty --title test_ephemeral".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.6 0] alacritty --title test_sticky".to_string(),
+                "[float; pin; size monitor_w*0.3 monitor_h*0.3; move monitor_w*0.3 0] alacritty --title test_pin".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 0] alacritty --title test_normal".to_string(),
+                "[float; size monitor_w*0.3 monitor_h*0.3; move 0 monitor_h*0.3] alacritty --title test_ephemeral".to_string(),
             ],
             expected_workspace: [
                 active_workspace.name.clone(),
-                (active_workspace.id.as_number().unwrap_or_default() + 1).to_string(),
+                (as_number(active_workspace.id).unwrap() + 1).to_string(),
                 "special:test_normal".to_string(),
                 "none".into(),
             ],

@@ -125,7 +125,7 @@ fn get_centered_conf(conf: &str, width: usize) -> String {
         conf
     };
 
-    let center_fix = if width % 2 == 0 {
+    let center_fix = if width.is_multiple_of(2) {
         config.len() + config.len() % 2
     } else {
         config.len() - 1
