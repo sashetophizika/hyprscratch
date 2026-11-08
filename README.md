@@ -22,6 +22,10 @@ flexible way.
 
 ## Installation
 
+### Prerequisites
+
+Hyprland's Lua config is required as of hyprscratch `0.7`.
+
 ### [Crates](https://crates.io/crates/hyprscratch)
 
 ```bash
