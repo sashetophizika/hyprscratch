@@ -1,6 +1,6 @@
+use crate::error::Result;
 use crate::ipc::data::{Client, Clients, Monitors, Workspace};
 use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
-use crate::error::Result;
 use crate::logs::*;
 use crate::utils::*;
 use std::collections::HashMap;
@@ -119,6 +119,32 @@ impl ScratchpadOptions {
     }
 }
 
+use Rules::*;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rules {
+    Legacy(String),
+    Lua(String),
+}
+
+impl Rules {
+    pub fn to_string(self) -> String {
+        match self {
+            Legacy(s) | Lua(s) => s,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Legacy(s) | Lua(s) => s,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let s = self.as_str().trim();
+        s.is_empty() || s == "{}"
+    }
+}
+
 use TriggerMode::*;
 #[derive(PartialEq, Debug)]
 enum TriggerMode<T> {
@@ -131,22 +157,24 @@ enum TriggerMode<T> {
 pub struct Scratchpad {
     pub title: String,
     pub command: String,
-    pub rules: String,
+    pub rules: Rules,
     pub options: ScratchpadOptions,
 }
 
 impl Scratchpad {
-    pub fn new(title: &str, command: &str, rules: &str, options: &str) -> Scratchpad {
+    pub fn new(title: &str, command: &str, rules: Rules, options: &str) -> Scratchpad {
         Scratchpad {
             title: title.into(),
             command: command.into(),
-            rules: rules.into(),
+            rules: rules,
             options: ScratchpadOptions::new(options),
         }
     }
 
     pub fn add_rules(&mut self, rules: &str) {
-        self.command = prepend_rules(&self.command, rules).join("?");
+        if let Legacy(_) = self.rules {
+            self.command = prepend_rules(&self.command, rules).join("?");
+        }
     }
 
     pub fn add_opts(&mut self, options: &str) {
@@ -185,8 +213,8 @@ impl Scratchpad {
     }
 
     fn spawn_special(&self, state: &HyprlandState) {
-        for cmd in &prepare_commands(self, Some(false), &state.special_workspace) {
-            dispatchers().exec(cmd).log_err(file!(), line!());
+        for (cmd, rules) in &prepare_commands(self, Some(false), &state.special_workspace) {
+            dispatchers().exec(cmd, rules).log_err(file!(), line!());
         }
     }
 
@@ -224,8 +252,8 @@ impl Scratchpad {
             hide_special(ac);
         }
 
-        for cmd in &prepare_commands(self, None, &state.special_workspace) {
-            dispatchers().exec(cmd).log_err(file!(), line!());
+        for (cmd, rules) in &prepare_commands(self, None, &state.special_workspace) {
+            dispatchers().exec(cmd, rules).log_err(file!(), line!());
         }
     }
 
@@ -377,7 +405,12 @@ mod tests {
         }
 
         fn into_scratchpad(&self, options: &str) -> Scratchpad {
-            Scratchpad::new(&self.title, &self.command, &self.rules, options)
+            Scratchpad::new(
+                &self.title,
+                &self.command,
+                Legacy(self.rules.clone()),
+                options,
+            )
         }
 
         fn assert_present(&self) {
@@ -646,9 +679,7 @@ mod tests {
         resources.assert_active();
 
         assert_eq!(Workspace::get_active().unwrap().name, "test");
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Id(1))
-            .unwrap();
+        dispatchers().workspace(WorkspaceIdentifier::Id(1)).unwrap();
     }
 
     #[test]
@@ -675,9 +706,9 @@ mod tests {
 
         resources.assert_not_present();
 
-        prepend_rules(&resources.command, &resources.rules)
-            .into_iter()
-            .for_each(|command| dispatchers().exec(&command).unwrap());
+        dispatchers()
+            .exec(&resources.command, &Legacy(resources.rules.clone()))
+            .unwrap();
         sleep(Duration::from_millis(1000));
 
         resources.assert_present();

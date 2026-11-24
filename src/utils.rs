@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::ipc::data::{Client, Clients};
 use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
-use crate::scratchpad::Scratchpad;
+use crate::scratchpad::{Rules, Scratchpad};
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
 use std::collections::HashMap;
@@ -147,7 +147,7 @@ pub fn move_floating(titles: &HashMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-fn prepend(command: &str, rules: &str) -> String {
+pub(crate) fn prepend(command: &str, rules: &str) -> String {
     if rules.is_empty() {
         return command.into();
     }
@@ -171,12 +171,12 @@ pub fn prepend_rules(command: &str, rules: &str) -> Vec<String> {
     command.split('?').map(|c| prepend(c, rules)).collect()
 }
 
-pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Vec<String> {
+fn prepare_legacy_rules(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Rules {
     let mut rules = "tag +scratchpad;".to_string();
 
     if let Some(is_silent) = on_special {
         let silent = if is_silent { " silent" } else { "" };
-        rules += &format!("workspace special:{}{silent};", workspace);
+        rules += &format!("workspace special:{workspace}{silent};");
     }
 
     if sc.options.pin && on_special.is_none() {
@@ -188,17 +188,67 @@ pub fn prepare_commands(sc: &Scratchpad, on_special: Option<bool>, workspace: &s
     }
 
     if !sc.rules.is_empty() {
-        rules += &sc.rules.clone();
+        rules += sc.rules.as_str();
     }
 
-    prepend_rules(&sc.command, &rules)
+    Rules::Legacy(rules)
+}
+
+fn prepare_lua_rules(sc: &Scratchpad, on_special: Option<bool>, workspace: &str) -> Rules {
+    let mut fields = Vec::new();
+
+    if let Some(is_silent) = on_special {
+        let silent = if is_silent { " silent" } else { "" };
+        fields.push(format!("workspace = \"special:{workspace}{silent}\""));
+    }
+
+    if sc.options.pin && on_special.is_none() {
+        fields.push("pin = true".to_string());
+    }
+
+    if !sc.options.tiled {
+        fields.push("float = true".to_string());
+    }
+
+    if !sc.rules.is_empty() {
+        let user_rules = sc.rules.as_str().trim();
+        let user_rules = user_rules
+            .strip_prefix('{')
+            .and_then(|r| r.strip_suffix('}'))
+            .unwrap_or(user_rules)
+            .trim();
+
+        if !user_rules.is_empty() {
+            fields.push(user_rules.to_string());
+        }
+    }
+
+    fields.push("tag = \"+scratchpad\"".to_string());
+
+    Rules::Lua(format!("{{ {} }}", fields.join(", ")))
+}
+
+pub fn prepare_commands(
+    sc: &Scratchpad,
+    on_special: Option<bool>,
+    workspace: &str,
+) -> Vec<(String, Rules)> {
+    let rules = match &sc.rules {
+        Rules::Legacy(_) => prepare_legacy_rules(sc, on_special, workspace),
+        Rules::Lua(_) => prepare_lua_rules(sc, on_special, workspace),
+    };
+
+    sc.command
+        .split('?')
+        .map(|cmd| (cmd.to_string(), rules.clone()))
+        .collect()
 }
 
 pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |(n, sc): (&String, &Scratchpad)| {
         prepare_commands(sc, Some(true), n)
             .iter()
-            .for_each(|cmd| dispatchers().exec(cmd).log_err(file!(), line!()));
+            .for_each(|(cmd, rules)| dispatchers().exec(cmd, rules).log_err(file!(), line!()));
     };
 
     let clients = Clients::get()?;
@@ -216,6 +266,7 @@ mod tests {
     use super::*;
     use crate::config::ConfigCache;
     use crate::ipc::data::{Client, Workspace};
+    use crate::scratchpad::Rules::{Legacy, Lua};
     use crate::scratchpad::Scratchpad;
     use std::collections::HashMap;
     use std::thread::sleep;
@@ -272,10 +323,11 @@ mod tests {
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        let _ = resources
-            .commands
-            .clone()
-            .map(|command| dispatchers().exec(&command).unwrap());
+        let _ = resources.commands.clone().map(|command| {
+            dispatchers()
+                .exec(&command, &Legacy(String::new()))
+                .unwrap()
+        });
         sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();
@@ -348,7 +400,7 @@ mod tests {
             .iter()
             .zip(resources.commands.clone())
             .zip(options)
-            .map(|((t, c), o)| (t.clone(), Scratchpad::new(t, &c, "", &o)))
+            .map(|((t, c), o)| (t.clone(), Scratchpad::new(t, &c, Lua("".into()), &o)))
             .collect();
 
         let mut config = Config {
@@ -358,6 +410,7 @@ mod tests {
             groups: HashMap::new(),
             names: Vec::new(),
             cache: ConfigCache::new(&HashMap::new()),
+            manual: HashMap::new(),
         };
 
         autospawn(&mut config).unwrap();

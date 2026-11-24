@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::logs::*;
+use crate::scratchpad::Rules::Legacy;
 use crate::scratchpad::{Scratchpad, ScratchpadOptions};
 use crate::utils::{dequote, get_flag_arg};
 use crate::DEFAULT_CONFIG_FILES;
@@ -53,7 +54,7 @@ impl ConfigData {
 
     fn add_to_config(&mut self, args: &[String]) {
         if let Some([title, command, rules, opts]) = parse_args(args) {
-            let scratchpad = Scratchpad::new(&title, &command, &rules, &opts);
+            let scratchpad = Scratchpad::new(&title, &command, Legacy(rules.into()), &opts);
             self.add_scratchpad(&title, &scratchpad);
 
             if let Some(g) = get_flag_arg(args, "group") {
@@ -164,7 +165,7 @@ impl ParserState {
             )
         };
         let options = &self.scratchpad_data["options"];
-        Scratchpad::new(title, &command, &rules, options)
+        Scratchpad::new(title, &command, Legacy(rules), options)
     }
 
     fn append_to_field(&mut self, k: &str, v: &str) {
@@ -235,28 +236,6 @@ impl ConfigCache {
             spotless_map: filter_maps(|opts| !opts.sticky && !opts.shiny && !opts.pin),
         }
     }
-
-    fn update_cache(&mut self, options: &ScratchpadOptions, name: &str, title: &str) {
-        if options.ephemeral {
-            self.ephemeral_titles.push(title.into());
-        }
-        if options.special {
-            self.special_titles.push(title.into());
-        }
-        if !options.special {
-            self.normal_titles.push(title.into());
-            self.normal_map.insert(title.into(), name.into());
-        }
-        if !options.special && !options.persist {
-            self.replace_map.insert(title.into(), name.into());
-        }
-        if !options.pin && !options.sticky {
-            self.clean_map.insert(title.into(), name.into());
-        }
-        if !options.shiny && !options.sticky && !options.pin {
-            self.spotless_map.insert(title.into(), name.into());
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -267,6 +246,7 @@ pub struct Config {
     pub groups: Groups,
     pub names: Vec<String>,
     pub cache: ConfigCache,
+    pub manual: HashMap<String, Scratchpad>,
 }
 
 impl Config {
@@ -289,24 +269,56 @@ impl Config {
             scratchpads: config_data.scratchpads,
             groups: config_data.groups,
             names: config_data.names,
+            manual: HashMap::new(),
         })
     }
 
-    pub fn add_scratchpad(&mut self, name: &str, sc: &Scratchpad) {
-        if self.scratchpads.contains_key(name) {
-            return;
-        }
+    fn insert_scratchpad(&mut self, name: &str, sc: &Scratchpad) {
+        let previous = self.scratchpads.insert(name.into(), sc.clone());
 
-        self.cache.update_cache(&sc.options, name, &sc.title);
-        self.scratchpads.insert(name.into(), sc.clone());
-        self.names.push(name.into());
+        match previous {
+            Some(previous) => {
+                for group in self.groups.values_mut() {
+                    for entry in group.iter_mut() {
+                        if *entry == previous {
+                            *entry = sc.clone();
+                        }
+                    }
+                }
+            }
+            None => self.names.push(name.into()),
+        }
+    }
+
+    pub fn add_scratchpad(&mut self, name: &str, sc: &Scratchpad) {
+        self.insert_scratchpad(name, sc);
+        self.manual.insert(name.into(), sc.clone());
+        self.cache = ConfigCache::new(&self.scratchpads);
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
-        *self = match config_path {
-            Some(_) => Config::new(config_path)?,
-            None => Config::new(Some(self.config_file.clone()))?,
+        let manual = std::mem::take(&mut self.manual);
+
+        let parsed = match config_path {
+            Some(_) => Config::new(config_path),
+            None => Config::new(Some(self.config_file.clone())),
         };
+
+        let mut new_config = match parsed {
+            Ok(config) => config,
+            Err(e) => {
+                self.manual = manual;
+                return Err(e);
+            }
+        };
+
+        for (name, sc) in &manual {
+            new_config.insert_scratchpad(name, sc);
+        }
+
+        new_config.manual = manual;
+        new_config.cache = ConfigCache::new(&new_config.scratchpads);
+        *self = new_config;
         Ok(())
     }
 
@@ -318,7 +330,7 @@ impl Config {
                     [
                         sc.title.clone(),
                         cmd.trim().into(),
-                        sc.rules.clone(),
+                        sc.rules.clone().to_string(),
                         sc.options.as_string(),
                     ]
                 })
@@ -762,6 +774,8 @@ fn parse_hyprlang(config: &str) -> Result<ConfigData> {
 
 #[cfg(test)]
 mod tests {
+    use crate::scratchpad::Rules::Legacy;
+
     use super::*;
     use pretty_assertions::assert_eq;
     use std::{fs::File, vec};
@@ -782,20 +796,20 @@ mod tests {
             Scratchpad::new(
                 "btop",
                 "kitty --title btop -e btop",
-                "size monitor_w*0.85 monitor_h*0.85",
+                Legacy("size monitor_w*0.85 monitor_h*0.85".into()),
                 "cover persist sticky shiny lazy show hide poly special tiled",
             ),
             Scratchpad::new(
                 "Loading…",
                 "nautilus",
-                "size monitor_w*0.7 monitor_h*0.8",
+                Legacy("size monitor_w*0.7 monitor_h*0.8".into()),
                 "",
             ),
-            Scratchpad::new("\\\"", "\\'", "", "cover lazy special"),
+            Scratchpad::new("\\\"", "\\'", Legacy("".into()), "cover lazy special"),
             Scratchpad::new(
                 " a program with ' a weird ' name",
                 "a \"command with\" \\'a weird\\' format",
-                "",
+                Legacy("".into()),
                 "hide show",
             ),
         ];
@@ -889,7 +903,10 @@ mod tests {
         let mut expected_scratchpads = HashMap::new();
         for i in 1..=11 {
             let title = format!("scratch{i}");
-            expected_scratchpads.insert(title.clone(), Scratchpad::new(&title, "noop", "", ""));
+            expected_scratchpads.insert(
+                title.clone(),
+                Scratchpad::new(&title, "noop", Legacy("".into()), ""),
+            );
         }
 
         assert_eq!(config_data.scratchpads, expected_scratchpads);
@@ -924,16 +941,17 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 daemon_options: String::new(),
                 groups: HashMap::new(),
                 names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
+                manual: HashMap::new(),
                 scratchpads: create_scratchpads(vec![
-                Scratchpad::new("firefox", "firefox", "", "cover"),
+                Scratchpad::new("firefox", "firefox", Legacy("".into()), "cover"),
                 Scratchpad::new(
                     "btop",
                     "kitty --title btop -e btop",
-                    "",
+                    Legacy("".into()),
                     "cover shiny lazy show hide special sticky",
                 ),
-                Scratchpad::new("htop", "kitty --title htop -e htop", "", "special"),
-                Scratchpad::new("cmat", "kitty --title cmat -e cmat", "", "lazy"),
+                Scratchpad::new("htop", "kitty --title htop -e htop", Legacy("".into()), "special"),
+                Scratchpad::new("cmat", "kitty --title cmat -e cmat", Legacy("".into()), "lazy"),
             ]),
                 cache: ConfigCache {
                     normal_titles: vec!["firefox".to_string(), "cmat".to_string()],
@@ -964,16 +982,17 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
                 daemon_options: String::new(),
                 groups: HashMap::new(),
                 names: vec!["firefox".into(), "btop".into(), "htop".into(), "cmat".into()],
+                manual: HashMap::new(),
                 scratchpads: create_scratchpads(vec![
                 Scratchpad::new(
                     "firefox",
                     "firefox --private-window",
-                    "",
+                    Legacy("".into()),
                     "special sticky",
                 ),
-                Scratchpad::new( "btop", "kitty --title btop -e btop", "", ""),
-                Scratchpad::new( "htop", "kitty --title htop -e htop", "", "cover shiny"),
-                Scratchpad::new( "cmat", "kitty --title cmat -e cmat", "", "special"),
+                Scratchpad::new("btop", "kitty --title btop -e btop", Legacy("".into()), ""),
+                Scratchpad::new("htop", "kitty --title htop -e htop", Legacy("".into()), "cover shiny"),
+                Scratchpad::new("cmat", "kitty --title cmat -e cmat", Legacy("".into()), "special"),
             ]),
                 cache: ConfigCache {
                     normal_titles: vec!["btop".to_string(), "htop".to_string()],
@@ -1038,5 +1057,35 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
 
         compare_configs(&mut config_a, &mut resources.expected_config_a);
         compare_configs(&mut config_b, &mut resources.expected_config_b);
+    }
+
+    #[test]
+    fn test_reload_preserves_manual_scratchpads() {
+        let config_path = "./test_configs/test_config2.txt";
+        let mut config_file = File::create(config_path).unwrap();
+        let resources = create_resources(config_path);
+        config_file.write_all(resources.config_contents_a).unwrap();
+
+        let mut config = Config::new(Some(config_path.to_string())).unwrap();
+
+        let manual = Scratchpad::new(
+            "manual",
+            "kitty --title manual",
+            Legacy("".into()),
+            "ephemeral",
+        );
+        config.add_scratchpad("manual", &manual);
+        assert_eq!(config.scratchpads.get("manual"), Some(&manual));
+
+        let overridden = Scratchpad::new("firefox", "firefox --new", Legacy("".into()), "special");
+        config.add_scratchpad("firefox", &overridden);
+        assert_eq!(config.scratchpads.get("firefox"), Some(&overridden));
+
+        config.reload(Some(config_path.to_string())).unwrap();
+
+        assert_eq!(config.scratchpads.get("manual"), Some(&manual));
+        assert_eq!(config.scratchpads.get("firefox"), Some(&overridden));
+        assert_eq!(config.names.iter().filter(|n| *n == "firefox").count(), 1);
+        assert_eq!(config.manual.get("manual"), Some(&manual));
     }
 }

@@ -13,7 +13,11 @@ use crate::error::{Error, Result};
 use crate::extra::*;
 use crate::logs::*;
 use crate::utils::*;
-use std::env::args;
+use std::env::{self, args};
+use std::fs;
+use std::path::PathBuf;
+
+const LUA_HELPER: &str = include_str!("../lua/hyprscratch.lua");
 
 const HYPRSCRATCH_DIR: &str = "/tmp/hyprscratch/";
 const DEFAULT_LOGFILE: &str = "/tmp/hyprscratch/hyprscratch.log";
@@ -27,6 +31,7 @@ const DEFAULT_CONFIG_FILES: &[&str] = &[
 ];
 
 const KNOWN_CLI_COMMANDS: &[&str] = &[
+    "install-lua",
     "get-config",
     "version",
     "reload",
@@ -38,6 +43,7 @@ const KNOWN_CLI_COMMANDS: &[&str] = &[
 
 const KNOWN_COMMANDS: &[&str] = &[
     "no-auto-reload",
+    "install-lua",
     "get-config",
     "spotless",
     "hide-all",
@@ -57,10 +63,29 @@ const KNOWN_COMMANDS: &[&str] = &[
     "kill",
     "logs",
     "help",
+    "add",
 ];
+
+fn install_lua() -> Result<()> {
+    let config_home = env::var_os("XDG_CONFIG_HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .ok_or_else(|| Error::Other("Neither XDG_CONFIG_HOME nor HOME is set".into()))?;
+
+    let target = config_home.join("hypr/hyprscratch.lua");
+    fs::write(&target, LUA_HELPER).log_err(file!(), line!());
+
+    log(
+        format!("Installed Lua helper to {}", target.display()),
+        Info,
+    );
+    Ok(())
+}
 
 fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>) -> Result<()> {
     match command {
+        "install-lua" => install_lua(),
         "get-config" => print_config(socket, false),
         "kill" => send_request(socket, "kill", ""),
         "full" => print_full_raw(socket),
@@ -96,7 +121,7 @@ fn send_manual(args: &[String], socket: Option<&str>) -> Result<()> {
 }
 
 fn exec_main_command(args: &[String], config: Option<String>, socket: Option<&str>) -> Result<()> {
-        let get_arg = |i| args.get(i).map_or("", String::as_str);
+    let get_arg = |i| args.get(i).map_or("", String::as_str);
     let (req, msg) = (get_arg(1), get_arg(2));
     match req {
         "init" => initialize_daemon(args.join(" "), config, socket),

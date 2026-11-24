@@ -45,41 +45,68 @@ Nix installation options can be found
 
 ## Usage
 
-### Basic
+### Lua Helper File (Recommended)
+Install or update `hyprscratch.lua` which provides functions for easy configuration:
+
+```bash
+hyprscratch install-lua
+```
 
 In `hyprland.lua`:
 
 ```lua
--- Start the hyprscratch daemon
-hl.on("hyprland.start", function()
-    hl.exec_cmd("hyprscratch init [DAEMON_OPTIONS]")
-end)
+-- Configure daemon and scratchpads
+hsc = require("hyprscratch")
+hsc.setup({
+    daemon = {OPTIONS},
+    scratchpads = {
+        NAME = {
+        title = CLIENT_TITLE,
+        command = HYPRLAND_EXEC_COMMAND,
+        options = SCRATCHPAD_OPTIONS,
+        rules = HYPRLAND_RULES
+        },
+    }
+})
 
--- Configure scratchpads
-hl.bind("SUPER + KEY", hl.dsp.exec_cmd("hyprscratch [CLIENT_TITLE] '[HYPRLAND_EXEC_COMMAND]' [SCRATCHPAD_OPTIONS]"))
+-- Configure bindigns
+hl.bind("SUPER + KEY", hsc.toggle("NAME"))
 ```
 
 Example scratchpad configuration:
 
 ```lua
-hl.on("hyprland.start", function()
-    hl.exec_cmd("hyprscratch init clean eager")
-end)
+hsc = require("hyprscratch")
+hsc.setup({
+    daemon = {clean = true, eager = true},
+    scratchpads = {
+        term = {
+            title = "terminal",
+            command = "alacritty --title terminal",
+        },
+        btop = {
+            title = "btop",
+            command = "alacritty --title btop",
+            options = {persist = true, pin = true},
+            rules = {size = {700 800}},
+        },
+        browser = {
+            title = "Mozilla Firefox",
+            command = "firefox",
+            options = {special = true, monitor = "1"},
+        }
+    }
+})
 
-hl.bind("SUPER + T", hl.dsp.exec_cmd("hyprscratch terminal 'alacritty --title terminal'"))
-hl.bind("SUPER + B", hl.dsp.exec_cmd("hyprscratch btop '[size monitor_w*0.7 monitor_h*0.8] alacritty --title btop -e btop' persist pin"))
-hl.bind("SUPER + F", hl.dsp.exec_cmd("hyprscratch 'Mozilla Firefox' firefox special monitor 1"))
+hl.bind("SUPER + T", hsc.toggle("term"))
+hl.bind("SUPER + B", hsc.toggle("btop"))
+hl.bind("SUPER + F", hsc.toggle("browser"))
 ```
 
-A Lua helper with wrappers for these commands is available in
-[`lua/hyprscratch.lua`](lua/hyprscratch.lua).
+### Optional Configuration File (Legacy)
 
-### Optional Configuration File
-
-If you consider it more convenient to use a separate configuration file, you
-can create a `~/.config/hypr/hyprscratch.conf` or
-`~/.config/hyprscratch/config.conf` and configure scratchpads in the following
-way:
+Scratchpads can also be configured in the following way in `~/.config/hypr/hyprscratch.conf` or
+`~/.config/hyprscratch/config.conf`:
 
 ```perl
 # Create a new scratchpad
@@ -132,7 +159,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 ## Options
 
-### Daemon options
+### Daemon Options
 
 * `clean`: automatically hides all scratchpads on workspace change.
 
@@ -144,7 +171,7 @@ Using a configuration file can be combined with normally configured scratchpads.
 
 * `config </path/to/config>`: specify a path to the configuration file.
 
-### Scratchpad options
+### Scratchpad Options
 
 * `ephemeral`: closes the scratchpad when it is hidden.
 
@@ -175,7 +202,9 @@ Using a configuration file can be combined with normally configured scratchpads.
 * `special`: uses the special workspace. Does not work with most other options
 and groups.
 
-### Extra subcommands
+### Extra Subcommands
+
+* `init`: manually start the daemon.
 
 * `toggle <name>`: toggles the scratchpad with the given name.
 
@@ -203,6 +232,18 @@ scratchpads (`rofi` for keybinds, `fzf` for cli).
 * `kill`: kills the hyprscratch daemon.
 
 * `logs`: shows logs.
+
+### Lua Helper Functions
+
+```lua
+hsc.setup(config: table)
+hsc.toggle(name: string)
+hsc.show(name: string)
+hsc.hide(name: string)
+hsc.cycle([mode: string])
+hsc.previous([action: string])
+hsc.hide_all()
+```
 
 ## Other Relevant Information
 

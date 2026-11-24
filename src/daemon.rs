@@ -4,10 +4,12 @@ use crate::event::start_event_listeners;
 use crate::ipc::data::{Client, Clients};
 use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::logs::*;
+use crate::scratchpad::Rules::Lua;
 use crate::scratchpad::Scratchpad;
 use crate::utils::*;
 use crate::DEFAULT_SOCKET;
 use crate::HYPRSCRATCH_DIR;
+use std::fmt::format;
 use std::fs::{create_dir, remove_file};
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -234,7 +236,7 @@ fn handle_call(mut data: RequestData) -> Result<()> {
 fn handle_attach(data: RequestData) -> Result<()> {
     if let Some(client) = Client::get_active()? {
         let class = client.initial_class;
-        let scratchpad = Scratchpad::new(&class, "", "", &data.msg);
+        let scratchpad = Scratchpad::new(&class, "", Lua("".into()), &data.msg);
         data.config.add_scratchpad(&class, &scratchpad);
 
         make_workspaces_persistent(data.config)?;
@@ -247,7 +249,7 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
     let args: Vec<&str> = data.msg.splitn(3, '^').collect();
     data.state.update_prev_titles(args[0]);
 
-    let mut scratchpad = Scratchpad::new(args[0], args[1], "", &args[2..].join(" "));
+    let mut scratchpad = Scratchpad::new(args[0], args[1], Lua("".into()), &args[2..].join(" "));
     data.config.add_scratchpad(args[0], &scratchpad);
 
     make_workspaces_persistent(data.config)?;
@@ -315,6 +317,38 @@ fn handle_menu(stream: &mut UnixStream, data: RequestData) -> Result<()> {
     Ok(())
 }
 
+fn handle_add(data: RequestData) -> Result<()> {
+    let args: Vec<&str> = data.msg.splitn(5, '^').collect();
+    let [name, title, command, rules, opts] = args[..] else {
+        log("Hyprscratch add has missing fields".into(), Warn);
+        return Ok(());
+    };
+
+    if name.is_empty() {
+        log("Scratchpad has no name".into(), Warn);
+        return Ok(());
+    }
+
+    if title.is_empty() {
+        log(format!("Scratchpad {name} has no title"), Warn);
+        return Ok(());
+    }
+
+    if command.is_empty() {
+        log(format!("Scratchpad {name} has no command"), Warn);
+        return Ok(());
+    }
+
+    data.state.update_prev_titles(name);
+    let scratchpad = Scratchpad::new(title, command, Lua(rules.into()), opts);
+
+    data.config.add_scratchpad(name, &scratchpad);
+    make_workspaces_persistent(data.config)?;
+
+    log(format!("Successfully added scratchpad {name}"), Info);
+    Ok(())
+}
+
 fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
     match data.req.as_str() {
         "toggle" | "summon" | "show" | "hide" => handle_call(data),
@@ -327,6 +361,7 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
         "attach" => handle_attach(data),
         "cycle" => handle_cycle(data),
         "menu" => handle_menu(stream, data),
+        "add" => handle_add(data),
         "kill" => {
             log("Received 'kill' request, terminating listener".into(), Info);
             Err(Error::Other("kill".into()))
@@ -432,6 +467,7 @@ mod tests {
     use super::*;
     use crate::ipc::data::{Clients, Workspace, WorkspaceId};
     use crate::ipc::dispatchers::WorkspaceIdentifier;
+    use crate::scratchpad::Rules::Legacy;
     use std::io::prelude::*;
     use std::{env, fs::File, thread::sleep, time::Duration};
 
@@ -515,10 +551,11 @@ mod tests {
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        let _ = resources
-            .commands
-            .clone()
-            .map(|command| dispatchers().exec(&command).unwrap());
+        let _ = resources.commands.clone().map(|command| {
+            dispatchers()
+                .exec(&command, &Legacy(String::new()))
+                .unwrap()
+        });
         sleep(Duration::from_millis(1000));
     }
 

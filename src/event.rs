@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::daemon::{DaemonOptions, DaemonState};
-use crate::ipc::data::{Client, Clients, Workspace};
-use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::error::Result;
 use crate::ipc;
+use crate::ipc::data::{Client, Clients, Workspace};
+use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::logs::*;
 use crate::utils::*;
 use notify::event::ModifyKind;

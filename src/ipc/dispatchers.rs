@@ -1,5 +1,7 @@
 use crate::error::Result;
 use crate::ipc;
+use crate::scratchpad::Rules;
+use crate::utils::prepend;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -69,8 +71,17 @@ impl Dispatchers {
         Dispatchers
     }
 
-    pub fn exec(&self, cmd: &str) -> Result<()> {
-        dispatch(&format!("hl.dsp.exec_cmd({})", quote(cmd)))
+    pub fn exec(&self, cmd: &str, rules: &Rules) -> Result<()> {
+        match rules {
+            Rules::Legacy(rules) => {
+                let cmd = prepend(cmd, rules);
+                dispatch(&format!("hl.dsp.exec_cmd({})", quote(&cmd)))
+            }
+            Rules::Lua(table) if !rules.is_empty() => {
+                dispatch(&format!("hl.dsp.exec_cmd({}, {table})", quote(cmd)))
+            }
+            Rules::Lua(_) => dispatch(&format!("hl.dsp.exec_cmd({})", quote(cmd))),
+        }
     }
 
     pub fn close_window(&self, win: WindowIdentifier<'_>) -> Result<()> {
