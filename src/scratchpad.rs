@@ -48,6 +48,7 @@ impl HyprlandState {
 pub struct ScratchpadOptions {
     options_string: String,
     pub monitor: Option<String>,
+    pub group: Option<String>,
     pub ephemeral: bool,
     pub persist: bool,
     pub special: bool,
@@ -89,6 +90,7 @@ impl ScratchpadOptions {
             lazy: opts.contains("lazy"),
             pin: opts.contains("pin"),
             monitor: get_arg("monitor"),
+            group: get_arg("group"),
         }
     }
 
@@ -375,7 +377,7 @@ impl Scratchpad {
         }
 
         self.hide_active(title_map, &state);
-        dispatchers().bring_active_to_top()?;
+        dispatchers().raise_active_window()?;
         Ok(())
     }
 }

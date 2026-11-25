@@ -1,15 +1,14 @@
-use crate::config::Config;
+use crate::config::{extract_rules, Config};
 use crate::error::{Error, Result};
 use crate::event::start_event_listeners;
 use crate::ipc::data::{Client, Clients};
 use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
 use crate::logs::*;
-use crate::scratchpad::Rules::Lua;
+use crate::scratchpad::Rules::{Legacy, Lua};
 use crate::scratchpad::Scratchpad;
 use crate::utils::*;
 use crate::DEFAULT_SOCKET;
 use crate::HYPRSCRATCH_DIR;
-use std::fmt::format;
 use std::fs::{create_dir, remove_file};
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -237,7 +236,7 @@ fn handle_attach(data: RequestData) -> Result<()> {
     if let Some(client) = Client::get_active()? {
         let class = client.initial_class;
         let scratchpad = Scratchpad::new(&class, "", Lua("".into()), &data.msg);
-        data.config.add_scratchpad(&class, &scratchpad);
+        data.config.add_scratchpad(&class, &scratchpad, true);
 
         make_workspaces_persistent(data.config)?;
     }
@@ -249,8 +248,14 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
     let args: Vec<&str> = data.msg.splitn(3, '^').collect();
     data.state.update_prev_titles(args[0]);
 
-    let mut scratchpad = Scratchpad::new(args[0], args[1], Lua("".into()), &args[2..].join(" "));
-    data.config.add_scratchpad(args[0], &scratchpad);
+    let [rules, command] = extract_rules(args[1]);
+    let mut scratchpad = Scratchpad::new(
+        args[0],
+        &command,
+        Legacy(rules.into()),
+        &args[2..].join(" "),
+    );
+    data.config.add_scratchpad(args[0], &scratchpad, true);
 
     make_workspaces_persistent(data.config)?;
 
@@ -262,6 +267,7 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
 
 fn handle_reload(data: RequestData) -> Result<()> {
     data.config.reload(data.get_config_path())?;
+    reload_lua();
     make_workspaces_persistent(data.config)?;
     if data.state.options.eager {
         autospawn(data.config)?;
@@ -317,35 +323,75 @@ fn handle_menu(stream: &mut UnixStream, data: RequestData) -> Result<()> {
     Ok(())
 }
 
-fn handle_add(data: RequestData) -> Result<()> {
-    let args: Vec<&str> = data.msg.splitn(5, '^').collect();
-    let [name, title, command, rules, opts] = args[..] else {
-        log("Hyprscratch add has missing fields".into(), Warn);
+fn group_from_data(gr_data: &str) -> Option<(String, Vec<&str>)> {
+    let Some((name, scratchpads)) = gr_data.split_once('\u{2C01}') else {
+        log(format!("Group has missing data"), Warn);
+        return None;
+    };
+
+    if name.is_empty() {
+        log("Group has no name".into(), Warn);
+        return None;
+    }
+
+    if scratchpads.is_empty() {
+        log(format!("Group {name} has no scratchpads"), Warn);
+        return None;
+    }
+    Some((name.into(), scratchpads.split('\u{2C00}').collect()))
+}
+
+fn handle_add_group(data: RequestData) -> Result<()> {
+    if data.msg.is_empty() {
         return Ok(());
+    }
+
+    data.msg.split('\u{2C02}').for_each(|gr_data| {
+        if let Some((name, sc_names)) = group_from_data(gr_data) {
+            data.config.add_group(&name, sc_names);
+        }
+    });
+    Ok(())
+}
+
+fn scratchpad_from_data(sc_data: &str) -> Option<(String, Scratchpad)> {
+    let data: Vec<&str> = sc_data.splitn(5, '\u{2C00}').collect();
+    let [name, title, command, rules, opts] = data[..] else {
+        log("Scratchpad has missing fields".into(), Warn);
+        return None;
     };
 
     if name.is_empty() {
         log("Scratchpad has no name".into(), Warn);
-        return Ok(());
+        return None;
     }
 
     if title.is_empty() {
-        log(format!("Scratchpad {name} has no title"), Warn);
-        return Ok(());
+        log(format!("Scratchpad {name} has no title or class"), Warn);
+        return None;
     }
 
     if command.is_empty() {
         log(format!("Scratchpad {name} has no command"), Warn);
-        return Ok(());
+        return None;
     }
 
-    data.state.update_prev_titles(name);
-    let scratchpad = Scratchpad::new(title, command, Lua(rules.into()), opts);
-
-    data.config.add_scratchpad(name, &scratchpad);
-    make_workspaces_persistent(data.config)?;
-
     log(format!("Successfully added scratchpad {name}"), Info);
+    Some((
+        name.into(),
+        Scratchpad::new(title, command, Lua(rules.into()), opts),
+    ))
+}
+
+fn handle_add(data: RequestData) -> Result<()> {
+    data.msg.split('\u{2C01}').for_each(|sc_data| {
+        if let Some((name, sc)) = scratchpad_from_data(sc_data) {
+            data.config.add_scratchpad(&name, &sc, false);
+        }
+    });
+
+    data.config.rebuild_cache();
+    make_workspaces_persistent(data.config)?;
     Ok(())
 }
 
@@ -353,6 +399,7 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
     match data.req.as_str() {
         "toggle" | "summon" | "show" | "hide" => handle_call(data),
         "get-config" => handle_get_config(stream, data),
+        "add-group" => handle_add_group(data),
         "previous" => handle_previous(data),
         "kill-all" => handle_killall(data),
         "hide-all" => handle_hideall(data),
@@ -400,12 +447,20 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
     Ok(listener)
 }
 
+fn reload_lua() {
+    match dispatchers().reload_lua() {
+        Ok(_) => log("Hyprland Lua config loaded".into(), Info),
+        Err(e) => log(format!("Hyprland Lua config not found: {e}"), Info),
+    }
+}
+
 fn start_unix_listener(
     socket_path: Option<&str>,
     state: &mut DaemonState,
     config: ConfigMutex,
 ) -> Result<()> {
     let listener = get_listener(socket_path)?;
+    reload_lua();
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {

@@ -45,6 +45,7 @@ const KNOWN_COMMANDS: &[&str] = &[
     "no-auto-reload",
     "install-lua",
     "get-config",
+    "add-group",
     "spotless",
     "hide-all",
     "kill-all",
@@ -66,15 +67,19 @@ const KNOWN_COMMANDS: &[&str] = &[
     "add",
 ];
 
-fn install_lua() -> Result<()> {
+fn install_lua(config: Option<String>) -> Result<()> {
     let config_home = env::var_os("XDG_CONFIG_HOME")
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
         .ok_or_else(|| Error::Other("Neither XDG_CONFIG_HOME nor HOME is set".into()))?;
 
-    let target = config_home.join("hypr/hyprscratch.lua");
-    fs::write(&target, LUA_HELPER).log_err(file!(), line!());
+    let target = match config {
+        Some(conf) => PathBuf::from(conf),
+        None => config_home.join("hypr/hyprscratch.lua"),
+    };
+
+    fs::write(&target, LUA_HELPER).unwrap_log(file!(), line!());
 
     log(
         format!("Installed Lua helper to {}", target.display()),
@@ -85,7 +90,7 @@ fn install_lua() -> Result<()> {
 
 fn exec_cli_command(command: &str, socket: Option<&str>, config: Option<String>) -> Result<()> {
     match command {
-        "install-lua" => install_lua(),
+        "install-lua" => install_lua(config),
         "get-config" => print_config(socket, false),
         "kill" => send_request(socket, "kill", ""),
         "full" => print_full_raw(socket),

@@ -61,7 +61,9 @@ hsc.setup({
     daemon = {OPTIONS},
     scratchpads = {
         NAME = {
+        -- One of title or class is manatory
         title = CLIENT_TITLE,
+        class = CLIENT_CLASS,
         command = HYPRLAND_EXEC_COMMAND,
         options = SCRATCHPAD_OPTIONS,
         rules = HYPRLAND_RULES
@@ -69,7 +71,7 @@ hsc.setup({
     }
 })
 
--- Configure bindigns
+-- Configure bindings
 hl.bind("SUPER + KEY", hsc.toggle("NAME"))
 ```
 
@@ -79,21 +81,31 @@ Example scratchpad configuration:
 hsc = require("hyprscratch")
 hsc.setup({
     daemon = {clean = true, eager = true},
+    global_options = {persist = true},
+    global_rules = {size = {1280, 720}},
+
     scratchpads = {
         term = {
             title = "terminal",
             command = "alacritty --title terminal",
-        },
-        btop = {
-            title = "btop",
-            command = "alacritty --title btop",
-            options = {persist = true, pin = true},
-            rules = {size = {700 800}},
+            rules = {size = {700, 800}},
         },
         browser = {
-            title = "Mozilla Firefox",
+            class = "firefox",
             command = "firefox",
             options = {special = true, monitor = "1"},
+        }
+    }
+
+    groups = {
+        g1 = {
+            "term", 
+            btop = {
+                title = "btop",
+                command = "alacritty --title btop",
+                options = {persist = true, pin = true},
+                rules = {size = {700, 800}, move = {0, 0}},
+            },
         }
     }
 })
@@ -204,7 +216,9 @@ and groups.
 
 ### Extra Subcommands
 
-* `init`: manually start the daemon.
+* `init <daemon_options>`: manually start the daemon.
+
+* `install-lua <config>`: installs the lua helper file to `.config/hypr` or a specified file.
 
 * `toggle <name>`: toggles the scratchpad with the given name.
 
@@ -214,6 +228,7 @@ and groups.
 
 * `cycle [normal|special]`: cycles between scratchpads (optionally only normal
 or special ones) in the order they are defined in the configuration file.
+Lua-defined scratchpads are cycled alphabetically.
 
 * `previous [show|hide]`: toggles the last used scratchpad that is not
 currently active.
@@ -242,6 +257,7 @@ hsc.show(name: string)
 hsc.hide(name: string)
 hsc.cycle([mode: string])
 hsc.previous([action: string])
+hsc.reload()
 hsc.hide_all()
 ```
 

@@ -290,10 +290,31 @@ impl Config {
         }
     }
 
-    pub fn add_scratchpad(&mut self, name: &str, sc: &Scratchpad) {
+    pub fn rebuild_cache(&mut self) {
+        self.cache = ConfigCache::new(&self.scratchpads);
+    }
+
+    pub fn add_scratchpad(&mut self, name: &str, sc: &Scratchpad, rebuild: bool) {
         self.insert_scratchpad(name, sc);
         self.manual.insert(name.into(), sc.clone());
-        self.cache = ConfigCache::new(&self.scratchpads);
+
+        if let Some(g_name) = sc.options.group.clone() {
+            if let Some(g) = self.groups.get_mut(&g_name) {
+                g.push(sc.clone())
+            }
+        }
+
+        if rebuild {
+            self.rebuild_cache();
+        }
+    }
+
+    pub fn add_group(&mut self, name: &str, scratchpad_names: Vec<&str>) {
+        let scratchpads = scratchpad_names
+            .iter()
+            .filter_map(|n| self.scratchpads.get(*n).cloned())
+            .collect();
+        self.groups.insert(name.into(), scratchpads);
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {
@@ -563,7 +584,7 @@ fn warn_unknown_options(opts: &str) {
         .fold(false, |acc, x| warn_unknown(x, acc));
 }
 
-fn extract_rules(cmd: &str) -> [String; 2] {
+pub(crate) fn extract_rules(cmd: &str) -> [String; 2] {
     let i1 = cmd.find('[').unwrap_or_default();
     let i2 = cmd.find(']').unwrap_or_default();
 
@@ -1074,11 +1095,11 @@ bind = $mainMod, d, exec, hyprscratch cmat 'kitty --title cmat -e cmat' special\
             Legacy("".into()),
             "ephemeral",
         );
-        config.add_scratchpad("manual", &manual);
+        config.add_scratchpad("manual", &manual, true);
         assert_eq!(config.scratchpads.get("manual"), Some(&manual));
 
         let overridden = Scratchpad::new("firefox", "firefox --new", Legacy("".into()), "special");
-        config.add_scratchpad("firefox", &overridden);
+        config.add_scratchpad("firefox", &overridden, true);
         assert_eq!(config.scratchpads.get("firefox"), Some(&overridden));
 
         config.reload(Some(config_path.to_string())).unwrap();

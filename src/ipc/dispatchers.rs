@@ -136,8 +136,12 @@ impl Dispatchers {
         ))
     }
 
-    pub fn bring_active_to_top(&self) -> Result<()> {
-        dispatch("hl.dsp.window.bring_to_top()")
+    pub fn raise_active_window(&self) -> Result<()> {
+        dispatch(r#"hl.dsp.window.alter_zorder({ mode = "top" })"#)
+    }
+
+    pub fn reload_lua(&self) -> Result<()> {
+        eval(r#"require("hyprscratch").reload()"#)
     }
 }
 
