@@ -59,15 +59,35 @@ In `hyprland.lua`:
 hsc = require("hyprscratch")
 hsc.setup({
     daemon = {OPTIONS},
+    global_options = {SCRATCHPAD_OPTIONS},
+    global_rules = {HYPRLAND_RULES},
     scratchpads = {
-        NAME = {
-        -- One of title or class is manatory
-        title = CLIENT_TITLE,
-        class = CLIENT_CLASS,
-        command = HYPRLAND_EXEC_COMMAND,
-        options = SCRATCHPAD_OPTIONS,
-        rules = HYPRLAND_RULES
+        SCRATCHPAD_NAME = {
+        -- Mandatory fields
+        command = "HYPRLAND_EXEC_COMMAND",
+
+        -- One of title or class is manatory, title takes priority
+        title = "CLIENT_TITLE",
+        class = "CLIENT_CLASS",
+
+        --Optional fields
+        options = {SCRATCHPAD_OPTIONS},
+        rules = {HYPRLAND_RULES},
         },
+    },
+    --Groups that manage multiple scratchpads are also supported
+    groups = {
+        GROUP_NAME = {
+            -- Add existing scratchpads to the groups
+            "SCRATCHPAD_NAME",
+
+            -- Define a new scratchpad that can also be used on its own
+            SCRATCHPAD_NAME = {
+                command = "HYPRLAND_EXEC_COMMAND",
+                title = "CLIENT_TITLE",
+
+            }
+        }
     }
 })
 
@@ -95,7 +115,7 @@ hsc.setup({
             command = "firefox",
             options = {special = true, monitor = "1"},
         }
-    }
+    },
 
     groups = {
         g1 = {
@@ -121,26 +141,19 @@ Scratchpads can also be configured in the following way in `~/.config/hypr/hyprs
 `~/.config/hyprscratch/config.conf`:
 
 ```perl
-# Create a new scratchpad
 scratchpad1 {
-    # Mandatory fields
     command = command
 
-    # At least one is mandatory, title takes priority for matching
     title = title # Hyprland initialTitle
     class = class # Hyprland initialClass
 
-    # Optional fields
     options = option1 option2 option3 # Scratchpad options
     rules = rule1;rule2;rule3 # Hyprland window rules
 }
 
-# Groups that manage multiple scratchpads are also supported
 group:group1 {
-    # Add an existing scratchpad to the group
     name = scratchpad1
 
-    # Create a new scratchpad that can also be used by itself
     scratchpad2 {
         title = title
         command = command
