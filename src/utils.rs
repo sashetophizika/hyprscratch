@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::ipc::data::{Client, Clients};
-use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
+use crate::ipc::dispatchers::{Dispatchers, WindowIdentifier, WorkspaceIdentifier};
 use crate::scratchpad::{Rules, Scratchpad};
 use crate::DEFAULT_SOCKET;
 use crate::{logs::*, KNOWN_CLI_COMMANDS};
@@ -98,17 +98,15 @@ pub fn send_request(socket: Option<&str>, req: &str, msg: &str) -> Result<()> {
 
 pub fn move_to_special(cl: &Client, workspace: &str) {
     if cl.pinned {
-        dispatchers()
-            .toggle_pin_window(WindowIdentifier::Address(cl.address.clone()))
+        Dispatchers::toggle_pin_window(WindowIdentifier::Address(cl.address.clone()))
             .log_err(file!(), line!());
     }
 
-    dispatchers()
-        .move_to_workspace_silent(
-            WorkspaceIdentifier::Special(Some(workspace)),
-            Some(WindowIdentifier::Address(cl.address.clone())),
-        )
-        .log_err(file!(), line!());
+    Dispatchers::move_to_workspace_silent(
+        WorkspaceIdentifier::Special(Some(workspace)),
+        Some(WindowIdentifier::Address(cl.address.clone())),
+    )
+    .log_err(file!(), line!());
 }
 
 pub fn is_known(titles: &[String], cl: &Client) -> bool {
@@ -129,9 +127,7 @@ pub fn auto_hide(cl: &Client, title_map: &HashMap<String, String>) {
 
 pub fn hide_special(cl: &Client) {
     if let Some(("special", workspace)) = cl.workspace.name.split_once(":") {
-        dispatchers()
-            .toggle_special_workspace(Some(workspace.into()))
-            .log_err(file!(), line!());
+        Dispatchers::toggle_special_workspace(Some(workspace.into())).log_err(file!(), line!());
     }
 }
 
@@ -248,7 +244,7 @@ pub fn autospawn(config: &mut Config) -> Result<()> {
     let spawn = |(n, sc): (&String, &Scratchpad)| {
         prepare_commands(sc, Some(true), n)
             .iter()
-            .for_each(|(cmd, rules)| dispatchers().exec(cmd, rules).log_err(file!(), line!()));
+            .for_each(|(cmd, rules)| Dispatchers::exec(cmd, rules).log_err(file!(), line!()));
     };
 
     let clients = Clients::get()?;
@@ -287,9 +283,7 @@ mod tests {
                 .zip(self.spawned)
                 .filter(|(_, spawned)| *spawned == 1)
                 .for_each(|(title, _)| {
-                    dispatchers()
-                        .close_window(WindowIdentifier::Title(&title))
-                        .unwrap();
+                    Dispatchers::close_window(WindowIdentifier::Title(&title)).unwrap();
                 });
             sleep(Duration::from_millis(500));
         }
@@ -323,11 +317,10 @@ mod tests {
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        let _ = resources.commands.clone().map(|command| {
-            dispatchers()
-                .exec(&command, &Legacy(String::new()))
-                .unwrap()
-        });
+        let _ = resources
+            .commands
+            .clone()
+            .map(|command| Dispatchers::exec(&command, &Legacy(String::new())).unwrap());
         sleep(Duration::from_millis(1000));
 
         clients = Clients::get().unwrap().into_iter();

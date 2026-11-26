@@ -44,14 +44,14 @@ pub fn request(command: &str) -> Result<String> {
     stream.write_all(command.as_bytes())?;
     stream.flush()?;
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response)?;
+    let mut buf = String::new();
+    stream.read_to_string(&mut buf)?;
 
-    if response.trim_start().starts_with("error:") {
-        return Err(Error::Ipc(response.trim().to_string()));
+    if buf.trim_start().starts_with("error:") {
+        return Err(Error::Ipc(buf.trim().to_string()));
     }
 
-    Ok(response)
+    Ok(buf)
 }
 
 pub fn eval(expression: &str) -> Result<String> {

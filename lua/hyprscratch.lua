@@ -114,22 +114,6 @@ local function init()
     hl.dispatch(hl.dsp.exec_cmd("hyprscratch init " .. daemon_opts(d)))
 end
 
-local function group_members(group)
-    local members = {}
-
-    if #group > 0 then
-        for _, value in ipairs(group) do
-            members[#members + 1] = { value, value }
-        end
-    else
-        for _, key in ipairs(sort_keys(group)) do
-            members[#members + 1] = { key, group[key] }
-        end
-    end
-
-    return members
-end
-
 local function reload()
     local scratchpads = {}
     for _, name in ipairs(sort_keys(config.scratchpads)) do
@@ -139,26 +123,20 @@ local function reload()
     local groups = {}
     for _, name in ipairs(sort_keys(config.groups)) do
         local group_scratchpads = {}
-        for _, member in ipairs(group_members(config.groups[name])) do
-            local member_name, sc = member[1], member[2]
+        for sc_name, sc in ipairs(config.groups[name]) do
             if type(sc) == "string" then
                 table.insert(group_scratchpads, sc)
             elseif type(sc) == "table" then
-                member_name = tostring(member_name)
-                table.insert(scratchpads, payload(member_name, sc))
-                table.insert(group_scratchpads, member_name)
+                table.insert(scratchpads, payload(tostring(sc_name), sc))
+                table.insert(group_scratchpads, tostring(sc_name))
             end
         end
         table.insert(groups, name .. "\u{2C01}" .. table.concat(group_scratchpads, "\u{2C00}"))
     end
 
-    if #scratchpads > 0 then
-        hl.dispatch(hl.dsp.exec_cmd("hyprscratch add " .. quote(table.concat(scratchpads, "\u{2C01}"))))
-    end
-
-    if #groups > 0 then
-        hl.dispatch(hl.dsp.exec_cmd("hyprscratch add-group " .. quote(table.concat(groups, "\u{2C02}"))))
-    end
+    local scratchpads_str = table.concat(scratchpads, "\u{2C01}")
+    local groups_str = table.concat(groups, "\u{2C02}")
+    hl.dispatch(hl.dsp.exec_cmd("hyprscratch populate " .. quote(scratchpads_str .. "\u{2C03}" .. groups_str)))
 end
 
 M.toggle = function(name)

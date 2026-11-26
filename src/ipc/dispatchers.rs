@@ -3,13 +3,6 @@ use crate::ipc;
 use crate::scratchpad::Rules;
 use crate::utils::prepend;
 use std::fmt;
-use std::sync::OnceLock;
-
-static DISPATCHERS: OnceLock<Dispatchers> = OnceLock::new();
-
-pub fn dispatchers() -> &'static Dispatchers {
-    DISPATCHERS.get_or_init(Dispatchers::init)
-}
 
 pub struct Dispatchers;
 
@@ -67,11 +60,7 @@ fn eval(expression: &str) -> Result<()> {
 }
 
 impl Dispatchers {
-    fn init() -> Self {
-        Dispatchers
-    }
-
-    pub fn exec(&self, cmd: &str, rules: &Rules) -> Result<()> {
+    pub fn exec(cmd: &str, rules: &Rules) -> Result<()> {
         match rules {
             Rules::Legacy(rules) => {
                 let cmd = prepend(cmd, rules);
@@ -84,15 +73,15 @@ impl Dispatchers {
         }
     }
 
-    pub fn close_window(&self, win: WindowIdentifier<'_>) -> Result<()> {
+    pub fn close_window(win: WindowIdentifier<'_>) -> Result<()> {
         dispatch(&format!("hl.dsp.window.close({})", win_selector(&win)))
     }
 
-    pub fn focus_window(&self, win: WindowIdentifier<'_>) -> Result<()> {
+    pub fn focus_window(win: WindowIdentifier<'_>) -> Result<()> {
         dispatch(&format!("hl.dsp.focus({})", win_selector(&win)))
     }
 
-    pub fn toggle_pin_window(&self, win: WindowIdentifier<'_>) -> Result<()> {
+    pub fn toggle_pin_window(win: WindowIdentifier<'_>) -> Result<()> {
         dispatch(&format!(
             "hl.dsp.window.pin({{action=\"toggle\", window={}}})",
             quote(&win.to_string())
@@ -100,7 +89,6 @@ impl Dispatchers {
     }
 
     pub fn move_to_workspace_silent(
-        &self,
         ws: WorkspaceIdentifier<'_>,
         win: Option<WindowIdentifier<'_>>,
     ) -> Result<()> {
@@ -114,14 +102,14 @@ impl Dispatchers {
         ))
     }
 
-    pub fn toggle_special_workspace(&self, name: Option<String>) -> Result<()> {
+    pub fn toggle_special_workspace(name: Option<String>) -> Result<()> {
         match name {
             Some(n) => dispatch(&format!("hl.dsp.workspace.toggle_special({})", quote(&n))),
             None => dispatch("hl.dsp.workspace.toggle_special()"),
         }
     }
 
-    pub fn set_workspace_persistent(&self, name: &str) -> Result<()> {
+    pub fn set_workspace_persistent(name: &str) -> Result<()> {
         eval(&format!(
             "hl.workspace_rule({{ workspace = {}, persistent = true }})",
             quote(&format!("special:{name}"))
@@ -129,18 +117,18 @@ impl Dispatchers {
     }
 
     #[cfg(test)]
-    pub fn workspace(&self, ws: WorkspaceIdentifier<'_>) -> Result<()> {
+    pub fn workspace(ws: WorkspaceIdentifier<'_>) -> Result<()> {
         dispatch(&format!(
             "hl.dsp.focus({{workspace={}}})",
             quote(&ws.to_string())
         ))
     }
 
-    pub fn raise_active_window(&self) -> Result<()> {
+    pub fn raise_active_window() -> Result<()> {
         dispatch(r#"hl.dsp.window.alter_zorder({ mode = "top" })"#)
     }
 
-    pub fn reload_lua(&self) -> Result<()> {
+    pub fn reload_lua() -> Result<()> {
         eval(r#"require("hyprscratch").reload()"#)
     }
 }

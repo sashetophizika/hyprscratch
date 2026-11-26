@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::ipc::data::{Client, Clients, Monitors, Workspace};
-use crate::ipc::dispatchers::{dispatchers, WindowIdentifier, WorkspaceIdentifier};
+use crate::ipc::dispatchers::{Dispatchers, WindowIdentifier, WorkspaceIdentifier};
 use crate::logs::*;
 use crate::utils::*;
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ impl HyprlandState {
     }
 
     fn toggle_special(&self) -> Result<()> {
-        dispatchers().toggle_special_workspace(Some(self.special_workspace.clone()))
+        Dispatchers::toggle_special_workspace(Some(self.special_workspace.clone()))
     }
 }
 
@@ -216,7 +216,7 @@ impl Scratchpad {
 
     fn spawn_special(&self, state: &HyprlandState) {
         for (cmd, rules) in &prepare_commands(self, Some(false), &state.special_workspace) {
-            dispatchers().exec(cmd, rules).log_err(file!(), line!());
+            Dispatchers::exec(cmd, rules).log_err(file!(), line!());
         }
     }
 
@@ -255,7 +255,7 @@ impl Scratchpad {
         }
 
         for (cmd, rules) in &prepare_commands(self, None, &state.special_workspace) {
-            dispatchers().exec(cmd, rules).log_err(file!(), line!());
+            Dispatchers::exec(cmd, rules).log_err(file!(), line!());
         }
     }
 
@@ -265,16 +265,15 @@ impl Scratchpad {
             .iter()
             .filter(|cl| !self.is_on_workspace(cl, state))
         {
-            dispatchers().move_to_workspace_silent(
+            Dispatchers::move_to_workspace_silent(
                 WorkspaceIdentifier::Name(&self.get_workspace_name(state)),
                 Some(WindowIdentifier::Address(client.address.clone())),
             )?;
 
-            dispatchers().focus_window(WindowIdentifier::Address(client.address.clone()))?;
+            Dispatchers::focus_window(WindowIdentifier::Address(client.address.clone()))?;
 
             if self.options.pin && !client.pinned {
-                dispatchers()
-                    .toggle_pin_window(WindowIdentifier::Address(client.address.clone()))?;
+                Dispatchers::toggle_pin_window(WindowIdentifier::Address(client.address.clone()))?;
             }
 
             if !self.options.poly {
@@ -357,7 +356,7 @@ impl Scratchpad {
     }
 
     fn refocus(client: &Client) -> Result<()> {
-        dispatchers().focus_window(WindowIdentifier::Address(client.address.clone()))?;
+        Dispatchers::focus_window(WindowIdentifier::Address(client.address.clone()))?;
         Ok(())
     }
 
@@ -377,7 +376,7 @@ impl Scratchpad {
         }
 
         self.hide_active(title_map, &state);
-        dispatchers().raise_active_window()?;
+        Dispatchers::raise_active_window()?;
         Ok(())
     }
 }
@@ -471,9 +470,7 @@ mod tests {
     impl Drop for TestResources {
         fn drop(&mut self) {
             self.command.split('?').for_each(|_| {
-                dispatchers()
-                    .close_window(WindowIdentifier::Title(&self.title))
-                    .unwrap();
+                Dispatchers::close_window(WindowIdentifier::Title(&self.title)).unwrap();
                 sleep(Duration::from_millis(500));
             });
         }
@@ -609,15 +606,11 @@ mod tests {
 
         resources.assert_active();
 
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(1)).unwrap();
         sleep(Duration::from_millis(500));
 
         resources.assert_active();
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(-1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(-1)).unwrap();
     }
 
     #[test]
@@ -667,9 +660,7 @@ mod tests {
 
         resources.assert_not_present();
 
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Name("test"))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Name("test")).unwrap();
         sleep(Duration::from_millis(500));
         assert_eq!(Workspace::get_active().unwrap().name, "test");
 
@@ -681,7 +672,7 @@ mod tests {
         resources.assert_active();
 
         assert_eq!(Workspace::get_active().unwrap().name, "test");
-        dispatchers().workspace(WorkspaceIdentifier::Id(1)).unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Id(1)).unwrap();
     }
 
     #[test]
@@ -708,9 +699,7 @@ mod tests {
 
         resources.assert_not_present();
 
-        dispatchers()
-            .exec(&resources.command, &Legacy(resources.rules.clone()))
-            .unwrap();
+        Dispatchers::exec(&resources.command, &Legacy(resources.rules.clone())).unwrap();
         sleep(Duration::from_millis(1000));
 
         resources.assert_present();

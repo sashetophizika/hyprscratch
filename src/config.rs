@@ -301,6 +301,8 @@ impl Config {
         if let Some(g_name) = sc.options.group.clone() {
             if let Some(g) = self.groups.get_mut(&g_name) {
                 g.push(sc.clone())
+            } else {
+                self.groups.insert(g_name, vec![sc.clone()]);
             }
         }
 
@@ -314,7 +316,12 @@ impl Config {
             .iter()
             .filter_map(|n| self.scratchpads.get(*n).cloned())
             .collect();
-        self.groups.insert(name.into(), scratchpads);
+
+        if let Some(g) = self.groups.get_mut(name) {
+            g.extend(scratchpads);
+        } else {
+            self.groups.insert(name.into(), scratchpads);
+        }
     }
 
     pub fn reload(&mut self, config_path: Option<String>) -> Result<()> {

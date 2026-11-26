@@ -2,7 +2,7 @@ use crate::config::{extract_rules, Config};
 use crate::error::{Error, Result};
 use crate::event::start_event_listeners;
 use crate::ipc::data::{Client, Clients};
-use crate::ipc::dispatchers::{dispatchers, WindowIdentifier};
+use crate::ipc::dispatchers::{Dispatchers, WindowIdentifier};
 use crate::logs::*;
 use crate::scratchpad::Rules::{Legacy, Lua};
 use crate::scratchpad::Scratchpad;
@@ -14,6 +14,7 @@ use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::thread::spawn;
 
 type ConfigMutex = Arc<RwLock<Config>>;
 
@@ -267,7 +268,8 @@ fn handle_manual(mut data: RequestData) -> Result<()> {
 
 fn handle_reload(data: RequestData) -> Result<()> {
     data.config.reload(data.get_config_path())?;
-    reload_lua();
+    spawn(reload_lua);
+
     make_workspaces_persistent(data.config)?;
     if data.state.options.eager {
         autospawn(data.config)?;
@@ -291,9 +293,7 @@ fn handle_killall(data: RequestData) -> Result<()> {
     };
 
     let kill = |cl: Client| {
-        dispatchers()
-            .close_window(WindowIdentifier::Address(cl.address))
-            .log_err(file!(), line!());
+        Dispatchers::close_window(WindowIdentifier::Address(cl.address)).log_err(file!(), line!());
     };
 
     Clients::get()?
@@ -341,19 +341,6 @@ fn group_from_data(gr_data: &str) -> Option<(String, Vec<&str>)> {
     Some((name.into(), scratchpads.split('\u{2C00}').collect()))
 }
 
-fn handle_add_group(data: RequestData) -> Result<()> {
-    if data.msg.is_empty() {
-        return Ok(());
-    }
-
-    data.msg.split('\u{2C02}').for_each(|gr_data| {
-        if let Some((name, sc_names)) = group_from_data(gr_data) {
-            data.config.add_group(&name, sc_names);
-        }
-    });
-    Ok(())
-}
-
 fn scratchpad_from_data(sc_data: &str) -> Option<(String, Scratchpad)> {
     let data: Vec<&str> = sc_data.splitn(5, '\u{2C00}').collect();
     let [name, title, command, rules, opts] = data[..] else {
@@ -383,15 +370,31 @@ fn scratchpad_from_data(sc_data: &str) -> Option<(String, Scratchpad)> {
     ))
 }
 
-fn handle_add(data: RequestData) -> Result<()> {
-    data.msg.split('\u{2C01}').for_each(|sc_data| {
-        if let Some((name, sc)) = scratchpad_from_data(sc_data) {
-            data.config.add_scratchpad(&name, &sc, false);
-        }
-    });
+fn handle_populate(data: RequestData) -> Result<()> {
+    let (sc_data, g_data) = data.msg.split_once('\u{2C03}').unwrap_log(file!(), line!());
+
+    if !sc_data.is_empty() {
+        sc_data.split('\u{2C01}').for_each(|sc_data| {
+            if let Some((name, sc)) = scratchpad_from_data(sc_data) {
+                data.config.add_scratchpad(&name, &sc, false);
+            }
+        });
+    }
+
+    if !g_data.is_empty() {
+        g_data.split('\u{2C02}').for_each(|gr_data| {
+            if let Some((name, sc_names)) = group_from_data(gr_data) {
+                data.config.add_group(&name, sc_names);
+            }
+        });
+    }
 
     data.config.rebuild_cache();
     make_workspaces_persistent(data.config)?;
+
+    if data.state.options.eager {
+        autospawn(data.config)?;
+    }
     Ok(())
 }
 
@@ -399,7 +402,7 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
     match data.req.as_str() {
         "toggle" | "summon" | "show" | "hide" => handle_call(data),
         "get-config" => handle_get_config(stream, data),
-        "add-group" => handle_add_group(data),
+        "populate" => handle_populate(data),
         "previous" => handle_previous(data),
         "kill-all" => handle_killall(data),
         "hide-all" => handle_hideall(data),
@@ -408,7 +411,6 @@ fn handle_request(data: RequestData, stream: &mut UnixStream) -> Result<()> {
         "attach" => handle_attach(data),
         "cycle" => handle_cycle(data),
         "menu" => handle_menu(stream, data),
-        "add" => handle_add(data),
         "kill" => {
             log("Received 'kill' request, terminating listener".into(), Info);
             Err(Error::Other("kill".into()))
@@ -448,7 +450,7 @@ fn get_listener(socket_path: Option<&str>) -> Result<UnixListener> {
 }
 
 fn reload_lua() {
-    match dispatchers().reload_lua() {
+    match Dispatchers::reload_lua() {
         Ok(_) => log("Hyprland Lua config loaded".into(), Info),
         Err(e) => log(format!("Hyprland Lua config not found: {e}"), Info),
     }
@@ -460,7 +462,8 @@ fn start_unix_listener(
     config: ConfigMutex,
 ) -> Result<()> {
     let listener = get_listener(socket_path)?;
-    reload_lua();
+    spawn(reload_lua);
+
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
@@ -494,7 +497,7 @@ fn start_unix_listener(
 
 fn make_workspaces_persistent(config: &Config) -> Result<()> {
     for name in config.scratchpads.keys() {
-        dispatchers().set_workspace_persistent(name)?;
+        Dispatchers::set_workspace_persistent(name)?;
     }
     Ok(())
 }
@@ -589,9 +592,7 @@ mod tests {
                 .zip(&self.expected_workspace)
                 .for_each(|(title, ws)| {
                     if ws != "none" {
-                        dispatchers()
-                            .close_window(WindowIdentifier::Title(title))
-                            .unwrap();
+                        Dispatchers::close_window(WindowIdentifier::Title(title)).unwrap();
                     }
                 });
 
@@ -606,11 +607,10 @@ mod tests {
             .clone()
             .map(|title| assert!(!clients.clone().any(|x| x.initial_title == title)));
 
-        let _ = resources.commands.clone().map(|command| {
-            dispatchers()
-                .exec(&command, &Legacy(String::new()))
-                .unwrap()
-        });
+        let _ = resources
+            .commands
+            .clone()
+            .map(|command| Dispatchers::exec(&command, &Legacy(String::new())).unwrap());
         sleep(Duration::from_millis(1000));
     }
 
@@ -671,13 +671,9 @@ mod tests {
 
         setup_test(&resources);
 
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(1)).unwrap();
         sleep(Duration::from_millis(500));
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(-1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(-1)).unwrap();
 
         verify_test(&resources);
         sleep(Duration::from_millis(500));
@@ -719,9 +715,7 @@ mod tests {
         let active_client = Client::get_active().unwrap().unwrap();
         setup_test(&resources);
 
-        dispatchers()
-            .focus_window(WindowIdentifier::Address(active_client.address))
-            .unwrap();
+        Dispatchers::focus_window(WindowIdentifier::Address(active_client.address)).unwrap();
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
@@ -769,15 +763,11 @@ mod tests {
         };
 
         setup_test(&resources);
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(1)).unwrap();
         sleep(Duration::from_millis(500));
 
         verify_test(&resources);
-        dispatchers()
-            .workspace(WorkspaceIdentifier::Relative(-1))
-            .unwrap();
+        Dispatchers::workspace(WorkspaceIdentifier::Relative(-1)).unwrap();
         sleep(Duration::from_millis(500));
     }
 

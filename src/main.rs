@@ -45,7 +45,7 @@ const KNOWN_COMMANDS: &[&str] = &[
     "no-auto-reload",
     "install-lua",
     "get-config",
-    "add-group",
+    "populate",
     "spotless",
     "hide-all",
     "kill-all",
@@ -64,7 +64,6 @@ const KNOWN_COMMANDS: &[&str] = &[
     "kill",
     "logs",
     "help",
-    "add",
 ];
 
 fn install_lua(config: Option<String>) -> Result<()> {
