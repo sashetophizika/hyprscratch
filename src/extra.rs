@@ -376,7 +376,7 @@ SCRATCHPAD OPTIONS
   special                    Use Hyprland's special workspace, ignores most other options
 
 EXTRA COMMANDS
-  install-lua                Install the Lua helper to the Hyprland config directory
+  install-lua [path]         Install the Lua helper to .config/hypr or a specifiad file
   cycle [normal|special]     Cycle between [only normal | only special] scratchpads
   toggle <name>              Toggles the scratchpad with the given name
   show <name>                Shows the scratchpad with the given name

@@ -231,7 +231,7 @@ and groups.
 
 * `init <daemon_options>`: manually start the daemon.
 
-* `install-lua <config>`: installs the lua helper file to `.config/hypr` or a specified file.
+* `install-lua [path]`: installs the lua helper file to `.config/hypr` or a specified file.
 
 * `toggle <name>`: toggles the scratchpad with the given name.
 
